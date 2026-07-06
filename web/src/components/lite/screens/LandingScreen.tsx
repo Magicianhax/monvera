@@ -73,7 +73,7 @@ export function LandingScreen() {
   };
 
   return (
-    <div className="screen screen-pad-top" style={{ justifyContent: "space-between", position: "relative", overflow: "hidden" }}>
+    <div className="screen screen-pad-top" style={{ justifyContent: "space-between" }}>
       {/* Vera, the brand watermark — big, half off the right edge, behind the
           content (z 0 vs content z 1), with a soft brand glow beneath her. */}
       <div aria-hidden style={{ position: "absolute", right: 0, bottom: "21%", zIndex: 0, pointerEvents: "none", transform: "translateX(46%)" }}>
