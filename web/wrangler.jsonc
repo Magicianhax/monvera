@@ -1,0 +1,31 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  // Custom entry wraps the OpenNext worker and adds scheduled() for Cron Triggers.
+  "main": "worker.ts",
+  "name": "monvera",
+  "compatibility_date": "2026-07-04",
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
+  // Cloudflare Cron Triggers → worker.ts scheduled() → /api/cron/autopilot.
+  // Hourly: the route itself claims only autopilots that are actually due.
+  "triggers": {
+    "crons": ["0 * * * *"]
+  },
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+  "services": [
+    {
+      "binding": "WORKER_SELF_REFERENCE",
+      "service": "monvera"
+    }
+  ],
+  "images": {
+    "binding": "IMAGES"
+  },
+  "observability": {
+    "enabled": true
+  }
+}

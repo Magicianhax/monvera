@@ -1,0 +1,30 @@
+# Monvera
+
+> Monvera is a mobile-first app for investing in real companies through tokenized stocks on Robinhood Chain, guided by Vera, an AI broker. You describe a goal in plain words; Vera turns it into a portfolio of tokenized shares and places it in one tap.
+
+Monvera is built for people who are new to investing and to crypto. There is no seed phrase and no gas: you sign in with email, and Monvera covers the fees. Holdings are real tokenized shares, held in self-custody and recorded on-chain, with settlement in USDG (Global Dollar). Because every action is signed on-chain, your track record can't be edited.
+
+## Key facts
+
+- Invest by describing a goal in plain language to Vera, an AI broker.
+- Buy fractional, tokenized shares of well-known global companies (for example NVDA, AAPL, TSLA, GOOGL, META, and the S&P 500 via SPY).
+- Email login — no seed phrase, no browser extension, no manual wallet setup.
+- Gasless, with fees on us: no gas costs and no account fees.
+- Real shares: tokenized 1:1, held in self-custody, recorded on-chain.
+- Trades execute through Arcus, the spot venue for Robinhood Chain stock tokens.
+- Autopilot: optional automated, recurring investing (dollar-cost averaging).
+- Open strategies: rule-based portfolios published with methods, weights, and honest walk-forward backtests (no look-ahead), free to reproduce or build on.
+- Built on Robinhood Chain, a fast, low-cost Ethereum L2. You can start from as little as $1.
+- Not available in the United States, Canada, the United Kingdom, or Switzerland.
+
+## Pages
+
+- [Home](https://monvera.xyz): product overview and how it works.
+- [Live demo](https://monvera.xyz/demo): try Monvera with demo data, no login required.
+- [Open strategies](https://monvera.xyz/strategies): Monvera's public strategy book — deterministic, rule-based portfolios with walk-forward backtests, refreshed from real market data every 6 hours. Raw JSON for agents and developers at https://monvera.xyz/api/strategies.
+- [Open the app](https://monvera.xyz/app): the live product.
+
+## More
+
+- [X / Twitter](https://x.com/monvera): updates and announcements.
+- Contact / support: monvera.best@gmail.com

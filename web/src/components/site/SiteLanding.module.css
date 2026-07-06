@@ -1,0 +1,496 @@
+/* Monvera landing — a warm, calm, green-anchored consumer-fintech surface.
+   Committed here (globals.css is edit-local-only) and scoped as a CSS Module.
+   Palette + fonts come from the committed .site tokens (--s-*, --font-*); this
+   file owns structure, rhythm, and the resting states GSAP animates from.
+   Nothing hides content by default: entrances are gsap.from() run in
+   useLayoutEffect, so with JS off every section still renders. */
+
+.root {
+  --edge: clamp(20px, 5vw, 40px);
+  --maxw: 1180px;
+  --gap: clamp(64px, 11vh, 148px);
+  position: relative;
+  overflow-x: clip;
+  background: var(--s-paper);
+  font-family: var(--font-geist), system-ui, sans-serif;
+  color: var(--s-ink);
+  -webkit-font-smoothing: antialiased;
+}
+
+.wrap {
+  width: 100%;
+  max-width: var(--maxw);
+  margin: 0 auto;
+  padding-inline: var(--edge);
+}
+
+.display {
+  font-family: var(--font-fraunces), Georgia, serif;
+  font-weight: 500;
+  letter-spacing: -0.03em;
+  line-height: 1.02;
+  text-wrap: balance;
+}
+
+.mono {
+  font-family: var(--font-jetbrains), ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Ambient background: a slow warm-green aurora, not glass orbs ──────────── */
+.aura {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(46% 40% at 8% -4%, color-mix(in srgb, var(--s-primary) 26%, transparent), transparent 60%),
+    radial-gradient(40% 38% at 100% 6%, color-mix(in srgb, var(--s-accent) 22%, transparent), transparent 58%),
+    radial-gradient(52% 44% at 88% 96%, color-mix(in srgb, var(--s-primary) 16%, transparent), transparent 62%);
+  opacity: 0.9;
+  will-change: transform;
+}
+
+/* ── Nav: a short floating pill, warm-translucent, hides on scroll ────────── */
+/* .root prefix beats the global `.site > nav { position: relative }` (0,1,1),
+   which was otherwise forcing the nav in-flow and pushing the hero down. */
+.root .nav {
+  position: fixed;
+  top: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 50;
+  width: min(var(--maxw), calc(100% - 28px));
+  will-change: transform;
+}
+/* Soft frosted glass — translucent, blurred, no hard edge, feathered shadow, so
+   it dissolves into the hero (and the content below) rather than sitting on top.
+   Colours are theme tokens: light glass in light mode, dark glass in dark. */
+.navInner {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 9px 9px 9px 18px;
+  border-radius: 999px;
+  background: var(--s-glass-strong);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  backdrop-filter: blur(24px) saturate(1.7);
+  -webkit-backdrop-filter: blur(24px) saturate(1.7);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.5),
+    0 16px 50px -16px rgba(18, 30, 20, 0.3);
+}
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  font-family: var(--font-fraunces), serif;
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--s-ink);
+  text-decoration: none;
+}
+.navLinks {
+  display: flex;
+  align-items: center;
+  gap: 22px;
+  margin-left: auto;
+}
+.navLinks a {
+  font-size: 14.5px;
+  font-weight: 500;
+  color: var(--s-ink-2);
+  text-decoration: none;
+  transition: color 0.2s var(--s-ease, ease);
+}
+.navLinks a:hover { color: var(--s-primary-d); }
+.navActions { display: flex; align-items: center; gap: 8px; }
+.iconBtn {
+  width: 38px;
+  height: 38px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  color: var(--s-ink-2);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+}
+.iconBtn:hover { background: var(--s-primary-soft); color: var(--s-primary-d); }
+.burger { display: none; }
+.navDrop { margin-top: 8px; }
+.navDropPanel {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px;
+  border-radius: 20px;
+  background: var(--s-surface);
+  border: 1px solid var(--s-line);
+  box-shadow: 0 18px 44px rgba(30, 44, 30, 0.14);
+}
+.navDropPanel a { padding: 11px 12px; border-radius: 12px; color: var(--s-ink); text-decoration: none; font-weight: 500; }
+.navDropPanel a:hover { background: var(--s-primary-soft); }
+
+/* ── Buttons ──────────────────────────────────────────────────────────────── */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 50px;
+  padding: 0 24px;
+  border-radius: 999px;
+  font-size: 15.5px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  text-decoration: none;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: transform 0.18s var(--s-ease-soft, ease), box-shadow 0.2s, background 0.2s;
+  white-space: nowrap;
+}
+.btn:active { transform: translateY(1px) scale(0.99); }
+/* .root prefix raises specificity above the global `.site a { color: inherit }`
+   so button label colours actually win (otherwise a white-on-white CTA). */
+.root .btnPrimary {
+  background: var(--s-primary-d);
+  color: #fff;
+  box-shadow: 0 8px 22px color-mix(in srgb, var(--s-primary-d) 34%, transparent);
+}
+.root .btnPrimary:hover { box-shadow: 0 12px 30px color-mix(in srgb, var(--s-primary-d) 42%, transparent); transform: translateY(-1px); }
+.root .btnGhost {
+  background: color-mix(in srgb, var(--s-surface) 60%, transparent);
+  color: var(--s-ink);
+  border-color: var(--s-line);
+  backdrop-filter: blur(8px);
+}
+.root .btnGhost:hover { border-color: color-mix(in srgb, var(--s-primary) 50%, var(--s-line)); }
+.btnSm { height: 42px; padding: 0 18px; font-size: 14.5px; }
+.btnLg { height: 56px; padding: 0 30px; font-size: 16.5px; }
+.root .btnOnDark { background: #fff; color: var(--s-primary-d); }
+.root .btnGhostOnDark { background: rgba(255,255,255,0.12); color: #fff; border-color: rgba(255,255,255,0.28); }
+
+/* ── Section scaffold ─────────────────────────────────────────────────────── */
+.section { position: relative; z-index: 1; padding-block: var(--gap); }
+.kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: var(--s-primary-d);
+  padding: 6px 13px 6px 10px;
+  border-radius: 999px;
+  background: var(--s-primary-soft);
+}
+.h2 { font-size: clamp(2rem, 4.6vw, 3.3rem); margin: 16px 0 0; }
+.lead { font-size: clamp(1.05rem, 1.6vw, 1.3rem); line-height: 1.55; color: var(--s-ink-2); max-width: 60ch; margin: 16px 0 0; }
+
+/* ── Hero ─────────────────────────────────────────────────────────────────── */
+.hero { position: relative; z-index: 1; padding: clamp(120px, 17vh, 190px) 0 clamp(40px, 7vh, 80px); }
+.heroGrid {
+  display: grid;
+  grid-template-columns: 1.05fr 0.95fr;
+  gap: clamp(24px, 5vw, 60px);
+  align-items: center;
+}
+.heroTitle { font-size: clamp(2.6rem, 6.2vw, 4.8rem); line-height: 1.05; margin: 4px 0 0; padding-bottom: 0.08em; }
+.heroTitle > span { display: block; }
+.heroTitle em { font-style: normal; color: var(--s-primary-d); }
+.heroSub { font-size: clamp(1.1rem, 1.8vw, 1.4rem); line-height: 1.5; color: var(--s-ink-2); margin: 22px 0 0; max-width: 30ch; }
+.heroCtas { display: flex; gap: 12px; margin-top: 30px; flex-wrap: wrap; }
+.heroProof { display: flex; align-items: center; gap: 18px; margin-top: 26px; flex-wrap: wrap; color: var(--s-ink-3); font-size: 13.5px; font-weight: 500; }
+.heroProof b { color: var(--s-ink); font-weight: 700; }
+.heroProofDot { width: 4px; height: 4px; border-radius: 999px; background: var(--s-ink-3); opacity: 0.6; }
+
+.heroStage { position: relative; display: grid; place-items: center; }
+.heroHalo {
+  position: absolute;
+  width: 118%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: radial-gradient(circle, color-mix(in srgb, var(--s-primary) 34%, transparent) 0%, transparent 62%);
+  filter: blur(14px);
+  z-index: 0;
+  will-change: transform;
+}
+.phoneWrap { position: relative; z-index: 1; will-change: transform; }
+
+/* floating stock chips around the hero phone */
+.chip {
+  position: absolute;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px 8px 8px;
+  border-radius: 999px;
+  background: var(--s-surface);
+  border: 1px solid var(--s-line);
+  box-shadow: 0 10px 26px rgba(30, 44, 30, 0.12);
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  will-change: transform;
+}
+.chip img, .chip span.mono { display: block; }
+.chip .up { color: var(--s-pos); font-weight: 700; }
+.chip .down { color: var(--s-neg); font-weight: 700; }
+.chipTL { top: 6%; left: -6%; }
+.chipTR { top: 22%; right: -8%; }
+.chipBL { bottom: 20%; left: -10%; }
+.chipBR { bottom: 4%; right: -4%; }
+
+/* ── Full-bleed hero: world-landmarks slideshow + wordmark ─────────────────── */
+.heroFull {
+  position: relative;
+  min-height: 100svh;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  isolation: isolate;
+}
+.heroSlides { position: absolute; inset: 0; z-index: 0; }
+.heroSlide {
+  position: absolute;
+  inset: 0;
+  background-size: cover;
+  background-position: center;
+  opacity: 0;
+  will-change: opacity, transform;
+}
+.heroSlide:first-child { opacity: 1; }
+.heroScrim {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background:
+    radial-gradient(58% 50% at 50% 45%, rgba(10, 20, 14, 0.5), transparent 72%),
+    linear-gradient(180deg, rgba(10, 20, 14, 0.5) 0%, rgba(10, 20, 14, 0.12) 26%, rgba(10, 20, 14, 0.18) 56%, rgba(10, 20, 14, 0.72) 100%),
+    linear-gradient(180deg, color-mix(in srgb, var(--s-primary-d) 22%, transparent), transparent 42%);
+}
+.heroContent {
+  position: relative;
+  z-index: 2;
+  text-align: center;
+  padding: 84px var(--edge) 0;
+}
+.wordmark {
+  color: #fff;
+  font-size: clamp(3rem, 14vw, 12rem);
+  line-height: 0.92;
+  letter-spacing: -0.03em;
+  margin: 0;
+  text-shadow: 0 6px 50px rgba(0, 0, 0, 0.45), 0 2px 12px rgba(0, 0, 0, 0.35);
+}
+/* Vera mascot — anchored to the bottom-left edge, ~2x size, static (no zoom/float).
+   The stacked imgs simply cross-fade as the region changes. bottom is pulled down
+   ~10% of her height so her feet sit on the bottom edge (her transparent margin). */
+.mascotLayer {
+  --mh: clamp(400px, 54vw, 800px);
+  position: absolute;
+  left: 0;
+  bottom: calc(var(--mh) * -0.17);
+  z-index: 3;
+  height: var(--mh);
+  aspect-ratio: 2 / 3;
+  pointer-events: none;
+}
+@media (max-width: 760px) { .mascotLayer { --mh: clamp(220px, 58vw, 420px); } }
+.mascot {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  opacity: 0;
+  will-change: opacity;
+  filter: drop-shadow(0 18px 26px rgba(0, 0, 0, 0.42));
+}
+.mascot:first-child { opacity: 1; }
+.heroTag {
+  color: rgba(255, 255, 255, 0.94);
+  font-size: clamp(1.05rem, 2.1vw, 1.5rem);
+  font-weight: 500;
+  margin: 20px auto 0;
+  max-width: 30ch;
+  text-shadow: 0 2px 16px rgba(0, 0, 0, 0.5);
+}
+.heroCtasFull { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; margin-top: 34px; }
+.placeLabel {
+  position: absolute;
+  bottom: clamp(22px, 4.5vh, 46px);
+  left: 0;
+  right: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-shadow: 0 1px 10px rgba(0, 0, 0, 0.5);
+}
+.placeDot {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--s-primary);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--s-primary) 32%, transparent);
+}
+@media (prefers-reduced-motion: reduce) {
+  .heroSlide { transition: none; }
+}
+
+/* ── Living beat: "you say → Vera builds" ─────────────────────────────────── */
+.beat { position: relative; z-index: 1; }
+.beatGrid { display: grid; grid-template-columns: 1fr 1fr; gap: clamp(24px, 5vw, 56px); align-items: center; }
+.sayBubble {
+  display: inline-block;
+  max-width: 92%;
+  padding: 16px 20px;
+  border-radius: 22px 22px 22px 6px;
+  background: var(--s-surface);
+  border: 1px solid var(--s-line);
+  box-shadow: 0 10px 30px rgba(30, 44, 30, 0.08);
+  font-family: var(--font-fraunces), serif;
+  font-size: clamp(1.3rem, 2.5vw, 1.9rem);
+  line-height: 1.25;
+  letter-spacing: -0.02em;
+  color: var(--s-ink);
+}
+.caret { color: var(--s-primary); font-weight: 400; }
+.planCard {
+  border-radius: 26px;
+  background: var(--s-surface);
+  border: 1px solid var(--s-line);
+  box-shadow: 0 24px 60px rgba(30, 44, 30, 0.12);
+  padding: 20px;
+}
+.planHead { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 15px; }
+.planHead .dot { width: 8px; height: 8px; border-radius: 999px; background: var(--s-primary); }
+.planRow { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-top: 1px solid var(--s-line); }
+.planRow:first-of-type { border-top: none; }
+.planRow img { width: 34px; height: 34px; border-radius: 999px; flex: none; }
+.planName { flex: 1; min-width: 0; font-weight: 600; font-size: 14.5px; }
+.planName small { display: block; color: var(--s-ink-3); font-weight: 500; font-size: 12px; margin-top: 1px; }
+.planBarTrack { width: 90px; height: 7px; border-radius: 999px; background: var(--s-primary-soft); overflow: hidden; }
+.planBar { height: 100%; border-radius: 999px; background: var(--s-primary); transform-origin: left; }
+.planPct { width: 34px; text-align: right; font-weight: 700; font-size: 13.5px; }
+
+/* ── Trust pillars ────────────────────────────────────────────────────────── */
+.pillars { display: grid; grid-template-columns: repeat(3, 1fr); gap: clamp(16px, 3vw, 34px); margin-top: 44px; }
+.pillar { }
+.pillarIco { width: 46px; height: 46px; border-radius: 15px; display: grid; place-items: center; background: var(--s-primary-soft); color: var(--s-primary-d); margin-bottom: 16px; }
+.pillarStat { font-family: var(--font-fraunces), serif; font-size: clamp(2rem, 4vw, 2.8rem); letter-spacing: -0.02em; color: var(--s-ink); line-height: 1; }
+.pillarStat span { color: var(--s-primary-d); }
+.pillarLabel { font-weight: 700; font-size: 16px; margin-top: 12px; }
+.pillarText { color: var(--s-ink-2); font-size: 14.5px; line-height: 1.55; margin-top: 4px; max-width: 34ch; }
+
+/* ── Own real companies: a drifting logo field ────────────────────────────── */
+.ownHead { text-align: center; }
+.ownHead .lead { margin-inline: auto; }
+.field { margin-top: 44px; display: flex; flex-direction: column; gap: 16px; overflow: hidden; -webkit-mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent); mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent); }
+.fieldRow { display: flex; gap: 14px; width: max-content; will-change: transform; }
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 11px;
+  padding: 12px 18px 12px 12px;
+  border-radius: 999px;
+  background: var(--s-surface);
+  border: 1px solid var(--s-line);
+  box-shadow: 0 6px 18px rgba(30, 44, 30, 0.06);
+  white-space: nowrap;
+}
+.pill img { width: 34px; height: 34px; border-radius: 999px; flex: none; }
+.pill b { font-size: 15px; font-weight: 700; }
+.pill i { font-style: normal; font-variant-numeric: tabular-nums; font-size: 13px; font-weight: 600; }
+.pill .up { color: var(--s-pos); }
+.pill .down { color: var(--s-neg); }
+
+/* ── How it works ─────────────────────────────────────────────────────────── */
+.howGrid { display: grid; grid-template-columns: 0.9fr 1.1fr; gap: clamp(28px, 6vw, 72px); align-items: center; }
+.steps { list-style: none; margin: 30px 0 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.step { display: flex; gap: 16px; padding: 18px 0; border-top: 1px solid var(--s-line); }
+.step:first-child { border-top: none; }
+.stepN { flex: none; width: 34px; height: 34px; border-radius: 999px; display: grid; place-items: center; background: var(--s-primary-d); color: #fff; font-weight: 700; font-size: 15px; font-family: var(--font-fraunces), serif; }
+.step h3 { margin: 4px 0 0; font-size: 17px; font-weight: 700; letter-spacing: -0.01em; }
+.step p { margin: 5px 0 0; color: var(--s-ink-2); font-size: 14.5px; line-height: 1.55; }
+
+/* ── Built on ─────────────────────────────────────────────────────────────── */
+.builton { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 14px 22px; }
+.builtonLabel { font-size: 12px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: var(--s-ink-3); }
+.builtonLogo { display: inline-flex; align-items: center; gap: 9px; opacity: 0.86; text-decoration: none; color: var(--s-ink); transition: opacity 0.2s; }
+.builtonLogo:hover { opacity: 1; }
+.builtonLogo b { font-size: 17px; font-weight: 700; letter-spacing: -0.01em; }
+.builtonLogo img.mono { height: 18px; width: auto; }
+.builtonDiv { width: 1px; height: 20px; background: var(--s-line); }
+.builtonNote { margin: 20px auto 0; max-width: 640px; text-align: center; font-size: 14.5px; line-height: 1.65; color: var(--s-ink-2); }
+.builtonNote b { color: var(--s-ink); font-weight: 700; }
+
+/* ── FAQ ──────────────────────────────────────────────────────────────────── */
+.faq { max-width: 760px; margin: 40px auto 0; }
+.faqItem { border-top: 1px solid var(--s-line); }
+.faqItem:last-child { border-bottom: 1px solid var(--s-line); }
+.faqSummary { display: flex; align-items: center; gap: 16px; padding: 20px 4px; cursor: pointer; list-style: none; }
+.faqSummary::-webkit-details-marker { display: none; }
+.faqQ { flex: 1; font-size: 17px; font-weight: 600; letter-spacing: -0.01em; }
+.faqIco { flex: none; color: var(--s-ink-3); transition: transform 0.3s var(--s-ease-soft, ease); }
+details[open] .faqIco { transform: rotate(180deg); }
+.faqA { overflow: hidden; }
+.faqA p { margin: 0; padding: 0 40px 22px 4px; color: var(--s-ink-2); font-size: 15px; line-height: 1.65; }
+
+/* ── Final CTA (green-drenched) ───────────────────────────────────────────── */
+.ctaCard {
+  position: relative;
+  overflow: hidden;
+  border-radius: 34px;
+  padding: clamp(40px, 6vw, 72px);
+  text-align: center;
+  background: var(--s-hero-grad);
+  color: #fff;
+  box-shadow: 0 30px 80px color-mix(in srgb, var(--s-primary-d) 40%, transparent);
+}
+.ctaCard h2 { font-family: var(--font-fraunces), serif; font-size: clamp(2rem, 5vw, 3.4rem); letter-spacing: -0.025em; line-height: 1.05; margin: 0; }
+.ctaCard p { margin: 16px auto 0; max-width: 46ch; font-size: clamp(1rem, 1.6vw, 1.2rem); line-height: 1.55; opacity: 0.92; }
+.ctaCtas { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; margin-top: 30px; position: relative; }
+.ctaGlow { position: absolute; inset: -40% -10% auto; height: 80%; background: radial-gradient(50% 60% at 50% 0%, rgba(255,255,255,0.28), transparent 70%); pointer-events: none; }
+
+/* ── Footer ───────────────────────────────────────────────────────────────── */
+.footer { position: relative; z-index: 1; padding: 64px 0 40px; border-top: 1px solid var(--s-line); margin-top: var(--gap); }
+.footerGrid { display: grid; grid-template-columns: 1.6fr repeat(3, 1fr); gap: 34px; }
+.footerBrand p { margin: 14px 0 0; color: var(--s-ink-2); font-size: 14.5px; line-height: 1.6; max-width: 34ch; }
+.footerCol h4 { font-size: 13px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--s-ink-3); margin: 0 0 14px; }
+.footerCol a, .footerCol span { display: block; color: var(--s-ink-2); font-size: 14.5px; text-decoration: none; margin-bottom: 10px; }
+.footerCol a:hover { color: var(--s-primary-d); }
+.footerBottom { display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-top: 48px; padding-top: 22px; border-top: 1px solid var(--s-line); color: var(--s-ink-3); font-size: 13px; }
+
+/* ── Responsive ───────────────────────────────────────────────────────────── */
+@media (max-width: 900px) {
+  .heroGrid, .beatGrid, .howGrid { grid-template-columns: 1fr; }
+  .heroStage { order: -1; }
+  .beatGrid > :first-child { order: 2; }
+  .pillars { grid-template-columns: 1fr; gap: 26px; }
+  .navLinks { display: none; }
+  .burger { display: grid; }
+  .footerGrid { grid-template-columns: 1fr 1fr; }
+  .chipBL, .chipTR { display: none; }
+}
+@media (max-width: 560px) {
+  .footerGrid { grid-template-columns: 1fr; }
+  .heroSub { max-width: none; }
+  .footerBottom { flex-direction: column; }
+}
+
+/* ── Reduced motion: kill the CSS drifts (GSAP handles its own guard) ─────── */
+@media (prefers-reduced-motion: reduce) {
+  .fieldRow, .aura, .heroHalo, .chip { animation: none !important; }
+}

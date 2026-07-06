@@ -1,0 +1,53 @@
+# Monvera — repo root ignore (web/ and contracts/ have their own too)
+
+# dependencies
+**/node_modules/
+
+# secrets — NEVER commit real env. The .env.example templates ARE committed.
+.env
+.env.local
+**/.env
+**/.env.local
+**/.env.*.local
+
+# next.js / build output
+**/.next/
+**/out/
+**/build/
+**/*.tsbuildinfo
+**/next-env.d.ts
+
+# cloudflare / opennext build + local state
+**/.open-next/
+**/.wrangler/
+
+# hardhat / solidity build artifacts
+**/artifacts/
+**/cache/
+**/typechain-types/
+**/coverage/
+**/coverage.json
+
+# internal planning notes — not for the public repo
+tasks/
+
+# pitch deck + demo-day assets — local only, never committed
+docs/pitch-deck*
+docs/teleprompter/
+
+# demo / marketing video project — local only, never committed
+video/
+
+# held-back working surfaces — local only, never committed
+web/src/app/v2/
+web/src/components/site/SiteLandingV2.tsx
+web/.design-handoff.*
+web/public/brand/app-screens.png
+web/public/brand/monvera-icon+full logo.png
+
+# os / editor / misc
+.DS_Store
+Thumbs.db
+*.pem
+*.log
+**/.vercel
