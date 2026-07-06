@@ -9,7 +9,7 @@
 // Styles live in the committed SiteLanding.module.css (globals.css is local-only).
 import { Fragment, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { ArrowUpRight, Sun, Moon, Menu, KeyRound, Zap, ShieldCheck, ChevronDown } from "lucide-react";
+import { ArrowUpRight, Sun, Moon, Menu, ChevronDown } from "lucide-react";
 import { gsap } from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import { TextPlugin } from "gsap/TextPlugin";
@@ -31,15 +31,15 @@ type Mode = "light" | "dark";
 
 // Hero background slideshow — famous places from countries Monvera serves, shown
 // in order. Media is hosted on Cloudflare R2 (see lib/assets.ts; prompts in docs/).
-const HERO_SLIDES: { file: string; place: string; mascot: string }[] = [
-  { file: "hero-01-tokyo.webp", place: "Tokyo, Japan", mascot: "vera-01-tokyo.webp" },
-  { file: "hero-02-tajmahal.webp", place: "Agra, India", mascot: "vera-02-tajmahal.webp" },
-  { file: "hero-03-dubai.webp", place: "Dubai, UAE", mascot: "vera-03-dubai.webp" },
-  { file: "hero-04-istanbul.webp", place: "Istanbul, Turkey", mascot: "vera-04-istanbul.webp" },
-  { file: "hero-05-singapore.webp", place: "Singapore", mascot: "vera-05-singapore.webp" },
-  { file: "hero-06-rio.webp", place: "Rio de Janeiro, Brazil", mascot: "vera-06-rio.webp" },
-  { file: "hero-07-capetown.webp", place: "Cape Town, South Africa", mascot: "vera-07-capetown.webp" },
-  { file: "hero-08-cairo.webp", place: "Cairo, Egypt", mascot: "vera-08-cairo.webp" },
+const HERO_SLIDES: { file: string; mascot: string }[] = [
+  { file: "hero-01-tokyo.webp", mascot: "vera-01-tokyo.webp" },
+  { file: "hero-02-tajmahal.webp", mascot: "vera-02-tajmahal.webp" },
+  { file: "hero-03-dubai.webp", mascot: "vera-03-dubai.webp" },
+  { file: "hero-04-istanbul.webp", mascot: "vera-04-istanbul.webp" },
+  { file: "hero-05-singapore.webp", mascot: "vera-05-singapore.webp" },
+  { file: "hero-06-rio.webp", mascot: "vera-06-rio.webp" },
+  { file: "hero-07-capetown.webp", mascot: "vera-07-capetown.webp" },
+  { file: "hero-08-cairo.webp", mascot: "vera-08-cairo.webp" },
 ];
 
 const FIELD_A = ["AAPL", "NVDA", "MSFT", "GOOGL", "AMZN", "SPY", "META"];
@@ -59,8 +59,6 @@ const PLAN: { sym: string; pct: number }[] = [
   { sym: "AAPL", pct: 18 },
   { sym: "SGOV", pct: 20 },
 ];
-
-const fmtPrice = (p?: number) => (p == null ? "" : p >= 1000 ? "$" + p.toLocaleString("en-US", { maximumFractionDigits: 0 }) : "$" + p.toFixed(2));
 
 /** A real-company pill (logo + name + day move) for the drifting field. */
 function StockPill({ sym }: { sym: string }) {
@@ -104,9 +102,16 @@ function Phone({ play, mode }: { play: DemoPlay; mode: Mode }) {
   );
 }
 
-export type VeraStats = { plans: number; invested: number; placed: number };
+export type VeraStats = {
+  agentId: string;
+  registryLive: boolean;
+  plans: number;
+  invested: number;
+  placed: number;
+  latest: { label: string; placed: boolean; usdc: number | null; txUrl: string } | null;
+};
 
-// Compact USD for the stat band: $0, $1.4K, $2.3M — landing headline scale.
+// Compact USD for the proof line: $0, $1.4K, $2.3M — landing headline scale.
 function compactUsd(n: number): string {
   if (n >= 1e6) return `$${(n / 1e6).toFixed(n >= 1e7 ? 0 : 1)}M`;
   if (n >= 1e3) return `$${(n / 1e3).toFixed(n >= 1e4 ? 0 : 1)}K`;
@@ -117,6 +122,19 @@ export function SiteLanding({ veraStats = null }: { veraStats?: VeraStats | null
   const root = useRef<HTMLDivElement>(null);
   const [mode, setMode] = useState<Mode>("light");
   const [menuOpen, setMenuOpen] = useState(false);
+  // Defer the 7 non-first hero slides + mascots to idle time: 16 large webps
+  // otherwise compete with LCP on phone connections. The slideshow's first
+  // transition starts at 3.6s, long after these land.
+  const [heroReady, setHeroReady] = useState(false);
+  useEffect(() => {
+    const ric = window.requestIdleCallback?.bind(window);
+    if (ric) {
+      const id = ric(() => setHeroReady(true));
+      return () => window.cancelIdleCallback?.(id);
+    }
+    const tm = window.setTimeout(() => setHeroReady(true), 1200);
+    return () => window.clearTimeout(tm);
+  }, []);
 
   useEffect(() => {
     const saved = localStorage.getItem("monvera-landing-mode") ?? localStorage.getItem("stax-landing-mode");
@@ -145,8 +163,7 @@ export function SiteLanding({ veraStats = null }: { veraStats?: VeraStats | null
       if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
       const q = gsap.utils.selector(root);
 
-      // Hero background: crossfading Ken-Burns slideshow of world landmarks, with
-      // the place caption synced to the active slide.
+      // Hero background: world-landmarks slideshow (slide-only, no zoom).
       const slides = q(".js-slide");
       const mascots = q(".js-mascot");
       const mRest = { opacity: 0 };
@@ -177,6 +194,14 @@ export function SiteLanding({ veraStats = null }: { veraStats?: VeraStats | null
           if (mascots[i]) stl.to(mascots[i], { opacity: 0, duration: SLIDE, ease: "power2.inOut" }, start + HOLD);
           if (mascots[ni]) stl.fromTo(mascots[ni], { opacity: 0 }, { opacity: 1, duration: SLIDE, ease: "power2.inOut", immediateRender: false }, start + HOLD);
         });
+        // No reason to animate 8 full-screen layers while the visitor reads
+        // sections far below the hero.
+        ScrollTrigger.create({
+          trigger: ".js-hero",
+          start: "top bottom",
+          end: "bottom top",
+          onToggle: (self) => { if (self.isActive) stl.play(); else stl.pause(); },
+        });
       }
 
       // Hero wordmark + Vera + tagline + CTA entrance.
@@ -188,10 +213,10 @@ export function SiteLanding({ veraStats = null }: { veraStats?: VeraStats | null
         .from(".js-hero-tag", { y: 18, opacity: 0, duration: 0.6 }, "-=0.5")
         .from(".js-hero-cta", { y: 16, opacity: 0, stagger: 0.1, duration: 0.5 }, "-=0.4");
 
-      // Generic scroll reveals + staggered groups.
-      q(".js-reveal").forEach((el) =>
-        gsap.from(el, { y: 42, opacity: 0, duration: 0.85, ease: "power3.out", scrollTrigger: { trigger: el, start: "top 84%" } }),
-      );
+      // Section entrances, fitted per surface: lists stagger below; the CTA
+      // card lands with a soft settle. The partner logos get no entrance at
+      // all: gating trust marks behind a tween risks them sticking invisible.
+      gsap.from(".js-cta", { opacity: 0, y: 24, scale: 0.985, duration: 0.8, ease: "power3.out", scrollTrigger: { trigger: ".js-cta", start: "top 84%" } });
       q(".js-stagger").forEach((group) =>
         gsap.from((group as HTMLElement).children, {
           y: 28, opacity: 0, duration: 0.6, stagger: 0.09, ease: "power3.out",
@@ -250,7 +275,7 @@ export function SiteLanding({ veraStats = null }: { veraStats?: VeraStats | null
 
   return (
     <div className={`site ${s.root}`} data-mode={mode} ref={root}>
-      <div className={`${s.aura} js-aura`} aria-hidden />
+      <div className={s.aura} aria-hidden />
 
       {/* NAV — short, floating, hides on scroll */}
       <nav className={`${s.nav} js-nav`}>
@@ -261,24 +286,24 @@ export function SiteLanding({ veraStats = null }: { veraStats?: VeraStats | null
             <button className={s.iconBtn} onClick={toggleMode} aria-label="Toggle theme">
               {mode === "dark" ? <Sun size={19} strokeWidth={1.9} /> : <Moon size={19} strokeWidth={1.9} />}
             </button>
-            <Link className={`${s.btn} ${s.btnPrimary} ${s.btnSm}`} href="/app">Open the app</Link>
+            <Link className={`${s.btn} ${s.btnPrimary} ${s.btnSm} ${s.navCta}`} href="/app">Open the app</Link>
             <button className={`${s.iconBtn} ${s.burger}`} onClick={() => setMenuOpen((o) => !o)} aria-label="Menu" aria-expanded={menuOpen}>
               <Menu size={20} strokeWidth={2} />
             </button>
           </div>
         </div>
-        {menuOpen && <div className={s.navDrop}><div className={s.navDropPanel}>{navLinks}</div></div>}
+        {menuOpen && <div className={s.navDrop}><div className={s.navDropPanel}>{navLinks}<Link href="/app" onClick={() => setMenuOpen(false)}>Open the app</Link></div></div>}
       </nav>
 
       {/* HERO — full-bleed world-landmarks slideshow + wordmark. Vera the mascot
           gets layered on top later, over the centre of the wordmark. */}
       <header id="top" className={`${s.heroFull} js-hero`}>
         <div className={s.heroSlides} aria-hidden>
-          {HERO_SLIDES.map((sl) => (
+          {HERO_SLIDES.map((sl, i) => (
             <div
               key={sl.file}
               className={`${s.heroSlide} js-slide`}
-              style={{ backgroundImage: `url(${asset(`/brand/hero/${sl.file}`)})` }}
+              style={i === 0 || heroReady ? { backgroundImage: `url(${asset(`/brand/hero/${sl.file}`)})` } : undefined}
             />
           ))}
         </div>
@@ -293,9 +318,9 @@ export function SiteLanding({ veraStats = null }: { veraStats?: VeraStats | null
         </div>
         {/* Vera the mascot — bottom-left of the hero, changes outfit with each slide */}
         <div className={s.mascotLayer} aria-hidden>
-          {HERO_SLIDES.map((sl) => (
+          {HERO_SLIDES.map((sl, i) => (
             // eslint-disable-next-line @next/next/no-img-element
-            <img key={sl.mascot} className={`${s.mascot} js-mascot`} src={asset(`/brand/hero/${sl.mascot}`)} alt="" decoding="async" />
+            <img key={sl.mascot} className={`${s.mascot} js-mascot`} src={i === 0 || heroReady ? asset(`/brand/hero/${sl.mascot}`) : undefined} alt="" decoding="async" />
           ))}
         </div>
       </header>
@@ -307,13 +332,13 @@ export function SiteLanding({ veraStats = null }: { veraStats?: VeraStats | null
             <div>
               <h2 className={`${s.display} ${s.h2}`}>A sentence, and Vera builds the rest.</h2>
               <p className={s.lead}>Say it however feels natural. Vera turns it into a real, diversified basket, sizes each holding from live market data, and explains every pick.</p>
-              <div style={{ marginTop: 26 }}>
+              <div className={s.sayWrap}>
                 <span className={s.sayBubble}><span className="js-say">Grow $300, mostly big tech, keep some safe.</span><span className={s.caret}>▌</span></span>
               </div>
             </div>
             <div className={s.planCard}>
               <div className={s.planHead}><span className={s.dot} /> An example plan · balanced</div>
-              <div style={{ marginTop: 8 }}>
+              <div className={s.planList}>
                 {PLAN.map((h) => {
                   const d = displayFor(h.sym);
                   return (
@@ -333,64 +358,101 @@ export function SiteLanding({ veraStats = null }: { veraStats?: VeraStats | null
       </section>
 
       {/* TRUST — honest numbers + three pillars */}
-      <section className={s.section}>
+      <section className={`${s.section} ${s.sectionTightBottom}`}>
         <div className={s.wrap}>
-          <div className={s.ownHead} style={{ textAlign: "center" }}>
+          <div className={s.ownHead}>
             <h2 className={`${s.display} ${s.h2}`}>You stay in control.</h2>
           </div>
           <div className={`${s.pillars} js-stagger`}>
             <div className={s.pillar}>
-              <span className={s.pillarIco}><KeyRound size={22} strokeWidth={1.9} /></span>
               <div className={s.pillarStat}>Your <span>keys</span></div>
               <div className={s.pillarLabel}>Non-custodial</div>
               <p className={s.pillarText}>Monvera never holds your money. It lives in a wallet only you control, provable on-chain.</p>
             </div>
             <div className={s.pillar}>
-              <span className={s.pillarIco}><Zap size={22} strokeWidth={1.9} /></span>
-              <div className={s.pillarStat}><span data-count="0" data-prefix="$">$0</span> gas</div>
+              <div className={s.pillarStat}><span>$0</span> gas</div>
               <div className={s.pillarLabel}>Gasless, no platform fee</div>
               <p className={s.pillarText}>We cover every network fee and charge no account or platform fees. Monvera earns a small referral from the trading venue, not from you.</p>
             </div>
             <div className={s.pillar}>
-              <span className={s.pillarIco}><ShieldCheck size={22} strokeWidth={1.9} /></span>
               <div className={s.pillarStat}>On the <span>record</span></div>
               <div className={s.pillarLabel}>Signed on-chain</div>
               <p className={s.pillarText}>Every plan Vera signs is written on-chain, so her track record is public and can&apos;t be edited later.</p>
             </div>
           </div>
-          {/* Vera's live on-chain record — the real numbers, read server-side
-              from the same executor log the app and /agent use. */}
+          {/* Vera's on-chain identity + latest signed plan — the real proof,
+              read server-side from the same executor log the app and /agent use.
+              Leads with verifiable identity (impressive at any volume) rather
+              than raw counts. Mascot on the left, sized to the card's height. */}
+          <div className={s.veraProof}>
+          <img
+            className={s.veraMascot}
+            src={asset("/brand/vera-mascot.webp")}
+            alt=""
+            aria-hidden
+            decoding="async"
+          />
           <div className={s.veraRecord}>
             <div className={s.veraRecordHead}>
-              <span className={s.veraRecordEyebrow}>Vera&apos;s record, live on-chain</span>
+              <span className={s.veraRecordEyebrow}>Verified on-chain agent</span>
             </div>
-            <div className={s.veraStats}>
-              <div className={s.veraStat}>
-                <div className={s.veraStatNum}>{(veraStats?.plans ?? 0).toLocaleString("en-US")}</div>
-                <div className={s.veraStatLabel}>Plans signed</div>
+            <div className={s.veraIdRow}>
+              <div className={s.veraIdName}>
+                Vera <span className={s.veraIdNum}>&#8470;{veraStats?.agentId ?? "1"}</span>
               </div>
-              <div className={s.veraStat}>
-                <div className={s.veraStatNum} style={{ color: "var(--s-primary-d)" }}>{compactUsd(veraStats?.invested ?? 0)}</div>
-                <div className={s.veraStatLabel}>Invested</div>
+              <span className={s.veraIdBadge}>ERC-8004 &middot; IdentityRegistry</span>
+            </div>
+            <p className={s.veraIdLine}>
+              She signs every plan she builds and posts it to the chain. The record below
+              is hers, and no one can edit it after the fact, us included.
+            </p>
+            {((veraStats?.plans ?? 0) > 0 || (veraStats?.invested ?? 0) > 0 || (veraStats?.placed ?? 0) > 0) && (
+            <div className={s.veraStatStrip}>
+              <div className={s.veraStatCell}>
+                <span className={s.veraStatNum}>{(veraStats?.plans ?? 0).toLocaleString("en-US")}</span>
+                <span className={s.veraStatLbl}>plans signed</span>
               </div>
-              <div className={s.veraStat}>
-                <div className={s.veraStatNum}>{(veraStats?.placed ?? 0).toLocaleString("en-US")}</div>
-                <div className={s.veraStatLabel}>Trades placed</div>
+              <div className={s.veraStatCell}>
+                <span className={s.veraStatNum}>{compactUsd(veraStats?.invested ?? 0)}</span>
+                <span className={s.veraStatLbl}>invested</span>
+              </div>
+              <div className={s.veraStatCell}>
+                <span className={s.veraStatNum}>{(veraStats?.placed ?? 0).toLocaleString("en-US")}</span>
+                <span className={s.veraStatLbl}>trades placed</span>
               </div>
             </div>
+            )}
+            {veraStats?.latest ? (
+              <a className={s.veraLatest} href={veraStats.latest.txUrl} target="_blank" rel="noreferrer">
+                <span className={s.veraLatestDot} aria-hidden />
+                <span className={s.veraLatestText}>
+                  Latest: a {veraStats.latest.label.toLowerCase()} plan
+                  {veraStats.latest.placed && veraStats.latest.usdc !== null ? `, ${compactUsd(veraStats.latest.usdc)}` : ""} on-chain
+                </span>
+                <span className={s.veraLatestLink}>view tx <ArrowUpRight size={13} strokeWidth={2} /></span>
+              </a>
+            ) : (
+              <div className={s.veraLatest}>
+                <span className={s.veraLatestDot} aria-hidden />
+                <span className={s.veraLatestText}>
+                  Her first plans are landing now. Each one shows up here, for good.
+                </span>
+              </div>
+            )}
             <Link href="/agent" className={s.veraRecordLink}>
-              See Vera&apos;s full public record
+              See her full record
               <ArrowUpRight size={16} strokeWidth={2} />
             </Link>
+          </div>
           </div>
         </div>
       </section>
 
       {/* OWN — real companies, real logos */}
-      <section className={s.section} id="own">
+      <section className={`${s.section} ${s.sectionTightTop}`} id="own">
         <div className={s.wrap}>
           <div className={s.ownHead}>
-            <h2 className={`${s.display} ${s.h2}`}>Own real shares of <span data-count="100" data-prefix="~" style={{ color: "var(--s-primary-d)" }}>~100</span> companies and funds.</h2>
+            <h2 className={`${s.display} ${s.h2}`}>Own real shares of <span style={{ color: "var(--s-primary-d)" }}>~100</span> companies and funds.</h2>
             <p className={s.lead}>Apple, Nvidia, the S&amp;P 500, US Treasuries and more, each a real share tokenized one-to-one, held by you. From a single dollar.</p>
           </div>
           <div className={s.field}>
@@ -412,7 +474,7 @@ export function SiteLanding({ veraStats = null }: { veraStats?: VeraStats | null
                 <li className={s.step}><span className={s.stepN}>3</span><div><h3>Invest in one tap</h3><p>Vera buys every holding for you, instantly and gas-free, then records it on-chain.</p></div></li>
               </ol>
             </div>
-            <div style={{ display: "grid", placeItems: "center" }}><Phone play="invest" mode={mode} /></div>
+            <div className={s.phoneSlot}><Phone play="invest" mode={mode} /></div>
           </div>
         </div>
       </section>
@@ -420,7 +482,7 @@ export function SiteLanding({ veraStats = null }: { veraStats?: VeraStats | null
       {/* BUILT ON */}
       <section className={s.section} id="built">
         <div className={s.wrap}>
-          <div className="js-reveal">
+          <div>
             <div className={s.builton}>
               <span className={s.builtonLabel}>Built on</span>
               {PARTNERS.map((p, i) => (
@@ -435,8 +497,7 @@ export function SiteLanding({ veraStats = null }: { veraStats?: VeraStats | null
             </div>
             <p className={s.builtonNote}>
               It settles on <b>Robinhood Chain</b>, a fast, low-cost Ethereum L2, where <b>Arcus</b> prices and routes every trade at a
-              live market quote, and <b>Vera</b> runs on <b>Virtuals</b>, which gives her a verifiable on-chain identity. Each stock is
-              a real share, tokenized one-to-one on Robinhood Chain, so what you own tracks the actual company.
+              live market quote, and <b>Vera</b> runs on <b>Virtuals</b>, which gives her a verifiable on-chain identity.
             </p>
           </div>
         </div>
@@ -445,8 +506,8 @@ export function SiteLanding({ veraStats = null }: { veraStats?: VeraStats | null
       {/* FAQ */}
       <section className={s.section} id="faq">
         <div className={s.wrap}>
-          <div className={s.ownHead} style={{ textAlign: "center" }}>
-            <h2 className={`${s.display} ${s.h2}`}>Questions you&rsquo;d actually ask.</h2>
+          <div className={s.ownHead}>
+            <h2 className={`${s.display} ${s.h2}`}>What people ask first.</h2>
           </div>
           <div className={`${s.faq} js-stagger`}>
             {FAQ.slice(0, 6).map((item) => (
@@ -459,8 +520,8 @@ export function SiteLanding({ veraStats = null }: { veraStats?: VeraStats | null
               </details>
             ))}
           </div>
-          <p style={{ textAlign: "center", marginTop: 26 }}>
-            <Link href="/app" style={{ color: "var(--s-primary-d)", fontWeight: 600 }}>More answers inside the app &rarr;</Link>
+          <p className={s.moreLink}>
+            <Link href="/app">More answers inside the app &rarr;</Link>
           </p>
         </div>
       </section>
@@ -468,10 +529,10 @@ export function SiteLanding({ veraStats = null }: { veraStats?: VeraStats | null
       {/* CTA */}
       <section className={s.section}>
         <div className={s.wrap}>
-          <div className={`${s.ctaCard} js-reveal`}>
+          <div className={`${s.ctaCard} js-cta`}>
             <div className={s.ctaGlow} aria-hidden />
             <h2>Your first investment is one sentence away.</h2>
-            <p>Start with as little as $1. Tell Vera a goal, look over the plan she builds, and invest in one tap.</p>
+            <p>Start with as little as $1, and sell back to digital dollars whenever you want. No lock-ups, no minimum balance.</p>
             <div className={s.ctaCtas}>
               <Link className={`${s.btn} ${s.btnLg} ${s.btnOnDark}`} href="/app">Open the app <ArrowUpRight size={18} strokeWidth={2.2} /></Link>
               <a className={`${s.btn} ${s.btnLg} ${s.btnGhostOnDark}`} href="#how">How it works</a>

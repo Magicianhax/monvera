@@ -494,7 +494,7 @@ export function AutopilotScreen({
                   value={goal}
                   onChange={(e) => { setGoal(e.target.value); setActiveTemplate(null); }}
                   maxLength={120}
-                  style={{ width: "100%", marginTop: 6, padding: "12px 14px", fontSize: 14.5, ...softInput }}
+                  style={{ width: "100%", marginTop: 6, padding: "12px 14px", fontSize: 16, ...softInput }}
                 />
               </label>
 

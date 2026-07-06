@@ -17,6 +17,13 @@
   -webkit-font-smoothing: antialiased;
 }
 
+.root.root {
+  /* Repeat-class bump: globals' .site declares font-family and overflow-x at the
+     same (0,1,0) specificity; stylesheet order across builds must not decide. */
+  font-family: var(--font-geist), system-ui, sans-serif;
+  overflow-x: clip;
+}
+
 .wrap {
   width: 100%;
   max-width: var(--maxw);
@@ -48,7 +55,6 @@
     radial-gradient(40% 38% at 100% 6%, color-mix(in srgb, var(--s-accent) 22%, transparent), transparent 58%),
     radial-gradient(52% 44% at 88% 96%, color-mix(in srgb, var(--s-primary) 16%, transparent), transparent 62%);
   opacity: 0.9;
-  will-change: transform;
 }
 
 /* ── Nav: a short floating pill, warm-translucent, hides on scroll ────────── */
@@ -100,7 +106,7 @@
 .navLinks a {
   font-size: 14.5px;
   font-weight: 500;
-  color: var(--s-ink-2);
+  color: var(--s-ink);
   text-decoration: none;
   transition: color 0.2s var(--s-ease, ease);
 }
@@ -127,8 +133,10 @@
   gap: 4px;
   padding: 12px;
   border-radius: 20px;
-  background: var(--s-surface);
-  border: 1px solid var(--s-line);
+  background: var(--s-glass-strong);
+  backdrop-filter: blur(24px) saturate(1.7);
+  -webkit-backdrop-filter: blur(24px) saturate(1.7);
+  border: 1px solid rgba(255, 255, 255, 0.16);
   box-shadow: 0 18px 44px rgba(30, 44, 30, 0.14);
 }
 .navDropPanel a { padding: 11px 12px; border-radius: 12px; color: var(--s-ink); text-decoration: none; font-weight: 500; }
@@ -156,94 +164,23 @@
 /* .root prefix raises specificity above the global `.site a { color: inherit }`
    so button label colours actually win (otherwise a white-on-white CTA). */
 .root .btnPrimary {
-  background: var(--s-primary-d);
+  /* #38795a, not the token: white-on-token is 4.26:1 in light mode (AA fail). */
+  background: #38795a;
   color: #fff;
   box-shadow: 0 8px 22px color-mix(in srgb, var(--s-primary-d) 34%, transparent);
 }
 .root .btnPrimary:hover { box-shadow: 0 12px 30px color-mix(in srgb, var(--s-primary-d) 42%, transparent); transform: translateY(-1px); }
-.root .btnGhost {
-  background: color-mix(in srgb, var(--s-surface) 60%, transparent);
-  color: var(--s-ink);
-  border-color: var(--s-line);
-  backdrop-filter: blur(8px);
-}
-.root .btnGhost:hover { border-color: color-mix(in srgb, var(--s-primary) 50%, var(--s-line)); }
 .btnSm { height: 42px; padding: 0 18px; font-size: 14.5px; }
 .btnLg { height: 56px; padding: 0 30px; font-size: 16.5px; }
-.root .btnOnDark { background: #fff; color: var(--s-primary-d); }
+.root .btnOnDark { background: #fff; color: #38795a; }
 .root .btnGhostOnDark { background: rgba(255,255,255,0.12); color: #fff; border-color: rgba(255,255,255,0.28); }
 
 /* ── Section scaffold ─────────────────────────────────────────────────────── */
 .section { position: relative; z-index: 1; padding-block: var(--gap); }
-.kicker {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 13px;
-  font-weight: 600;
-  letter-spacing: 0.01em;
-  color: var(--s-primary-d);
-  padding: 6px 13px 6px 10px;
-  border-radius: 999px;
-  background: var(--s-primary-soft);
-}
+.sectionTightBottom { padding-bottom: clamp(28px, 5vh, 60px); }
+.sectionTightTop { padding-top: clamp(28px, 5vh, 60px); }
 .h2 { font-size: clamp(2rem, 4.6vw, 3.3rem); margin: 16px 0 0; }
 .lead { font-size: clamp(1.05rem, 1.6vw, 1.3rem); line-height: 1.55; color: var(--s-ink-2); max-width: 60ch; margin: 16px 0 0; }
-
-/* ── Hero ─────────────────────────────────────────────────────────────────── */
-.hero { position: relative; z-index: 1; padding: clamp(120px, 17vh, 190px) 0 clamp(40px, 7vh, 80px); }
-.heroGrid {
-  display: grid;
-  grid-template-columns: 1.05fr 0.95fr;
-  gap: clamp(24px, 5vw, 60px);
-  align-items: center;
-}
-.heroTitle { font-size: clamp(2.6rem, 6.2vw, 4.8rem); line-height: 1.05; margin: 4px 0 0; padding-bottom: 0.08em; }
-.heroTitle > span { display: block; }
-.heroTitle em { font-style: normal; color: var(--s-primary-d); }
-.heroSub { font-size: clamp(1.1rem, 1.8vw, 1.4rem); line-height: 1.5; color: var(--s-ink-2); margin: 22px 0 0; max-width: 30ch; }
-.heroCtas { display: flex; gap: 12px; margin-top: 30px; flex-wrap: wrap; }
-.heroProof { display: flex; align-items: center; gap: 18px; margin-top: 26px; flex-wrap: wrap; color: var(--s-ink-3); font-size: 13.5px; font-weight: 500; }
-.heroProof b { color: var(--s-ink); font-weight: 700; }
-.heroProofDot { width: 4px; height: 4px; border-radius: 999px; background: var(--s-ink-3); opacity: 0.6; }
-
-.heroStage { position: relative; display: grid; place-items: center; }
-.heroHalo {
-  position: absolute;
-  width: 118%;
-  aspect-ratio: 1;
-  border-radius: 50%;
-  background: radial-gradient(circle, color-mix(in srgb, var(--s-primary) 34%, transparent) 0%, transparent 62%);
-  filter: blur(14px);
-  z-index: 0;
-  will-change: transform;
-}
-.phoneWrap { position: relative; z-index: 1; will-change: transform; }
-
-/* floating stock chips around the hero phone */
-.chip {
-  position: absolute;
-  z-index: 2;
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 12px 8px 8px;
-  border-radius: 999px;
-  background: var(--s-surface);
-  border: 1px solid var(--s-line);
-  box-shadow: 0 10px 26px rgba(30, 44, 30, 0.12);
-  font-size: 13px;
-  font-weight: 600;
-  white-space: nowrap;
-  will-change: transform;
-}
-.chip img, .chip span.mono { display: block; }
-.chip .up { color: var(--s-pos); font-weight: 700; }
-.chip .down { color: var(--s-neg); font-weight: 700; }
-.chipTL { top: 6%; left: -6%; }
-.chipTR { top: 22%; right: -8%; }
-.chipBL { bottom: 20%; left: -10%; }
-.chipBR { bottom: 4%; right: -4%; }
 
 /* ── Full-bleed hero: world-landmarks slideshow + wordmark ─────────────────── */
 .heroFull {
@@ -261,7 +198,6 @@
   background-size: cover;
   background-position: center;
   opacity: 0;
-  will-change: opacity, transform;
 }
 .heroSlide:first-child { opacity: 1; }
 .heroScrim {
@@ -288,20 +224,25 @@
   margin: 0;
   text-shadow: 0 6px 50px rgba(0, 0, 0, 0.45), 0 2px 12px rgba(0, 0, 0, 0.35);
 }
-/* Vera mascot — anchored to the bottom-left edge, ~2x size, static (no zoom/float).
-   The stacked imgs simply cross-fade as the region changes. bottom is pulled down
-   ~10% of her height so her feet sit on the bottom edge (her transparent margin). */
+/* Vera mascot — anchored to the bottom-left edge, static (no zoom/float). The
+   stacked imgs cross-fade as the region changes. bottom is pulled down 17% of
+   her height so her feet sit on the bottom edge (her transparent margin).
+   z-index 1: above the scrim (same z, later in DOM), below .heroContent (z 2),
+   so she can never cover the tagline or CTAs on small screens. */
 .mascotLayer {
   --mh: clamp(400px, 54vw, 800px);
   position: absolute;
   left: 0;
   bottom: calc(var(--mh) * -0.17);
-  z-index: 3;
+  z-index: 1;
   height: var(--mh);
   aspect-ratio: 2 / 3;
   pointer-events: none;
 }
-@media (max-width: 760px) { .mascotLayer { --mh: clamp(220px, 58vw, 420px); } }
+/* Phones: cap by viewport height too, so short screens keep the CTAs clear. */
+@media (max-width: 760px) { .mascotLayer { --mh: min(clamp(220px, 58vw, 420px), 55svh); } }
+/* Landscape phones: no room for a mascot at all. */
+@media (max-height: 480px) { .mascotLayer { display: none; } }
 .mascot {
   position: absolute;
   inset: 0;
@@ -309,7 +250,6 @@
   height: 100%;
   object-fit: contain;
   opacity: 0;
-  will-change: opacity;
   filter: drop-shadow(0 18px 26px rgba(0, 0, 0, 0.42));
 }
 .mascot:first-child { opacity: 1; }
@@ -322,29 +262,6 @@
   text-shadow: 0 2px 16px rgba(0, 0, 0, 0.5);
 }
 .heroCtasFull { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; margin-top: 34px; }
-.placeLabel {
-  position: absolute;
-  bottom: clamp(22px, 4.5vh, 46px);
-  left: 0;
-  right: 0;
-  z-index: 2;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 9px;
-  color: rgba(255, 255, 255, 0.9);
-  font-size: 13px;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  text-shadow: 0 1px 10px rgba(0, 0, 0, 0.5);
-}
-.placeDot {
-  width: 7px;
-  height: 7px;
-  border-radius: 999px;
-  background: var(--s-primary);
-  box-shadow: 0 0 0 4px color-mix(in srgb, var(--s-primary) 32%, transparent);
-}
 @media (prefers-reduced-motion: reduce) {
   .heroSlide { transition: none; }
 }
@@ -357,7 +274,9 @@
   max-width: 92%;
   padding: 16px 20px;
   border-radius: 22px 22px 22px 6px;
-  background: var(--s-surface);
+  background: var(--s-glass);
+  backdrop-filter: var(--s-glass-blur);
+  -webkit-backdrop-filter: var(--s-glass-blur);
   border: 1px solid var(--s-line);
   box-shadow: 0 10px 30px rgba(30, 44, 30, 0.08);
   font-family: var(--font-fraunces), serif;
@@ -367,11 +286,23 @@
   color: var(--s-ink);
 }
 .caret { color: var(--s-primary); font-weight: 400; }
+.sayWrap { margin-top: 26px; }
+.planList { margin-top: 8px; }
+/* While stacked, reserve the bubble's tall state so the typing loop never
+   shifts the plan card below it. */
+@media (max-width: 900px) {
+  .sayBubble { display: block; max-width: 100%; min-height: calc(2 * 1.25em + 34px); }
+}
+@media (max-width: 400px) {
+  .sayBubble { min-height: calc(3 * 1.25em + 34px); }
+}
 .planCard {
   border-radius: 26px;
-  background: var(--s-surface);
+  background: var(--s-glass-strong);
+  backdrop-filter: var(--s-glass-blur);
+  -webkit-backdrop-filter: var(--s-glass-blur);
   border: 1px solid var(--s-line);
-  box-shadow: 0 24px 60px rgba(30, 44, 30, 0.12);
+  box-shadow: var(--s-glass-shadow);
   padding: 20px;
 }
 .planHead { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 15px; }
@@ -387,24 +318,46 @@
 
 /* ── Trust pillars ────────────────────────────────────────────────────────── */
 .pillars { display: grid; grid-template-columns: repeat(3, 1fr); gap: clamp(16px, 3vw, 34px); margin-top: 44px; }
-.pillar { }
-.pillarIco { width: 46px; height: 46px; border-radius: 15px; display: grid; place-items: center; background: var(--s-primary-soft); color: var(--s-primary-d); margin-bottom: 16px; }
+.pillar { border-top: 1px solid var(--s-line); padding-top: 18px; }
 .pillarStat { font-family: var(--font-fraunces), serif; font-size: clamp(2rem, 4vw, 2.8rem); letter-spacing: -0.02em; color: var(--s-ink); line-height: 1; }
 .pillarStat span { color: var(--s-primary-d); }
 .pillarLabel { font-weight: 700; font-size: 16px; margin-top: 12px; }
 .pillarText { color: var(--s-ink-2); font-size: 14.5px; line-height: 1.55; margin-top: 4px; max-width: 34ch; }
 
-/* ── Vera's live on-chain record — a stat band under the trust pillars ─────── */
-.veraRecord {
-  margin: 48px auto 0;
-  max-width: 560px;
-  padding: 26px 28px 22px;
-  border-radius: 24px;
-  background: var(--s-surface);
-  box-shadow: 0 2px 10px rgba(70, 84, 62, 0.05), 0 22px 54px rgba(70, 84, 62, 0.1);
-  text-align: center;
+/* ── Vera's on-chain identity + latest plan — mascot left, card right, the pair
+      centered; mascot height tracks the card (align-items: stretch). ───────── */
+.veraProof {
+  display: flex;
+  align-items: flex-end;   /* mascot stands on the card's bottom edge */
+  justify-content: center;
+  gap: clamp(8px, 2vw, 28px);
+  max-width: 1060px;
+  margin: clamp(56px, 8vh, 84px) auto 0;
 }
-.veraRecordHead { display: flex; justify-content: center; margin-bottom: 20px; }
+/* Explicit height tuned to the card (2:3 image, so width follows). A plain
+   <img> renders reliably; aspect-ratio on a flex item collapsed its width. */
+.veraMascot {
+  flex: none;
+  height: clamp(240px, 30vw, 392px);
+  width: auto;
+  display: block;
+  object-fit: contain;
+  object-position: bottom;
+  filter: drop-shadow(0 14px 32px rgba(0, 0, 0, 0.18));
+}
+.veraRecord {
+  flex: 1 1 auto;
+  max-width: 780px;
+  padding: 24px 32px 20px;
+  border-radius: 24px;
+  background: var(--s-glass-strong);
+  backdrop-filter: var(--s-glass-blur);
+  -webkit-backdrop-filter: var(--s-glass-blur);
+  border: 1px solid var(--s-line);
+  box-shadow: var(--s-glass-shadow);
+  text-align: left;
+}
+.veraRecordHead { display: flex; margin-bottom: 16px; }
 .veraRecordEyebrow {
   display: inline-flex; align-items: center; gap: 8px;
   font-size: 12.5px; font-weight: 600; letter-spacing: 0.02em; color: var(--s-ink-2);
@@ -413,15 +366,53 @@
   content: ""; width: 7px; height: 7px; border-radius: 50%;
   background: var(--s-primary-d); box-shadow: 0 0 0 4px var(--s-primary-soft);
 }
-.veraStats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
-.veraStat { min-width: 0; }
-.veraStatNum {
-  font-family: var(--font-fraunces), serif; font-size: clamp(1.7rem, 4vw, 2.3rem);
+.veraIdRow { display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap; }
+.veraIdName {
+  font-family: var(--font-fraunces), serif; font-size: clamp(1.9rem, 4vw, 2.4rem);
   letter-spacing: -0.02em; color: var(--s-ink); line-height: 1;
 }
-.veraStatLabel { font-size: 13px; font-weight: 500; color: var(--s-ink-2); margin-top: 8px; }
+.veraIdNum { color: var(--s-primary-d); }
+.veraIdBadge {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 6px 12px; border-radius: 99px;
+  background: var(--s-primary-soft); color: var(--s-primary-d);
+  font-size: 12px; font-weight: 600; letter-spacing: 0.01em;
+}
+.veraIdLine { margin: 12px 0 0; font-size: 15px; line-height: 1.55; color: var(--s-ink-2); max-width: 64ch; }
+.veraStatStrip {
+  display: flex;
+  gap: 8px;
+  margin-top: 20px;
+  padding-top: 18px;
+  border-top: 1px solid var(--s-line);
+}
+.veraStatCell { flex: 1; display: flex; flex-direction: column; gap: 3px; }
+.veraStatNum {
+  font-family: var(--font-fraunces), serif; font-size: clamp(1.35rem, 2.6vw, 1.7rem);
+  letter-spacing: -0.02em; color: var(--s-ink); line-height: 1;
+}
+.veraStatCell:nth-child(2) .veraStatNum { color: var(--s-primary-d); }
+.veraStatLbl { font-size: 12px; font-weight: 500; color: var(--s-ink-3); }
+.veraLatest {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  margin-top: 20px; padding: 13px 15px; border-radius: 14px;
+  background: rgba(120, 140, 110, 0.08);
+  font-size: 13.5px; color: var(--s-ink); text-decoration: none;
+  transition: background 0.2s;
+}
+a.veraLatest:hover { background: color-mix(in srgb, var(--s-primary) 14%, transparent); }
+.veraLatestDot {
+  width: 8px; height: 8px; border-radius: 50%; flex: none;
+  background: var(--s-primary-d);
+  box-shadow: 0 0 0 4px var(--s-primary-soft);
+}
+.veraLatestText { flex: 1; min-width: 0; font-weight: 500; }
+.veraLatestLink {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-weight: 600; color: var(--s-primary-d); white-space: nowrap;
+}
 .veraRecordLink {
-  display: inline-flex; align-items: center; gap: 5px; margin-top: 22px;
+  display: inline-flex; align-items: center; gap: 5px; margin-top: 20px;
   font-size: 13.5px; font-weight: 600; color: var(--s-primary-d);
 }
 
@@ -436,7 +427,7 @@
   gap: 11px;
   padding: 12px 18px 12px 12px;
   border-radius: 999px;
-  background: var(--s-surface);
+  background: color-mix(in srgb, var(--s-surface) 76%, transparent);
   border: 1px solid var(--s-line);
   box-shadow: 0 6px 18px rgba(30, 44, 30, 0.06);
   white-space: nowrap;
@@ -455,6 +446,8 @@
 .stepN { flex: none; width: 34px; height: 34px; border-radius: 999px; display: grid; place-items: center; background: var(--s-primary-d); color: #fff; font-weight: 700; font-size: 15px; font-family: var(--font-fraunces), serif; }
 .step h3 { margin: 4px 0 0; font-size: 17px; font-weight: 700; letter-spacing: -0.01em; }
 .step p { margin: 5px 0 0; color: var(--s-ink-2); font-size: 14.5px; line-height: 1.55; }
+
+.phoneSlot { display: grid; place-items: center; }
 
 /* ── Built on ─────────────────────────────────────────────────────────────── */
 .builton { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 14px 22px; }
@@ -477,7 +470,9 @@
 .faqIco { flex: none; color: var(--s-ink-3); transition: transform 0.3s var(--s-ease-soft, ease); }
 details[open] .faqIco { transform: rotate(180deg); }
 .faqA { overflow: hidden; }
-.faqA p { margin: 0; padding: 0 40px 22px 4px; color: var(--s-ink-2); font-size: 15px; line-height: 1.65; }
+.faqA p { margin: 0; padding: 0 40px 22px 4px; color: var(--s-ink-2); font-size: 15px; line-height: 1.65; max-width: 62ch; }
+.moreLink { text-align: center; margin-top: 26px; }
+.root .moreLink a { color: var(--s-primary-d); font-weight: 600; text-decoration: none; }
 
 /* ── Final CTA (green-drenched) ───────────────────────────────────────────── */
 .ctaCard {
@@ -486,14 +481,17 @@ details[open] .faqIco { transform: rotate(180deg); }
   border-radius: 34px;
   padding: clamp(40px, 6vw, 72px);
   text-align: center;
-  background: var(--s-hero-grad);
+  /* Deeper tail than the hero-grad token: white body text needs 4.5:1 across
+     the whole card (mid #38795a = 5.1:1, tail #2b6349 = 6.9:1). */
+  background: linear-gradient(135deg, #45896c 0%, #38795a 45%, #2b6349 100%);
   color: #fff;
   box-shadow: 0 30px 80px color-mix(in srgb, var(--s-primary-d) 40%, transparent);
 }
-.ctaCard h2 { font-family: var(--font-fraunces), serif; font-size: clamp(2rem, 5vw, 3.4rem); letter-spacing: -0.025em; line-height: 1.05; margin: 0; }
-.ctaCard p { margin: 16px auto 0; max-width: 46ch; font-size: clamp(1rem, 1.6vw, 1.2rem); line-height: 1.55; opacity: 0.92; }
+.ctaCard h2 { font-family: var(--font-fraunces), serif; font-size: clamp(2rem, 5vw, 3.4rem); letter-spacing: -0.025em; line-height: 1.05; margin: 0; text-wrap: balance; }
+.ctaCard p { margin: 16px auto 0; max-width: 46ch; font-size: clamp(1rem, 1.6vw, 1.2rem); line-height: 1.55; }
+.ctaCard h2, .ctaCard p { position: relative; z-index: 1; }
 .ctaCtas { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; margin-top: 30px; position: relative; }
-.ctaGlow { position: absolute; inset: -40% -10% auto; height: 80%; background: radial-gradient(50% 60% at 50% 0%, rgba(255,255,255,0.28), transparent 70%); pointer-events: none; }
+.ctaGlow { position: absolute; inset: -40% -10% auto; height: 80%; background: radial-gradient(50% 60% at 50% 0%, rgba(255,255,255,0.16), transparent 70%); pointer-events: none; z-index: 0; }
 
 /* ── Footer ───────────────────────────────────────────────────────────────── */
 .footer { position: relative; z-index: 1; padding: 64px 0 40px; border-top: 1px solid var(--s-line); margin-top: var(--gap); }
@@ -506,22 +504,72 @@ details[open] .faqIco { transform: rotate(180deg); }
 
 /* ── Responsive ───────────────────────────────────────────────────────────── */
 @media (max-width: 900px) {
-  .heroGrid, .beatGrid, .howGrid { grid-template-columns: 1fr; }
-  .heroStage { order: -1; }
-  .beatGrid > :first-child { order: 2; }
-  .pillars { grid-template-columns: 1fr; gap: 26px; }
+  .beatGrid, .howGrid { grid-template-columns: 1fr; }
+  .planCard { max-width: 620px; }
+  /* 3 -> 2 -> 1: the middle band gets a real 2-column layout, the odd pillar
+     spanning the full row, instead of a lopsided single column. */
+  .pillars { grid-template-columns: repeat(2, 1fr); gap: 30px 22px; }
+  .pillars > .pillar:last-child { grid-column: 1 / -1; }
   .navLinks { display: none; }
+  /* .navLinks owned the flex spacer; without it the actions must claim it. */
+  .navActions { margin-left: auto; }
   .burger { display: grid; }
   .footerGrid { grid-template-columns: 1fr 1fr; }
-  .chipBL, .chipTR { display: none; }
+}
+@media (max-width: 760px) {
+  /* Stack the proof: mascot centered above the card at a fixed size (the
+     side-by-side row squeezes the card's stat strip below this width). */
+  .veraProof { flex-direction: column; align-items: center; gap: 4px; }
+  .veraMascot { align-self: center; width: clamp(120px, 34vw, 180px); height: auto; }
+  .veraRecord { max-width: 100%; }
+  /* Wrapping logo rows read cleaner without orphaned divider ticks. */
+  .builtonDiv { display: none; }
+  .builton { gap: 12px 20px; }
 }
 @media (max-width: 560px) {
-  .footerGrid { grid-template-columns: 1fr; }
-  .heroSub { max-width: none; }
-  .footerBottom { flex-direction: column; }
+  /* Phone: center the narrative. Section titles, leads, and standalone text
+     blocks all align to the middle; list rows keep their readable left edge
+     but sit centered as a block. */
+  .h2 { text-align: center; }
+  .lead { margin-inline: auto; text-align: center; }
+  .sayWrap { text-align: center; }
+  .sayBubble { text-align: left; }
+  .steps { max-width: 420px; margin-inline: auto; }
+  .builtonLabel { flex-basis: 100%; text-align: center; }
+  .pillar { text-align: center; }
+  .pillarText { margin-inline: auto; }
+  /* Footer: one centered column instead of a left-hugging stack. */
+  .footerGrid { grid-template-columns: 1fr; text-align: center; }
+  .footerBrand p { margin-inline: auto; }
+  .footerBottom { flex-direction: column; text-align: center; align-items: center; }
+  .footerCol a { padding-block: 8px; margin-bottom: 2px; }
+  .footerCol h4 { margin-top: 10px; }
+  .pillars { grid-template-columns: 1fr; gap: 26px; }
+  .pillars > .pillar:last-child { grid-column: auto; }
+  .planRow { gap: 9px; }
+  .planBarTrack { width: clamp(48px, 16vw, 90px); }
+  .planPct { width: 30px; }
+  .veraStatStrip { gap: 4px; }
+  /* The burger menu: a compact 2-across grid, not a tall single-file list. */
+  .navDropPanel { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .navDropPanel a { text-align: center; padding: 13px 8px; background: color-mix(in srgb, var(--s-primary-soft) 55%, transparent); }
+}
+@media (max-width: 520px) {
+  /* The pill's min-content exceeds a 320-390px viewport with the CTA inline;
+     the burger menu carries "Open the app" instead. */
+  .navInner { gap: 12px; padding-left: 14px; }
+  .navCta { display: none; }
+}
+@media (max-width: 374px) {
+  .veraStatLbl { font-size: 11px; letter-spacing: 0; }
+}
+@media (pointer: coarse) {
+  .iconBtn { width: 44px; height: 44px; }
+  .btnSm { height: 44px; }
+  .navLinks a, .footerCol a { padding-block: 6px; }
 }
 
 /* ── Reduced motion: kill the CSS drifts (GSAP handles its own guard) ─────── */
 @media (prefers-reduced-motion: reduce) {
-  .fieldRow, .aura, .heroHalo, .chip { animation: none !important; }
+  .fieldRow, .aura { animation: none !important; }
 }

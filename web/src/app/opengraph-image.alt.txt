@@ -1,1 +1,1 @@
-Monvera — own real stocks, in plain words. AI broker for tokenized stocks on Robinhood Chain.
+Monvera: invest by just saying what you want. Vera the mascot beside the app showing a real portfolio, built on Robinhood, Arcus, and Virtuals.

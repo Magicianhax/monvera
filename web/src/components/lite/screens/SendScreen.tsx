@@ -213,7 +213,7 @@ export function SendScreen({
             autoCapitalize="off"
             autoCorrect="off"
             className="mono"
-            style={{ flex: 1, minWidth: 0, border: "none", background: "transparent", outline: "none", fontSize: 14, padding: "14px 0", color: "var(--ink)" }}
+            style={{ flex: 1, minWidth: 0, border: "none", background: "transparent", outline: "none", fontSize: 16, padding: "14px 0", color: "var(--ink)" }}
           />
           {to.trim().length > 0 && (
             <Icon
