@@ -30,9 +30,12 @@ export interface AssetDisplay extends TileAsset {
 }
 
 // Real stock/ETF logos Arcus publishes for Robinhood Chain tokens (public bucket).
-const ARCUS_LOGO_BASE = "https://v5-production-api-meta-branding.s3.ap-northeast-1.amazonaws.com/markets/branding";
+// Stock logos are mirrored into public/logos (see the Arcus branding bucket for
+// the originals) so every asset serves from our own Cloudflare CDN, not a
+// third-party S3 bucket. TokenLogo falls back to a coloured monogram if missing.
+const LOGO_BASE = "/logos";
 function arcusLogo(symbol: string): string {
-  return `${ARCUS_LOGO_BASE}/${symbol}.png`;
+  return `${LOGO_BASE}/${symbol}.webp`;
 }
 
 const UP = [4, 5, 5, 6, 7, 7, 8, 9, 9, 10];
