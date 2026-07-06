@@ -21,7 +21,8 @@ import { displayFor } from "@/lib/displayAssets";
 import { whyItMoved } from "@/lib/marketContext";
 import { toWalletEvents } from "@/lib/walletActivity";
 import { sinceBought } from "@/lib/sinceBought";
-import { Icon, PriceChart, CountUp } from "@/components/design";
+import { Icon, PriceChart, CountUp, BottomSheet } from "@/components/design";
+import { useNotifyActions } from "@/hooks/useNotifications";
 import { usd, addressUrl, shortAddress } from "@/lib/format";
 import { WatchStar } from "@/components/lite/WatchStar";
 import { iconBtn } from "./primitives";
@@ -70,6 +71,11 @@ export function AssetDetailScreen({
   go: (target: string | number, params?: Record<string, unknown>) => void;
   symbol: string;
 }) {
+  const [alertOpen, setAlertOpen] = useState(false);
+  const [alertDir, setAlertDir] = useState<"above" | "below">("above");
+  const [alertPx, setAlertPx] = useState("");
+  const [alertBusy, setAlertBusy] = useState(false);
+  const { createAlert } = useNotifyActions();
   const asset: Asset = ALL_ASSETS.find((a) => a.symbol === symbol) ?? ALL_ASSETS[0];
   const d = displayFor(asset.symbol, asset.name);
   const { address } = useSmartAccount();
@@ -222,6 +228,10 @@ export function AssetDetailScreen({
             Coming soon
           </span>
         )}
+        <button className="tap" onClick={() => setAlertOpen(true)} aria-label="Set a price alert"
+          style={{ width: 34, height: 34, borderRadius: 99, display: "grid", placeItems: "center", background: "var(--surface-2)", color: "var(--ink-2)", flex: "none" }}>
+          <Icon name="bell" size={17} />
+        </button>
         <WatchStar symbol={asset.symbol} size={22} />
       </div>
 
@@ -450,6 +460,43 @@ export function AssetDetailScreen({
           </a>
         </div>
       </section>
+
+            {/* price alert — one honest trigger, checked every 15 minutes */}
+      <BottomSheet open={alertOpen} onClose={() => setAlertOpen(false)} title={`Alert me on ${d.name}`}>
+        <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
+          {(["above", "below"] as const).map((dir) => (
+            <button key={dir} className={`chip tap ${alertDir === dir ? "is-on" : ""}`} onClick={() => setAlertDir(dir)}
+              style={{ flex: 1, height: 38, justifyContent: "center" }}>
+              Goes {dir}
+            </button>
+          ))}
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 14px", borderRadius: "var(--r)", background: "var(--surface-2)" }}>
+          <span className="tnum" style={{ fontSize: 20, fontWeight: 500 }}>$</span>
+          <input inputMode="decimal" value={alertPx} onChange={(e) => setAlertPx(e.target.value.replace(/[^0-9.]/g, ""))}
+            placeholder={heroPrice !== undefined ? heroPrice.toFixed(2) : "0.00"} aria-label="Alert price"
+            style={{ flex: 1, minWidth: 0, border: "none", background: "transparent", outline: "none", fontSize: 20, fontWeight: 500, color: "var(--ink)" }} />
+        </div>
+        <button className="btn btn-primary btn-block btn-lg tap" style={{ marginTop: 16 }}
+          disabled={alertBusy || !(parseFloat(alertPx) > 0)}
+          onClick={async () => {
+            setAlertBusy(true);
+            try {
+              await createAlert({ symbol: asset.symbol, direction: alertDir, threshold: parseFloat(alertPx) });
+              setAlertOpen(false);
+              setAlertPx("");
+            } catch {
+              /* surfaced by the alerts list staying unchanged */
+            } finally {
+              setAlertBusy(false);
+            }
+          }}>
+          {alertBusy ? "Saving..." : "Set alert"}
+        </button>
+        <p style={{ fontSize: 12, color: "var(--ink-3)", textAlign: "center", marginTop: 12, lineHeight: 1.5 }}>
+          Checked every 15 minutes. You will get a notification in the app; the alert turns itself off after it fires.
+        </p>
+      </BottomSheet>
 
       {/* CTA — flat sticky bar: solid surface, hairline top */}
       <div

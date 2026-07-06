@@ -21,13 +21,16 @@ export default {
   // Fired by Cloudflare on the schedule in wrangler.jsonc. Self-invokes the
   // Next.js cron route through the service binding so the OpenNext runtime
   // (env, store, executor) handles the actual work.
-  async scheduled(_event: unknown, env: Env, ctx: { waitUntil(p: Promise<unknown>): void }) {
+  async scheduled(event: unknown, env: Env, ctx: { waitUntil(p: Promise<unknown>): void }) {
     const secret = env.AUTOPILOT_CRON_SECRET;
-    if (!secret) return; // autopilot not configured on this deployment
-    ctx.waitUntil(
-      env.WORKER_SELF_REFERENCE.fetch("https://monvera.xyz/api/cron/autopilot", {
+    if (!secret) return; // crons not configured on this deployment
+    const cron = (event as { cron?: string }).cron ?? "";
+    const hit = (path: string) =>
+      env.WORKER_SELF_REFERENCE.fetch(`https://monvera.xyz${path}`, {
         headers: { authorization: `Bearer ${secret}` },
-      }),
-    );
+      });
+    // every 15 min: price alerts; on the hour: autopilot too.
+    ctx.waitUntil(hit("/api/cron/alerts"));
+    if (cron === "0 * * * *") ctx.waitUntil(hit("/api/cron/autopilot"));
   },
 };

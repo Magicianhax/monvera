@@ -26,6 +26,7 @@ import { toTile, catFor } from "@/lib/displayAssets";
 import { usd, tokenQty, fmtAmt } from "@/lib/format";
 import { toWalletEvents, eventLabel } from "@/lib/walletActivity";
 import { ActivityGlyph } from "@/components/lite/ActivityGlyph";
+import { useNotifications } from "@/hooks/useNotifications";
 import { iconBtn, boxHead, innerBox } from "./primitives";
 
 const DOTS = "••••••";
@@ -154,6 +155,7 @@ export function HomeScreen({
 }: {
   go: (screen: string, params?: Record<string, unknown>) => void;
 }) {
+  const unread = useNotifications().data?.unread ?? 0;
   const { address } = useSmartAccount();
   // Cash, invested, and total all arrive pre-computed from /api/portfolio —
   // this screen renders them verbatim (no client-side money math).
@@ -200,8 +202,15 @@ export function HomeScreen({
           <button onClick={() => go("wallet")} style={iconBtn} className="tap" aria-label="Wallet">
             <Icon name="wallet" size={21} />
           </button>
-          <button onClick={() => go("activity")} style={iconBtn} className="tap" aria-label="Activity">
+          <button onClick={() => go("notifications")} style={{ ...iconBtn, position: "relative" }} className="tap" aria-label="Notifications">
             <Icon name="bell" size={21} />
+            {unread > 0 && (
+              <span
+                style={{ position: "absolute", top: 9, right: 10, minWidth: 15, height: 15, padding: "0 3px", borderRadius: 99, background: "var(--primary)", color: "var(--primary-ink)", fontSize: 9.5, fontWeight: 600, display: "grid", placeItems: "center", lineHeight: 1 }}
+              >
+                {unread > 9 ? "9+" : unread}
+              </span>
+            )}
           </button>
           <button onClick={() => go("settings")} style={iconBtn} className="tap" aria-label="Settings">
             <Icon name="settings" size={21} />

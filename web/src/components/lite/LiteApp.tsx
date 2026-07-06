@@ -35,6 +35,7 @@ import { SuccessScreen } from "./screens/SuccessScreen";
 import { PortfolioScreen } from "./screens/PortfolioScreen";
 import { MarketScreen } from "./screens/MarketScreen";
 import { MoversScreen } from "./screens/MoversScreen";
+import { NotificationsScreen } from "./screens/NotificationsScreen";
 import { AssetDetailScreen } from "./screens/AssetDetailScreen";
 import { TradeScreen } from "./screens/TradeScreen";
 import { ReceiptScreen } from "./screens/ReceiptScreen";
@@ -61,6 +62,7 @@ type Screen =
   | "portfolio"
   | "market"
   | "movers"
+  | "notifications"
   | "asset"
   | "trade"
   | "receipt"
@@ -312,6 +314,7 @@ export function LiteApp({ demoPlay = null }: { demoPlay?: "invest" | "vera" | nu
       portfolio: "What you own",
       market: "Market",
       movers: "Movers",
+      notifications: "Notifications",
       asset: "Asset",
       trade: "Trade",
       receipt: "Receipt",
@@ -473,6 +476,9 @@ export function LiteApp({ demoPlay = null }: { demoPlay?: "invest" | "vera" | nu
       break;
     case "movers":
       view = <MoversScreen go={go} />;
+      break;
+    case "notifications":
+      view = <NotificationsScreen go={go} />;
       break;
     case "asset":
       view = <AssetDetailScreen go={go} symbol={String(params.symbol ?? "")} />;

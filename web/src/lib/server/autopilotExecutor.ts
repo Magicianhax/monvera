@@ -15,6 +15,7 @@ import { createPublicClient, encodeFunctionData, http, parseAbi } from "viem";
 import { chain, RPC_URL } from "@/lib/chain";
 import { checkBounds, type AutopilotConfig } from "@/lib/autopilot";
 import { recordRun, logRun } from "@/lib/server/autopilotStore";
+import { addNotification } from "@/lib/server/notifyStore";
 import { buildAllocation } from "@/lib/server/allocate";
 import { getServerSmartAccountClient } from "@/lib/server/privySmartAccount";
 import { getQuote, PERMIT2 } from "@/lib/server/arcus";
@@ -222,6 +223,14 @@ export async function runAutopilot(
     lastRunAt: now,
     runs: working.runs + 1,
     spentThisPeriod: working.spentThisPeriod + working.amountUsd,
+  });
+  // Inbox note (never breaks the run; addNotification swallows failures).
+  await addNotification(working.userId, {
+    kind: "autopilot",
+    title: `Autopilot invested $${working.amountUsd.toFixed(2)}`,
+    body: "Vera placed your scheduled plan. Tap to see the run.",
+    txHash,
+    at: now,
   });
   const holdings = quotes.map(({ symbol, amountMicro }) => {
     const leg = legs.find((l) => l.symbol === symbol);
