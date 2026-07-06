@@ -124,7 +124,7 @@ export function Toast({
           borderRadius: 6,
           boxShadow: "var(--shadow-lg)",
           fontSize: 14,
-          fontWeight: 600,
+          fontWeight: 500,
           letterSpacing: "-0.01em",
           opacity: shown && !leaving ? 1 : 0,
           transform: shown && !leaving ? "translateY(0)" : "translateY(-14px)",

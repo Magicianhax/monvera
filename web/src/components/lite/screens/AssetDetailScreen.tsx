@@ -32,7 +32,7 @@ const RANGES = ["1D", "1W", "1M", "1Y", "All"];
 const sectionHead: CSSProperties = {
   margin: "26px 22px 10px",
   fontSize: 13,
-  fontWeight: 700,
+  fontWeight: 600,
   color: "var(--ink-2)",
 };
 
@@ -185,7 +185,7 @@ export function AssetDetailScreen({
             flex: 1,
             minWidth: 0,
             fontSize: 16,
-            fontWeight: 800,
+            fontWeight: 600,
             letterSpacing: "-.02em",
             display: "flex",
             alignItems: "baseline",
@@ -198,7 +198,7 @@ export function AssetDetailScreen({
           <span
             style={{
               fontSize: 13.5,
-              fontWeight: 600,
+              fontWeight: 500,
               color: "var(--ink-2)",
               overflow: "hidden",
               textOverflow: "ellipsis",
@@ -212,11 +212,10 @@ export function AssetDetailScreen({
             style={{
               flex: "none",
               fontSize: 12,
-              fontWeight: 600,
+              fontWeight: 500,
               color: "var(--ink-2)",
               background: "var(--surface-2)",
-              border: "1px solid var(--line)",
-              borderRadius: 5,
+              borderRadius: 999,
               padding: "4px 10px",
             }}
           >
@@ -238,7 +237,7 @@ export function AssetDetailScreen({
         </div>
       ) : (
         <div className="anim-rise" style={{ padding: "14px 22px 0", textAlign: "center" }}>
-          <div className="tnum" style={{ fontSize: 34, fontWeight: 800, letterSpacing: "-.02em" }}>
+          <div className="tnum" style={{ fontSize: 34, fontWeight: 600, letterSpacing: "-.02em" }}>
             {heroPrice === undefined ? (
               "—"
             ) : scrub ? (
@@ -252,7 +251,7 @@ export function AssetDetailScreen({
             className="tnum"
             style={{
               fontSize: 14,
-              fontWeight: 700,
+              fontWeight: 600,
               color: winUp ? "var(--pos)" : "var(--neg)",
               marginTop: 3,
             }}
@@ -261,27 +260,10 @@ export function AssetDetailScreen({
               <>{(winUp ? "+" : "") + usd(dollarMove)}{" · "}</>
             )}
             {(winUp ? "+" : "") + heroChange.toFixed(2)}%{" "}
-            <span style={{ color: "var(--ink-3)", fontWeight: 600 }}>· {RANGES[r]}</span>
+            <span style={{ color: "var(--ink-3)", fontWeight: 500 }}>· {RANGES[r]}</span>
           </div>
         </div>
       )}
-
-      {/* range chips — directly under the price so they're always in view
-          (a control for the chart; keeping them above it avoids the tall chart
-          pushing them below the fold). */}
-      <div style={{ display: "flex", gap: 8, padding: "12px 22px 0", overflowX: "auto", justifyContent: "center" }}>
-        {RANGES.map((rr, idx) => (
-          <button
-            key={rr}
-            onClick={() => setR(idx)}
-            className={`chip tap ${r === idx ? "is-on" : ""}`}
-            aria-pressed={r === idx}
-            style={{ flex: "none", height: 32, fontSize: 13, fontWeight: 600 }}
-          >
-            {rr}
-          </button>
-        ))}
-      </div>
 
       {/* chart — full-bleed, no frame; chart-shaped skeleton on first load */}
       <div className="anim-rise" style={{ animationDelay: ".05s", marginTop: 12 }}>
@@ -300,6 +282,22 @@ export function AssetDetailScreen({
             label={`${d.name} price chart, ${lineUp ? "up" : "down"} ${Math.abs(rangeChange).toFixed(1)}% over ${RANGES[r]}. Touch and drag to read the price at any point.`}
           />
         )}
+      </div>
+
+      {/* range chips — under the chart (safe now that screens scroll instead of
+          crushing children; see the .screen>* flex-shrink rule). */}
+      <div style={{ display: "flex", gap: 8, padding: "14px 22px 0", overflowX: "auto", justifyContent: "center" }}>
+        {RANGES.map((rr, idx) => (
+          <button
+            key={rr}
+            onClick={() => setR(idx)}
+            className={`chip tap ${r === idx ? "is-on" : ""}`}
+            aria-pressed={r === idx}
+            style={{ flex: "none", height: 32, fontSize: 13, fontWeight: 500 }}
+          >
+            {rr}
+          </button>
+        ))}
       </div>
 
       {/* why it moved — honest plain-words context (market move, not a headline) */}
@@ -326,20 +324,20 @@ export function AssetDetailScreen({
           <div className="stagger-in" style={groupCard}>
             <div style={groupRow(true)}>
               <span style={{ color: "var(--ink-2)" }}>Value</span>
-              <span className="tnum" style={{ fontWeight: 700, color: "var(--ink)" }}>
+              <span className="tnum" style={{ fontWeight: 600, color: "var(--ink)" }}>
                 {holding.valueUsd !== undefined ? usd(holding.valueUsd) : "—"}
               </span>
             </div>
             <div style={groupRow(false)}>
               <span style={{ color: "var(--ink-2)" }}>Shares</span>
-              <span className="tnum" style={{ fontWeight: 700, color: "var(--ink)" }}>
+              <span className="tnum" style={{ fontWeight: 600, color: "var(--ink)" }}>
                 {holding.qty.toLocaleString("en-US", { maximumFractionDigits: 4 })}
               </span>
             </div>
             {shownPrice !== undefined && (
               <div style={groupRow(false)}>
                 <span style={{ color: "var(--ink-2)" }}>Price</span>
-                <span className="tnum" style={{ fontWeight: 700, color: "var(--ink)" }}>
+                <span className="tnum" style={{ fontWeight: 600, color: "var(--ink)" }}>
                   {usd(shownPrice)}
                 </span>
               </div>
@@ -429,7 +427,7 @@ export function AssetDetailScreen({
           {facts.map((f, i) => (
             <div key={f.k} style={groupRow(i === 0)}>
               <span style={{ color: "var(--ink-2)" }}>{f.k}</span>
-              <span style={{ fontWeight: 600, color: "var(--ink)", textAlign: "right" }}>
+              <span style={{ fontWeight: 500, color: "var(--ink)", textAlign: "right" }}>
                 {f.v}
               </span>
             </div>
@@ -444,7 +442,7 @@ export function AssetDetailScreen({
             <span style={{ color: "var(--ink-2)" }}>Contract</span>
             <span
               className="mono"
-              style={{ display: "inline-flex", alignItems: "center", gap: 6, fontWeight: 600, color: "var(--primary)" }}
+              style={{ display: "inline-flex", alignItems: "center", gap: 6, fontWeight: 500, color: "var(--primary)" }}
             >
               {shortAddress(asset.address)}
               <Icon name="arrowUR" size={13} />

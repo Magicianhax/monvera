@@ -29,7 +29,7 @@ const HAIRLINE_2 = "1px solid var(--line-2)";
 // Ledger section header — strong sans in the 22px gutter.
 function SectionHeader({ children }: { children: ReactNode }) {
   return (
-    <div style={{ padding: "28px 22px 10px", fontSize: 13, fontWeight: 700, color: "var(--ink-2)" }}>
+    <div style={{ padding: "28px 22px 10px", fontSize: 13, fontWeight: 600, color: "var(--ink-2)" }}>
       {children}
     </div>
   );
@@ -56,7 +56,7 @@ function ActionBtn({ icon, label, onClick }: { icon: IconName; label: string; on
       }}
     >
       <Icon name={icon} size={20} style={{ color: "var(--primary)" }} />
-      <span style={{ fontSize: 12.5, fontWeight: 600, letterSpacing: "-.01em" }}>{label}</span>
+      <span style={{ fontSize: 12.5, fontWeight: 500, letterSpacing: "-.01em" }}>{label}</span>
     </button>
   );
 }
@@ -120,7 +120,7 @@ export function WalletScreen({
         <button onClick={() => go(-1)} style={iconBtn} className="tap" aria-label="Back">
           <Icon name="back" size={20} />
         </button>
-        <h1 style={{ margin: 0, fontSize: 26, fontWeight: 800, letterSpacing: "-.02em" }}>Wallet</h1>
+        <h1 style={{ margin: 0, fontSize: 26, fontWeight: 600, letterSpacing: "-.02em" }}>Wallet</h1>
         <button
           onClick={() => setHide((v) => !v)}
           className="tap"
@@ -138,7 +138,7 @@ export function WalletScreen({
           <div className="card" style={{ padding: "15px 16px", display: "flex", flexDirection: "column", gap: 10 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
               <Icon name="info" size={17} stroke={2} style={{ color: "var(--accent)", flex: "none" }} />
-              <span style={{ fontSize: 14.5, fontWeight: 600 }}>Recover previous balance</span>
+              <span style={{ fontSize: 14.5, fontWeight: 500 }}>Recover previous balance</span>
             </div>
             <div style={{ fontSize: 13, color: "var(--ink-2)", lineHeight: 1.5 }}>
               You have <b className="tnum" style={{ color: "var(--ink)" }}>{usd(recover.usdValue)}</b> in your previous account
@@ -159,12 +159,12 @@ export function WalletScreen({
 
       {/* balance block — centered hero, flat */}
       <div className="anim-rise" style={{ padding: "22px 22px 0", textAlign: "center" }}>
-        <div style={{ fontSize: 13, fontWeight: 600, color: "var(--ink-2)" }}>Total balance</div>
+        <div style={{ fontSize: 13, fontWeight: 500, color: "var(--ink-2)" }}>Total balance</div>
         <div style={{ marginTop: 6, minHeight: 46 }}>
           {loading ? (
             <div className="skeleton" style={{ width: 180, height: 40, borderRadius: 6, margin: "4px auto 0" }} />
           ) : (
-            <div className="tnum" style={{ fontSize: balSize, fontWeight: 700, letterSpacing: "-.045em", lineHeight: 1 }}>
+            <div className="tnum" style={{ fontSize: balSize, fontWeight: 600, letterSpacing: "-.045em", lineHeight: 1 }}>
               {hide ? <span style={{ letterSpacing: ".06em" }}>{DOTS}</span> : <CountUp to={total} />}
             </div>
           )}
@@ -196,13 +196,13 @@ export function WalletScreen({
       >
         <TokenLogo symbol="USDG" size={38} />
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontWeight: 600, fontSize: 15.5, letterSpacing: "-.01em" }}>US Dollar</div>
+          <div style={{ fontWeight: 500, fontSize: 15.5, letterSpacing: "-.01em" }}>US Dollar</div>
           <div style={{ fontSize: 13, color: "var(--ink-2)", marginTop: 2 }}>USDG · spendable cash</div>
         </div>
         {walletPending || (balLoading && !bal) ? (
           <div className="skeleton" style={{ width: 64, height: 16, borderRadius: 4 }} aria-label="Loading cash balance" />
         ) : (
-          <div className="tnum" style={{ fontWeight: 700, fontSize: 16 }}>{hide ? DOTS : usd(cash)}</div>
+          <div className="tnum" style={{ fontWeight: 600, fontSize: 16 }}>{hide ? DOTS : usd(cash)}</div>
         )}
       </button>
 
@@ -225,7 +225,7 @@ export function WalletScreen({
                       onClick={() => go("asset", { symbol: h.asset.symbol })}
                       right={
                         <div style={{ textAlign: "right" }}>
-                          <div className="tnum" style={{ fontWeight: 600, fontSize: 16 }}>
+                          <div className="tnum" style={{ fontWeight: 500, fontSize: 16 }}>
                             {hide ? DOTS : h.valueUsd !== undefined ? usd(h.valueUsd) : "—"}
                           </div>
                           <div className="tnum" style={{ fontSize: 12, color: "var(--ink-2)", marginTop: 2 }}>
@@ -264,7 +264,7 @@ export function WalletScreen({
       ) : events.length === 0 ? (
         <section style={{ padding: "22px 22px 0" }}>
           <div className="card" style={{ padding: "24px 22px", textAlign: "center" }}>
-            <div style={{ fontSize: 14.5, fontWeight: 600 }}>No activity yet</div>
+            <div style={{ fontSize: 14.5, fontWeight: 500 }}>No activity yet</div>
             <div style={{ fontSize: 13, color: "var(--ink-2)", marginTop: 3 }}>Your buys, sells, and transfers will show up here.</div>
           </div>
         </section>
@@ -301,16 +301,16 @@ export function WalletScreen({
                   >
                     <ActivityGlyph event={e} size={40} />
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontWeight: 600, fontSize: 15 }}>{verb} {e.symbol}</div>
+                      <div style={{ fontWeight: 500, fontSize: 15 }}>{verb} {e.symbol}</div>
                       <div className="mono" style={{ fontSize: 11.5, color: "var(--ink-2)", marginTop: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{sub}</div>
                     </div>
                     {isTrade ? (
                       <div className="tnum" style={{ textAlign: "right", flex: "none" }}>
-                        <div style={{ fontWeight: 700, fontSize: 15, color: e.kind === "sell" ? "var(--pos)" : "var(--ink)" }}>{hide ? DOTS : usdgLeg}</div>
-                        <div style={{ fontSize: 12, fontWeight: 600, marginTop: 1, color: e.kind === "buy" ? "var(--pos)" : "var(--ink-2)" }}>{hide ? DOTS : assetLeg}</div>
+                        <div style={{ fontWeight: 600, fontSize: 15, color: e.kind === "sell" ? "var(--pos)" : "var(--ink)" }}>{hide ? DOTS : usdgLeg}</div>
+                        <div style={{ fontSize: 12, fontWeight: 500, marginTop: 1, color: e.kind === "buy" ? "var(--pos)" : "var(--ink-2)" }}>{hide ? DOTS : assetLeg}</div>
                       </div>
                     ) : (
-                      <span className="tnum" style={{ fontWeight: 700, fontSize: 15, color: positive ? "var(--pos)" : "var(--ink)", flex: "none" }}>{hide ? DOTS : single}</span>
+                      <span className="tnum" style={{ fontWeight: 600, fontSize: 15, color: positive ? "var(--pos)" : "var(--ink)", flex: "none" }}>{hide ? DOTS : single}</span>
                     )}
                   </button>
                 );

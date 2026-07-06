@@ -172,7 +172,7 @@ export function LandingScreen() {
             onClick={() => onSignIn("google")}
             aria-label="Continue with Google"
           >
-            {signing === "google" ? <Spinner small /> : <span style={{ fontWeight: 700, fontSize: 18 }}>G</span>}
+            {signing === "google" ? <Spinner small /> : <span style={{ fontWeight: 600, fontSize: 18 }}>G</span>}
           </button>
           <button
             className="btn btn-outline tap"
@@ -181,7 +181,7 @@ export function LandingScreen() {
             onClick={() => onSignIn("x")}
             aria-label="Continue with X"
           >
-            {signing === "x" ? <Spinner small /> : <span style={{ fontWeight: 700, fontSize: 18 }}>X</span>}
+            {signing === "x" ? <Spinner small /> : <span style={{ fontWeight: 600, fontSize: 18 }}>X</span>}
           </button>
           <button
             className="btn btn-outline tap"

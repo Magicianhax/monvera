@@ -128,11 +128,11 @@ export function ReceiptScreen({
         >
           <Icon name={heroIcon} size={30} />
         </div>
-        <div style={{ fontSize: 20, fontWeight: 700, letterSpacing: "-.02em" }}>{heroTitle}</div>
+        <div style={{ fontSize: 20, fontWeight: 600, letterSpacing: "-.02em" }}>{heroTitle}</div>
         {heroValue !== undefined && (
           <div
             className="tnum"
-            style={{ fontSize: 32, fontWeight: 700, marginTop: 6, color: heroPositive ? "var(--pos)" : "var(--ink)" }}
+            style={{ fontSize: 32, fontWeight: 600, marginTop: 6, color: heroPositive ? "var(--pos)" : "var(--ink)" }}
           >
             {heroValue}
           </div>
@@ -155,7 +155,7 @@ export function ReceiptScreen({
               }}
             >
               <span style={{ color: "var(--ink-2)" }}>{k}</span>
-              <span className="tnum" style={{ fontWeight: 600 }}>{v}</span>
+              <span className="tnum" style={{ fontWeight: 500 }}>{v}</span>
             </div>
           ))}
         </div>
@@ -167,7 +167,7 @@ export function ReceiptScreen({
           <div style={{ display: "flex", justifyContent: "center", marginBottom: 11 }}>
             <Seal size={30} />
           </div>
-          <div style={{ fontWeight: 700, fontSize: 15.5, letterSpacing: "-.01em" }}>Permanent record</div>
+          <div style={{ fontWeight: 600, fontSize: 15.5, letterSpacing: "-.01em" }}>Permanent record</div>
           <div style={{ fontSize: 12.5, color: "var(--ink-2)", marginTop: 2 }}>Signed &amp; recorded on-chain</div>
           <p style={{ fontSize: 13.5, color: "var(--ink-2)", margin: "12px auto 14px", lineHeight: 1.55, maxWidth: 330 }}>
             This can&apos;t be edited or deleted, and anyone can check it. It&apos;s how Vera&apos;s
@@ -195,5 +195,5 @@ export function ReceiptScreen({
 }
 
 function Positive({ children }: { children: React.ReactNode }) {
-  return <span style={{ color: "var(--pos)", fontWeight: 600 }}>{children}</span>;
+  return <span style={{ color: "var(--pos)", fontWeight: 500 }}>{children}</span>;
 }

@@ -184,7 +184,7 @@ export function InstallPrompt() {
       />
 
       <div style={{ minWidth: 0, flex: 1, lineHeight: 1.3 }}>
-        <div style={{ fontWeight: 700, fontSize: 14.5 }}>Install Monvera</div>
+        <div style={{ fontWeight: 600, fontSize: 14.5 }}>Install Monvera</div>
         {mode === "android" ? (
           <div style={{ fontSize: 12.5, color: "var(--ink-2)" }}>Add to your home screen for a faster, full-screen app.</div>
         ) : (

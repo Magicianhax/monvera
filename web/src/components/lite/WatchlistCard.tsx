@@ -33,7 +33,7 @@ export function WatchlistCard({
           <button
             className="tap"
             onClick={() => go("market", { filter: "watchlist" })}
-            style={{ background: "none", fontSize: 12.5, fontWeight: 600, color: "var(--primary)", padding: "0 6px 8px" }}
+            style={{ background: "none", fontSize: 12.5, fontWeight: 500, color: "var(--primary)", padding: "0 6px 8px" }}
           >
             See all
           </button>
@@ -56,7 +56,7 @@ export function WatchlistCard({
               >
                 <AssetTile asset={tile} size={38} radius={12} />
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontWeight: 600, fontSize: 15, letterSpacing: "-.01em", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  <div style={{ fontWeight: 500, fontSize: 15, letterSpacing: "-.01em", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                     {tile.name}
                   </div>
                   <div className="mono" style={{ fontSize: 11.5, color: "var(--ink-3)", marginTop: 2 }}>{symbol}</div>
@@ -65,9 +65,9 @@ export function WatchlistCard({
                   <Sparkline data={spark} color={up ? "var(--pos)" : "var(--neg)"} />
                 </div>
                 <div className="tnum" style={{ textAlign: "right", minWidth: 58 }}>
-                  <div style={{ fontWeight: 600, fontSize: 14.5 }}>{price !== undefined ? usd(price) : "—"}</div>
+                  <div style={{ fontWeight: 500, fontSize: 14.5 }}>{price !== undefined ? usd(price) : "—"}</div>
                   {day !== undefined && (
-                    <div style={{ fontSize: 12, fontWeight: 600, marginTop: 1, color: up ? "var(--pos)" : "var(--neg)" }}>
+                    <div style={{ fontSize: 12, fontWeight: 500, marginTop: 1, color: up ? "var(--pos)" : "var(--neg)" }}>
                       {(up ? "+" : "") + day.toFixed(2)}%
                     </div>
                   )}

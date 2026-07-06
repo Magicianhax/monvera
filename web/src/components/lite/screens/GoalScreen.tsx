@@ -80,7 +80,7 @@ export function GoalScreen({
                     key={p.label}
                     className="chip tap"
                     onClick={() => setPreset(p.frac)}
-                    style={{ height: 28, padding: "0 11px", fontSize: 12.5, fontWeight: 600 }}
+                    style={{ height: 28, padding: "0 11px", fontSize: 12.5, fontWeight: 500 }}
                   >
                     {p.label}
                   </button>
@@ -89,7 +89,7 @@ export function GoalScreen({
             )}
           </div>
           <div className="field" style={{ display: "flex", alignItems: "center", gap: 6, padding: "12px 16px" }}>
-            <span className="tnum" style={{ fontSize: 30, fontWeight: 700, color: "var(--ink-3)" }}>
+            <span className="tnum" style={{ fontSize: 30, fontWeight: 600, color: "var(--ink-3)" }}>
               $
             </span>
             <input
@@ -98,7 +98,7 @@ export function GoalScreen({
               inputMode="decimal"
               aria-label="Amount to invest"
               className="tnum"
-              style={{ flex: 1, fontSize: 30, fontWeight: 700, letterSpacing: "-.02em", width: "100%" }}
+              style={{ flex: 1, fontSize: 30, fontWeight: 600, letterSpacing: "-.02em", width: "100%" }}
             />
             <span className="caption" style={{ fontWeight: 500 }}>of {usd(balance)}</span>
           </div>

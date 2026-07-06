@@ -30,7 +30,7 @@ export function MoversStrip({
     <section style={{ padding: "22px 0 0" }}>
       <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", padding: "0 22px" }}>
         <span style={{ ...boxHead, padding: "0 0 10px" }}>Movers today</span>
-        <button className="tap" onClick={() => go("movers")} style={{ background: "none", fontSize: 12.5, fontWeight: 600, color: "var(--primary)", padding: "0 0 8px" }}>
+        <button className="tap" onClick={() => go("movers")} style={{ background: "none", fontSize: 12.5, fontWeight: 500, color: "var(--primary)", padding: "0 0 8px" }}>
           See all
         </button>
       </div>
@@ -49,7 +49,6 @@ export function MoversStrip({
                 background: "var(--glass-bg)",
                 backdropFilter: "var(--glass-blur)",
                 WebkitBackdropFilter: "var(--glass-blur)",
-                border: "1px solid var(--line)",
                 borderRadius: "var(--r-lg)",
                 boxShadow: "var(--shadow)",
                 padding: "12px",
@@ -61,11 +60,11 @@ export function MoversStrip({
             >
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 <AssetTile asset={tile} size={28} radius={9} />
-                <span className="mono" style={{ fontSize: 12.5, fontWeight: 700 }}>{m.symbol}</span>
+                <span className="mono" style={{ fontSize: 12.5, fontWeight: 600 }}>{m.symbol}</span>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
                 <Icon name={up ? "trend" : "trendDown"} size={14} style={{ color: up ? "var(--pos)" : "var(--neg)" }} />
-                <span className="tnum" style={{ fontSize: 14, fontWeight: 700, color: up ? "var(--pos)" : "var(--neg)" }}>
+                <span className="tnum" style={{ fontSize: 14, fontWeight: 600, color: up ? "var(--pos)" : "var(--neg)" }}>
                   {(up ? "+" : "") + m.day.toFixed(2)}%
                 </span>
               </div>

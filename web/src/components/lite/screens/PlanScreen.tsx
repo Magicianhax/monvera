@@ -205,7 +205,7 @@ export function PlanScreen({
                     style={{
                       display: "block",
                       color: "var(--ink)",
-                      fontWeight: 700,
+                      fontWeight: 600,
                       fontSize: 16,
                       letterSpacing: "-.01em",
                       marginTop: 8,
@@ -265,14 +265,14 @@ export function PlanScreen({
                 <AssetTile asset={tile} />
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-                    <span style={{ fontWeight: 600, fontSize: 16.5 }}>{tile.name}</span>
-                    <span className="tnum" style={{ fontWeight: 700, fontSize: 16 }}>
+                    <span style={{ fontWeight: 500, fontSize: 16.5 }}>{tile.name}</span>
+                    <span className="tnum" style={{ fontWeight: 600, fontSize: 16 }}>
                       {usd(dollars)}
                     </span>
                   </div>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginTop: 1 }}>
                     <span style={{ fontSize: 13, color: "var(--ink-2)" }}>{catFor(a.symbol)}</span>
-                    <span className="tnum" style={{ fontSize: 12.5, color: "var(--ink-2)", fontWeight: 600 }}>
+                    <span className="tnum" style={{ fontSize: 12.5, color: "var(--ink-2)", fontWeight: 500 }}>
                       {Math.round(a.weightPct)}%
                     </span>
                   </div>
@@ -300,10 +300,10 @@ export function PlanScreen({
       <div style={{ ...recompose, padding: "6px 22px 0" }}>
         <div data-fx="risk" className="card" style={{ padding: 16 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-            <span style={{ fontSize: 14, fontWeight: 600, color: "var(--ink-2)" }}>
+            <span style={{ fontSize: 14, fontWeight: 500, color: "var(--ink-2)" }}>
               How bumpy this could feel
             </span>
-            <span style={{ fontSize: 13.5, fontWeight: 700, color: "var(--accent)" }}>{risk.label}</span>
+            <span style={{ fontSize: 13.5, fontWeight: 600, color: "var(--accent)" }}>{risk.label}</span>
           </div>
           {/* wrapper (not RiskMeter's own segments — they carry CSS transitions)
               so GSAP can grow the fill from the left without a transition fight */}
@@ -322,7 +322,7 @@ export function PlanScreen({
         <div style={{ ...recompose, padding: "10px 22px 0" }}>
           <div data-fx="bt" className="card" style={{ padding: 16 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 4 }}>
-              <span style={{ fontSize: 14, fontWeight: 600, color: "var(--ink-2)" }}>
+              <span style={{ fontSize: 14, fontWeight: 500, color: "var(--ink-2)" }}>
                 How this mix held up
               </span>
               <span style={{ fontSize: 12.5, color: "var(--ink-3)" }}>last 12 months</span>

@@ -107,33 +107,18 @@ export function TabBar({ active, onNav, pro = false }: TabBarProps) {
             onClick={() => onNav(t.id)}
             className="tap"
             style={{
-              position: "relative",
               display: "flex",
               flexDirection: "column",
               alignItems: "center",
               justifyContent: "center",
               textAlign: "center",
               gap: 4,
-              color: on ? "var(--primary)" : "var(--ink-3)",
+              color: on ? "var(--ink)" : "var(--ink-3)",
               flex: 1,
               minWidth: 0,
               transition: "color .2s var(--ease-out)",
             }}
           >
-            {/* ledger indicator — a short rule above the active tab, not a pill */}
-            <span
-              aria-hidden
-              style={{
-                position: "absolute",
-                top: -8,
-                left: "50%",
-                transform: "translateX(-50%)",
-                width: on ? 22 : 0,
-                height: 2,
-                background: "var(--primary)",
-                transition: "width .22s var(--ease-out)",
-              }}
-            />
             <Icon name={t.icon} size={23} stroke={on ? 2.2 : 1.8} />
             <span style={{ fontSize: 10.5, fontWeight: on ? 700 : 500 }}>{t.label}</span>
           </button>

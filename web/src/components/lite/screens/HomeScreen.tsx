@@ -37,7 +37,7 @@ function LedgerHeader({ children, tight }: { children: ReactNode; tight?: boolea
       style={{
         margin: `${tight ? 16 : 28}px 22px 10px`,
         fontSize: 13,
-        fontWeight: 700,
+        fontWeight: 600,
         letterSpacing: ".01em",
         color: "var(--ink-2)",
       }}
@@ -103,7 +103,7 @@ function QuickAction({
       }}
     >
       <Icon name={icon} size={19} style={{ color: "var(--primary)" }} />
-      <span style={{ fontSize: 13, fontWeight: 600, color: "var(--ink)" }}>{label}</span>
+      <span style={{ fontSize: 13, fontWeight: 500, color: "var(--ink)" }}>{label}</span>
       {loading ? (
         // First-load: skeleton bar in the sub slot — no $0.00 dressed as real.
         <span className="skeleton" style={{ width: 64, height: 12, borderRadius: 4, marginTop: -2 }} />
@@ -192,7 +192,7 @@ export function HomeScreen({
         <div style={{ display: "flex", alignItems: "center", gap: 11 }}>
           <VeraOrb size={40} />
           <div>
-            <div className="caption" style={{ fontWeight: 600 }}>Hey there 👋</div>
+            <div className="caption" style={{ fontWeight: 500 }}>Hey there 👋</div>
             <h1 className="serif" style={{ margin: 0, fontSize: 25, letterSpacing: "-.01em" }}>Your money</h1>
           </div>
         </div>
@@ -239,7 +239,7 @@ export function HomeScreen({
           ) : (
             <div
               className="tnum"
-              style={{ fontSize: balSize, fontWeight: 700, letterSpacing: "-.04em", lineHeight: 1 }}
+              style={{ fontSize: balSize, fontWeight: 600, letterSpacing: "-.04em", lineHeight: 1 }}
             >
               {hideBalance ? (
                 <span style={{ letterSpacing: ".06em" }}>{DOTS}</span>
@@ -299,7 +299,7 @@ export function HomeScreen({
                 >
                   <AssetTile asset={tile} size={38} radius={12} />
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontWeight: 600, fontSize: 15.5, letterSpacing: "-.01em" }}>
+                    <div style={{ fontWeight: 500, fontSize: 15.5, letterSpacing: "-.01em" }}>
                       {tile.name}
                     </div>
                     <div
@@ -323,7 +323,7 @@ export function HomeScreen({
                     />
                   </div>
                   <div className="tnum" style={{ textAlign: "right" }}>
-                    <div style={{ fontWeight: 600, fontSize: 15 }}>
+                    <div style={{ fontWeight: 500, fontSize: 15 }}>
                       {hideBalance
                         ? DOTS
                         : h.valueUsd !== undefined
@@ -334,7 +334,7 @@ export function HomeScreen({
                       <div
                         style={{
                           fontSize: 12,
-                          fontWeight: 600,
+                          fontWeight: 500,
                           marginTop: 2,
                           color: day >= 0 ? "var(--pos)" : "var(--neg)",
                         }}
@@ -352,7 +352,7 @@ export function HomeScreen({
               onClick={() => go("portfolio")}
               style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 5, width: "100%", padding: "12px 0 4px", background: "none" }}
             >
-              <span style={{ fontSize: 13.5, fontWeight: 600, color: "var(--primary)" }}>
+              <span style={{ fontSize: 13.5, fontWeight: 500, color: "var(--primary)" }}>
                 View all holdings
               </span>
               <Icon name="chevR" size={16} style={{ color: "var(--primary)" }} />
@@ -386,7 +386,7 @@ export function HomeScreen({
               <div
                 style={{
                   fontSize: 16,
-                  fontWeight: 700,
+                  fontWeight: 600,
                   letterSpacing: "-.01em",
                   display: "flex",
                   alignItems: "center",
@@ -439,24 +439,24 @@ export function HomeScreen({
                 >
                   <ActivityGlyph event={e} size={40} />
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontWeight: 600, fontSize: 14.5 }}>{eventLabel(e).verb} {e.symbol}</div>
+                    <div style={{ fontWeight: 500, fontSize: 14.5 }}>{eventLabel(e).verb} {e.symbol}</div>
                     <div className="mono" style={{ fontSize: 11.5, color: "var(--ink-2)", marginTop: 2 }}>
                       {sub}
                     </div>
                   </div>
                   {isTrade ? (
                     <div className="tnum" style={{ textAlign: "right", flex: "none" }}>
-                      <div style={{ fontWeight: 700, fontSize: 15, color: e.kind === "sell" ? "var(--pos)" : "var(--ink)" }}>
+                      <div style={{ fontWeight: 600, fontSize: 15, color: e.kind === "sell" ? "var(--pos)" : "var(--ink)" }}>
                         {hideBalance ? DOTS : usdgLeg}
                       </div>
-                      <div style={{ fontSize: 12, fontWeight: 600, marginTop: 1, color: e.kind === "buy" ? "var(--pos)" : "var(--ink-2)" }}>
+                      <div style={{ fontSize: 12, fontWeight: 500, marginTop: 1, color: e.kind === "buy" ? "var(--pos)" : "var(--ink-2)" }}>
                         {hideBalance ? DOTS : assetLeg}
                       </div>
                     </div>
                   ) : (
                     <span
                       className="tnum"
-                      style={{ fontWeight: 700, fontSize: 15, color: positive ? "var(--pos)" : "var(--ink)" }}
+                      style={{ fontWeight: 600, fontSize: 15, color: positive ? "var(--pos)" : "var(--ink)" }}
                     >
                       {hideBalance ? DOTS : right}
                     </span>
@@ -471,7 +471,7 @@ export function HomeScreen({
                 onClick={() => go("activity")}
                 style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 5, width: "100%", padding: "12px 0 4px", background: "none" }}
               >
-                <span style={{ fontSize: 13.5, fontWeight: 600, color: "var(--primary)" }}>
+                <span style={{ fontSize: 13.5, fontWeight: 500, color: "var(--primary)" }}>
                   View all activity
                 </span>
                 <Icon name="chevR" size={16} style={{ color: "var(--primary)" }} />

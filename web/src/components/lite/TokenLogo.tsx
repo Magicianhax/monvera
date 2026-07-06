@@ -47,7 +47,7 @@ export function TokenLogo({
         placeItems: "center",
         background: d.color,
         color: "#fff",
-        fontWeight: 700,
+        fontWeight: 600,
         fontSize: size * 0.42,
       }}
     >

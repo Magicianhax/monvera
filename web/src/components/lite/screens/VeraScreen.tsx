@@ -60,8 +60,21 @@ export function VeraScreen({
     <div className="screen screen-pad-top" style={{ paddingBottom: 110 }}>
       {/* hero — Vera + her verifiable on-chain identity */}
       <div className="anim-rise" style={{ padding: "20px 22px 0", textAlign: "center" }}>
-        <div style={{ display: "inline-block", marginBottom: 8 }}>
-          <VeraMascot size={140} />
+        {/* Cropped to face + tummy (legs cut), with a soft fade at the cut so she
+            melts into the bg; negative top margin trims the art's transparent
+            headroom so the name sits close beneath her. */}
+        <div
+          aria-hidden
+          style={{
+            display: "inline-block",
+            height: 102,
+            overflow: "hidden",
+            marginBottom: 2,
+            WebkitMaskImage: "linear-gradient(180deg, #000 88%, transparent 100%)",
+            maskImage: "linear-gradient(180deg, #000 88%, transparent 100%)",
+          }}
+        >
+          <VeraMascot size={185} style={{ marginTop: -22 }} />
         </div>
         <h1 className="serif" style={{ margin: 0, fontSize: 32, letterSpacing: "-.01em" }}>
           {VERA.name}
@@ -72,8 +85,8 @@ export function VeraScreen({
         <div style={{ marginTop: 15, display: "flex", flexDirection: "column", alignItems: "center", gap: 7 }}>
           <div style={{ display: "inline-flex", alignItems: "center", gap: 10 }}>
             <Seal size={23} />
-            <span style={{ fontSize: 15, fontWeight: 600, letterSpacing: "-.01em" }}>Verified agent</span>
-            <span className="serif" style={{ fontSize: 19, fontWeight: 600, color: "var(--primary)", lineHeight: 1 }}>
+            <span style={{ fontSize: 15, fontWeight: 500, letterSpacing: "-.01em" }}>Verified agent</span>
+            <span className="serif" style={{ fontSize: 19, fontWeight: 500, color: "var(--primary)", lineHeight: 1 }}>
               №{identity ? identity.agentId.toString() : "1"}
             </span>
           </div>
@@ -98,7 +111,7 @@ export function VeraScreen({
       {/* track record — REAL, from the on-chain executor log. Glass stat tiles. */}
       <div className="anim-rise" style={{ animationDelay: ".05s", padding: "22px 22px 0" }}>
         <div className="card" style={{ padding: 16 }}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: "var(--ink-2)", padding: "0 2px 12px" }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: "var(--ink-2)", padding: "0 2px 12px" }}>
             Her record, live on-chain
           </div>
           <div style={{ display: "flex", gap: 8 }}>
@@ -107,14 +120,14 @@ export function VeraScreen({
                 key={s.label}
                 style={{ flex: 1, background: "var(--glass-bg-2)", borderRadius: "var(--r)", padding: "13px 6px", textAlign: "center" }}
               >
-                <div className="tnum" style={{ fontSize: 22, fontWeight: 700, color: s.color }}>
+                <div className="tnum" style={{ fontSize: 22, fontWeight: 600, color: s.color }}>
                   {recordLoading ? (
                     <span className="skeleton" style={{ display: "inline-block", width: s.w, height: 20, borderRadius: 6 }} />
                   ) : (
                     s.value
                   )}
                 </div>
-                <div style={{ fontSize: 11.5, fontWeight: 600, color: "var(--ink-2)", marginTop: 4 }}>{s.label}</div>
+                <div style={{ fontSize: 11.5, fontWeight: 500, color: "var(--ink-2)", marginTop: 4 }}>{s.label}</div>
               </div>
             ))}
           </div>
@@ -142,7 +155,7 @@ export function VeraScreen({
         >
           <VeraOrb size={46} />
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontWeight: 700, fontSize: 17, letterSpacing: "-.01em" }}>Build a plan with Vera</div>
+            <div style={{ fontWeight: 600, fontSize: 17, letterSpacing: "-.01em" }}>Build a plan with Vera</div>
             <div style={{ fontSize: 13.5, marginTop: 3, lineHeight: 1.4, opacity: 0.88 }}>
               Tell me a goal, I&apos;ll build it in seconds.
             </div>
@@ -162,7 +175,7 @@ export function VeraScreen({
             <Icon name="spark" size={20} />
           </span>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontWeight: 700, fontSize: 15 }}>Autopilot</div>
+            <div style={{ fontWeight: 600, fontSize: 15 }}>Autopilot</div>
             <div style={{ fontSize: 12.5, color: "var(--ink-2)", marginTop: 1, lineHeight: 1.4 }}>
               Invest on a schedule, within limits you set.
             </div>
@@ -212,7 +225,7 @@ export function VeraScreen({
                   <Icon name={x.icon} size={18} />
                 </span>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontWeight: 700, fontSize: 14.5, letterSpacing: "-.01em" }}>{x.t}</div>
+                  <div style={{ fontWeight: 600, fontSize: 14.5, letterSpacing: "-.01em" }}>{x.t}</div>
                   <div style={{ fontSize: 12.5, color: "var(--ink-2)", marginTop: 1 }}>{x.s}</div>
                 </div>
               </div>
@@ -241,7 +254,7 @@ export function VeraScreen({
           </div>
         ) : recents.length === 0 ? (
           <div className="card" style={{ padding: "26px 18px", textAlign: "center", color: "var(--ink-2)" }}>
-            <div style={{ fontSize: 15, fontWeight: 600, color: "var(--ink)" }}>No plans recorded yet</div>
+            <div style={{ fontSize: 15, fontWeight: 500, color: "var(--ink)" }}>No plans recorded yet</div>
             <div style={{ fontSize: 13.5, marginTop: 4, lineHeight: 1.5 }}>
               Every plan Vera builds is signed and written on-chain. The first one will appear here, permanently.
             </div>
@@ -268,7 +281,7 @@ export function VeraScreen({
                     <Icon name={placed ? "check" : "shield"} size={18} stroke={placed ? 2.4 : undefined} />
                   </span>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontWeight: 600, fontSize: 14.5, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    <div style={{ fontWeight: 500, fontSize: 14.5, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                       {risk.label} plan{placed ? ` · ${usd(r.usdcSpent as number)}` : ""}
                     </div>
                     <div style={{ fontSize: 11.5, color: "var(--ink-2)", marginTop: 2 }}>

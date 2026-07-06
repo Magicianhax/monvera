@@ -95,7 +95,7 @@ export const ROUND_THEME_CSS =
 // Emitted AFTER globals.css AND ROUND_THEME_CSS, so its surface/shadow values win.
 export const SOFT_THEME_CSS =
   // UI typeface: Geist (loaded in layout.tsx). The serif stays Fraunces.
-  ".stax{--font-ui:var(--font-geist),system-ui,-apple-system,sans-serif;}" +
+  ".stax{--font-ui:var(--font-roboto),Roboto,system-ui,-apple-system,sans-serif;}" +
   ".site{--s-ui:var(--font-geist),system-ui,-apple-system,sans-serif;}" +
   // ── App: light — brand-tinted aurora (blobs shift with the chosen color) ──
   '.stax,.stax[data-mode="light"]{' +
@@ -137,15 +137,18 @@ export const SOFT_THEME_CSS =
   // Frosted glass for section cards: translucent fill + backdrop blur so the
   // aurora shows through and the edges dissolve into the background.
   ".stax .card{background:var(--glass-bg);backdrop-filter:var(--glass-blur);-webkit-backdrop-filter:var(--glass-blur);}" +
-  // Legible chips: solid surface + ink text + a visible border, so range/filter
-  // switchers don't vanish against the dark aurora (is-on still wins → primary).
-  ".stax .chip{background:var(--surface-2);color:var(--ink);box-shadow:inset 0 0 0 1px var(--line);}" +
-  // Tactile press feedback: every tappable element springs in slightly.
-  ".stax .tap{transition:transform .13s cubic-bezier(.4,0,.2,1);}" +
-  ".stax .tap:active{transform:scale(.975);}" +
-  "@media (prefers-reduced-motion: reduce){.stax .tap:active{transform:none;}}" +
   // Custom pull-to-refresh owns the top overscroll (blocks the browser's own).
   ".stax .screen{overscroll-behavior-y:contain;}" +
+  // Screens are fixed-height flex columns: without this, when content exceeds
+  // the viewport every child gets vertically CRUSHED (default flex-shrink:1)
+  // instead of the screen scrolling — the recurring "range chips / cards are
+  // hidden" bug. Children that should flex set flex:1 inline, which still wins.
+  ".stax .screen>*{flex-shrink:0;}" +
+  // Lighter type register: the app avoids true bold almost everywhere (Roboto
+  // reads solid at 500-600). Inline weights are softened in the components.
+  ".stax b,.stax strong{font-weight:600;}" +
+  ".stax .btn{font-weight:600;}" +
+  ".stax .label-eyebrow{font-weight:600;}" +
   // Gentle, unhurried entrances.
   ".stax .anim-rise{animation-duration:.30s;}" +
   ".stax .anim-fade{animation-duration:.24s;}" +

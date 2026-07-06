@@ -118,7 +118,7 @@ export function SuccessScreen({
                 sub={catFor(h.symbol, h.name)}
                 showSpark={false}
                 right={
-                  <div className="tnum" style={{ fontWeight: 700, fontSize: 16 }}>
+                  <div className="tnum" style={{ fontWeight: 600, fontSize: 16 }}>
                     {usd(h.amountUsd)}
                   </div>
                 }
@@ -140,11 +140,11 @@ export function SuccessScreen({
                 <Icon name="shield" size={20} stroke={2} />
               </span>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontWeight: 700, fontSize: 16, letterSpacing: "-.01em" }}>Verified on-chain</div>
+                <div style={{ fontWeight: 600, fontSize: 16, letterSpacing: "-.01em" }}>Verified on-chain</div>
                 <div style={{ fontSize: 12.5, color: "var(--ink-2)", marginTop: 1 }}>Provable, not just promised.</div>
               </div>
               <span
-                style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "5px 10px", borderRadius: 6, background: "var(--primary-soft)", color: "var(--primary)", fontSize: 12, fontWeight: 700, flex: "none" }}
+                style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "5px 10px", borderRadius: 6, background: "var(--primary-soft)", color: "var(--primary)", fontSize: 12, fontWeight: 600, flex: "none" }}
               >
                 <Icon name="check" size={13} stroke={2.8} /> Signed
               </span>
@@ -169,7 +169,7 @@ export function SuccessScreen({
                 target="_blank"
                 rel="noopener noreferrer"
                 className="tap"
-                style={{ fontSize: 13, fontWeight: 600, color: "var(--primary)", display: "inline-flex", alignItems: "center", gap: 5, textDecoration: "none" }}
+                style={{ fontSize: 13, fontWeight: 500, color: "var(--primary)", display: "inline-flex", alignItems: "center", gap: 5, textDecoration: "none" }}
               >
                 View on Blockscout <Icon name="arrowUR" size={14} />
               </a>
@@ -187,7 +187,7 @@ export function SuccessScreen({
               <Icon name="shield" size={22} />
             </span>
             <div style={{ flex: 1 }}>
-              <div style={{ fontWeight: 600, fontSize: 15.5 }}>Vera recorded this plan</div>
+              <div style={{ fontWeight: 500, fontSize: 15.5 }}>Vera recorded this plan</div>
               <div className="mono" style={{ fontSize: 11.5, color: "var(--accent)", marginTop: 2 }}>
                 View the receipt on Blockscout →
               </div>

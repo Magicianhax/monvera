@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Geist, Hanken_Grotesk, Fraunces, JetBrains_Mono } from "next/font/google";
+import { Geist, Hanken_Grotesk, Fraunces, JetBrains_Mono, Roboto_Flex } from "next/font/google";
 import "./globals.css";
 import { Providers } from "./providers";
 import {
@@ -21,6 +21,14 @@ const hanken = Hanken_Grotesk({
 });
 
 // Primary UI sans — clean, neutral, premium (the injector points --font-ui here).
+// App UI typeface — Roboto (variable "Flex" cut so every weight 100-1000 exists;
+// the app runs light, mostly 400-600). The marketing site keeps Geist.
+const roboto = Roboto_Flex({
+  variable: "--font-roboto",
+  subsets: ["latin"],
+  display: "swap",
+});
+
 const geist = Geist({
   variable: "--font-geist",
   subsets: ["latin"],
@@ -165,7 +173,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${geist.variable} ${hanken.variable} ${fraunces.variable} ${jetbrains.variable} h-full antialiased`}
+      className={`${geist.variable} ${roboto.variable} ${hanken.variable} ${fraunces.variable} ${jetbrains.variable} h-full antialiased`}
     >
       <body className="min-h-full antialiased">
         <script

@@ -132,22 +132,6 @@ export function PriceChart({ data, up = true, height = 210, label, onScrub, raw 
   // xPct/yPct in [0,100]; price = the real interpolated value at the cursor.
   const [cursor, setCursor] = useState<{ xPct: number; yPct: number; price: number } | null>(null);
 
-  // Draw-in: the line sweeps left→right on mount and whenever the data changes
-  // (e.g. switching ranges). Respects reduced-motion.
-  const [drawn, setDrawn] = useState(false);
-  const dataKey = data.length ? `${data.length}:${data[0]}:${data[data.length - 1]}` : "";
-  useEffect(() => {
-    const reduce =
-      typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
-    if (reduce) {
-      setDrawn(true);
-      return;
-    }
-    setDrawn(false);
-    const raf = requestAnimationFrame(() => setDrawn(true));
-    return () => cancelAnimationFrame(raf);
-  }, [dataKey]);
-
   const series = raw ? data : densify(data, 6);
   const min = series.length ? Math.min(...series) : 0;
   const max = series.length ? Math.max(...series) : 1;
@@ -230,11 +214,7 @@ export function PriceChart({ data, up = true, height = 210, label, onScrub, raw 
             opacity="0.45"
           />
         ))}
-        <path
-          d={area}
-          fill={`url(#pc${id})`}
-          style={{ opacity: drawn ? 1 : 0, transition: "opacity .5s ease .2s" }}
-        />
+        <path d={area} fill={`url(#pc${id})`} />
         <path
           d={line}
           fill="none"
@@ -243,14 +223,6 @@ export function PriceChart({ data, up = true, height = 210, label, onScrub, raw 
           vectorEffect="non-scaling-stroke"
           strokeLinecap="round"
           strokeLinejoin="round"
-          // Sweep the line in: normalize length to 1 so the dash math is
-          // viewBox-agnostic, then run the offset from 1 (hidden) to 0 (drawn).
-          pathLength={1}
-          style={{
-            strokeDasharray: 1,
-            strokeDashoffset: drawn ? 0 : 1,
-            transition: "stroke-dashoffset .7s cubic-bezier(.4,0,.2,1)",
-          }}
         />
         {/* scrub cursor — full-height guide line at the finger */}
         {cursor && (
@@ -282,9 +254,6 @@ export function PriceChart({ data, up = true, height = 210, label, onScrub, raw 
             borderRadius: "50%",
             background: color,
             boxShadow: `0 0 0 4px color-mix(in srgb, ${color} 20%, transparent)`,
-            opacity: drawn ? 1 : 0,
-            transform: drawn ? "scale(1)" : "scale(0)",
-            transition: "opacity .3s ease .55s, transform .3s cubic-bezier(.34,1.56,.64,1) .55s",
           }}
         />
       )}
@@ -377,12 +346,9 @@ export interface DonutProps {
   size?: number;
   thickness?: number;
   center?: ReactNode;
-  /** When set, segments become tappable; the active one is emphasized. */
-  activeIndex?: number | null;
-  onSegmentClick?: (index: number) => void;
 }
 
-export function Donut({ segments, size = 116, thickness = 16, center, activeIndex = null, onSegmentClick }: DonutProps) {
+export function Donut({ segments, size = 116, thickness = 16, center }: DonutProps) {
   const r = (size - thickness) / 2;
   const c = 2 * Math.PI * r;
   const tot = segments.reduce((s, x) => s + x.value, 0) || 1;
@@ -422,7 +388,6 @@ export function Donut({ segments, size = 116, thickness = 16, center, activeInde
           const shown = Math.max(len - 3, 0.5);
           // gap that grows from full (hidden) to the true gap (drawn).
           const dash = drawn ? shown : 0.5;
-          const dim = activeIndex !== null && activeIndex !== i;
           const el = (
             <circle
               key={i}
@@ -431,16 +396,13 @@ export function Donut({ segments, size = 116, thickness = 16, center, activeInde
               r={r}
               fill="none"
               stroke={s.color}
-              strokeWidth={activeIndex === i ? thickness + 3 : thickness}
+              strokeWidth={thickness}
               strokeLinecap="round"
               strokeDasharray={`${dash} ${c - dash}`}
               strokeDashoffset={-off}
-              onClick={onSegmentClick ? () => onSegmentClick(i) : undefined}
               style={{
-                cursor: onSegmentClick ? "pointer" : undefined,
-                opacity: dim ? 0.32 : 1,
                 transition:
-                  "stroke-dasharray .7s var(--ease-out), stroke-dashoffset .7s var(--ease-out), opacity .2s var(--ease-out), stroke-width .2s var(--ease-out)",
+                  "stroke-dasharray .7s var(--ease-out), stroke-dashoffset .7s var(--ease-out)",
                 transitionDelay: `${i * 0.07}s`,
               }}
             />

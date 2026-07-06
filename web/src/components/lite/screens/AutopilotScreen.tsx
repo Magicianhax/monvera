@@ -39,7 +39,7 @@ const TEMPLATES: { name: string; goal: string; amount: string; cadence: Cadence;
 // Shared glass stat tile (plan summary) — replaces hairline dividers so the
 // numbers sit in soft frosted cells that match the rounded theme.
 const planTile: CSSProperties = { flex: 1, background: "var(--glass-bg-2)", borderRadius: "var(--r)", padding: "12px 6px", textAlign: "center" };
-const tileLabel: CSSProperties = { fontSize: 11.5, fontWeight: 600, color: "var(--ink-2)", marginTop: 4 };
+const tileLabel: CSSProperties = { fontSize: 11.5, fontWeight: 500, color: "var(--ink-2)", marginTop: 4 };
 // Soft rounded input surface for the plan form (goal / amount).
 const softInput: CSSProperties = { borderRadius: "var(--r)", border: "none", background: "var(--surface-2)", outline: "none", color: "var(--ink)" };
 
@@ -286,7 +286,7 @@ export function AutopilotScreen({
                 <div className="card" style={{ padding: 16, display: "flex", alignItems: "center", gap: 12 }}>
                   <Seal size={36} />
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontWeight: 700, fontSize: 15 }}>On · {usd(config.amountUsd)} {CADENCE_LABEL[config.cadence].toLowerCase()}</div>
+                    <div style={{ fontWeight: 600, fontSize: 15 }}>On · {usd(config.amountUsd)} {CADENCE_LABEL[config.cadence].toLowerCase()}</div>
                     <div style={{ fontSize: 12.5, color: "var(--ink-2)", marginTop: 2 }}>
                       Next run {new Date(config.nextRunAt * 1000).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })} · {config.runs} run{config.runs === 1 ? "" : "s"} so far
                     </div>
@@ -297,22 +297,22 @@ export function AutopilotScreen({
               <div style={{ padding: "20px 22px 0" }}>
                 <div className="label-eyebrow" style={{ marginBottom: 8, textAlign: "center" }}>Your plan</div>
                 <div className="card" style={{ padding: 18 }}>
-                  <div style={{ fontWeight: 700, fontSize: 16.5, textAlign: "center", letterSpacing: "-.01em" }}>{config.goal}</div>
+                  <div style={{ fontWeight: 600, fontSize: 16.5, textAlign: "center", letterSpacing: "-.01em" }}>{config.goal}</div>
                   <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
                     <div style={planTile}>
-                      <div className="tnum" style={{ fontWeight: 700, fontSize: 17 }}>{usd(config.amountUsd)}</div>
+                      <div className="tnum" style={{ fontWeight: 600, fontSize: 17 }}>{usd(config.amountUsd)}</div>
                       <div style={tileLabel}>Each run</div>
                     </div>
                     <div style={planTile}>
-                      <div style={{ fontWeight: 700, fontSize: 17, textTransform: "capitalize" }}>{CADENCE_LABEL[config.cadence].replace("Every ", "").trim()}</div>
+                      <div style={{ fontWeight: 600, fontSize: 17, textTransform: "capitalize" }}>{CADENCE_LABEL[config.cadence].replace("Every ", "").trim()}</div>
                       <div style={tileLabel}>Cadence</div>
                     </div>
                     <div style={planTile}>
-                      <div className="tnum" style={{ fontWeight: 700, fontSize: 17 }}>≤{Math.round(config.riskCeilingBps / 100)}%</div>
+                      <div className="tnum" style={{ fontWeight: 600, fontSize: 17 }}>≤{Math.round(config.riskCeilingBps / 100)}%</div>
                       <div style={tileLabel}>Risk</div>
                     </div>
                   </div>
-                  <div style={{ textAlign: "center", marginTop: 16, paddingTop: 13, borderTop: "1px solid var(--line-2)", fontSize: 13, fontWeight: 600, color: cash + 1e-6 >= config.amountUsd ? "var(--ink-2)" : "var(--neg)" }}>
+                  <div style={{ textAlign: "center", marginTop: 16, paddingTop: 13, borderTop: "1px solid var(--line-2)", fontSize: 13, fontWeight: 500, color: cash + 1e-6 >= config.amountUsd ? "var(--ink-2)" : "var(--neg)" }}>
                     {usd(cash)} available{cash + 1e-6 < config.amountUsd ? " · add cash to keep running" : ""}
                   </div>
                 </div>
@@ -354,7 +354,7 @@ export function AutopilotScreen({
                             </span>
                           )}
                           <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ fontWeight: 600, fontSize: 14 }}>
+                            <div style={{ fontWeight: 500, fontSize: 14 }}>
                               {okRun ? `Invested ${usd(r.amountUsd)}` : skipped ? "Skipped this run" : "Run didn't go through"}
                             </div>
                             <div style={{ fontSize: 11.5, color: "var(--ink-2)", marginTop: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
@@ -380,7 +380,7 @@ export function AutopilotScreen({
             <div className="card" style={{ padding: "14px 16px", display: "flex", alignItems: "center", gap: 12 }}>
               <Icon name={delegated ? "shield" : "lock"} size={20} style={{ color: delegated ? "var(--primary)" : "var(--ink-3)", flex: "none" }} />
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontWeight: 600, fontSize: 14.5 }}>{delegated ? "Vera is authorized" : "Authorize Vera"}</div>
+                <div style={{ fontWeight: 500, fontSize: 14.5 }}>{delegated ? "Vera is authorized" : "Authorize Vera"}</div>
                 <div style={{ fontSize: 12.5, color: "var(--ink-2)", marginTop: 2 }}>
                   {delegated ? "Bounded, gasless, revocable any time." : "A one-time grant so Vera can place your scheduled plans."}
                 </div>
@@ -412,7 +412,7 @@ export function AutopilotScreen({
                       <Icon name={t.icon} size={19} />
                     </span>
                     <div>
-                      <div style={{ fontWeight: 700, fontSize: 13.5 }}>{t.name}</div>
+                      <div style={{ fontWeight: 600, fontSize: 13.5 }}>{t.name}</div>
                       <div style={{ fontSize: 11.5, color: "var(--ink-2)", marginTop: 2, lineHeight: 1.35 }}>
                         {usd(Number(t.amount))} · {CADENCE_LABEL[t.cadence].replace("Every ", "")} · {RISK_TIERS[t.risk].label}
                       </div>
@@ -440,18 +440,18 @@ export function AutopilotScreen({
               <div>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8 }}>
                   <span style={{ fontSize: 13, color: "var(--ink-2)" }}>Amount each run</span>
-                  <span style={{ fontSize: 12, fontWeight: 600, color: cash + 1e-6 >= amountNum ? "var(--ink-3)" : "var(--neg)" }}>
+                  <span style={{ fontSize: 12, fontWeight: 500, color: cash + 1e-6 >= amountNum ? "var(--ink-3)" : "var(--neg)" }}>
                     {usd(cash)} available
                   </span>
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 6, padding: "10px 14px", ...softInput }}>
-                  <span className="tnum" style={{ fontSize: 20, fontWeight: 700 }}>$</span>
+                  <span className="tnum" style={{ fontSize: 20, fontWeight: 600 }}>$</span>
                   <input
                     inputMode="decimal"
                     value={amount}
                     onChange={(e) => { setAmount(e.target.value.replace(/[^0-9.]/g, "")); setActiveTemplate(null); }}
                     className="tnum"
-                    style={{ flex: 1, minWidth: 0, border: "none", background: "transparent", outline: "none", fontSize: 20, fontWeight: 700, color: "var(--ink)" }}
+                    style={{ flex: 1, minWidth: 0, border: "none", background: "transparent", outline: "none", fontSize: 20, fontWeight: 600, color: "var(--ink)" }}
                   />
                 </div>
               </div>
@@ -527,7 +527,7 @@ export function AutopilotScreen({
                       <Icon name={skipped ? "clock" : "info"} size={21} stroke={2.2} />
                     </span>
                   )}
-                  <div style={{ fontWeight: 700, fontSize: 19 }}>
+                  <div style={{ fontWeight: 600, fontSize: 19 }}>
                     {ok ? `Invested ${usd(r.amountUsd)}` : skipped ? "Run skipped" : "Run failed"}
                   </div>
                   <div style={{ fontSize: 12.5, color: "var(--ink-2)" }}>{when}</div>
@@ -547,10 +547,10 @@ export function AutopilotScreen({
                         <div key={h.symbol} style={{ display: "flex", alignItems: "center", gap: 12, padding: "11px 0", borderBottom: i < hs.length - 1 ? "1px solid var(--line-2)" : "none" }}>
                           <TokenLogo symbol={h.symbol} size={32} />
                           <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ fontWeight: 600, fontSize: 14 }}>{displayFor(h.symbol).name}</div>
+                            <div style={{ fontWeight: 500, fontSize: 14 }}>{displayFor(h.symbol).name}</div>
                             <div style={{ fontSize: 11.5, color: "var(--ink-2)", marginTop: 1 }}>{h.weightPct}% of the plan</div>
                           </div>
-                          <div className="tnum" style={{ fontWeight: 700, fontSize: 14 }}>{usd(h.amountUsd)}</div>
+                          <div className="tnum" style={{ fontWeight: 600, fontSize: 14 }}>{usd(h.amountUsd)}</div>
                         </div>
                       ))}
                     </div>
@@ -560,7 +560,7 @@ export function AutopilotScreen({
                 {ok && r.assessedRiskBps != null && (
                   <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, marginTop: 16 }}>
                     <span style={{ color: "var(--ink-2)" }}>Risk Vera assessed</span>
-                    <span style={{ fontWeight: 600 }}>{Math.round(r.assessedRiskBps / 100)}%</span>
+                    <span style={{ fontWeight: 500 }}>{Math.round(r.assessedRiskBps / 100)}%</span>
                   </div>
                 )}
 

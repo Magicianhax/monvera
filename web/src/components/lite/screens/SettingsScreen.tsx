@@ -134,7 +134,7 @@ export function SettingsScreen({
         <button onClick={() => go(-1)} style={iconBtn} className="tap" aria-label="Back">
           <Icon name="back" size={20} />
         </button>
-        <h1 style={{ margin: 0, flex: 1, textAlign: "center", fontSize: 17, fontWeight: 600, letterSpacing: "-.01em" }}>
+        <h1 style={{ margin: 0, flex: 1, textAlign: "center", fontSize: 17, fontWeight: 500, letterSpacing: "-.01em" }}>
           Settings
         </h1>
         {/* spacer mirrors the back button so the title stays optically centered */}
@@ -143,7 +143,7 @@ export function SettingsScreen({
 
       <div style={{ padding: "14px 22px 0" }}>
         {/* identity pill */}
-        <div className="card" style={{ padding: "17px 18px", fontWeight: 600, fontSize: 15.5, letterSpacing: "-.005em", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+        <div className="card" style={{ padding: "17px 18px", fontWeight: 500, fontSize: 15.5, letterSpacing: "-.005em", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
           {identity || "—"}
         </div>
 

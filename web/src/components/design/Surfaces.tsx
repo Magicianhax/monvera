@@ -214,7 +214,7 @@ export function HoldingRow({
     >
       <AssetTile asset={asset} />
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontWeight: 600, fontSize: 16.5, letterSpacing: "-.01em" }}>{asset.name}</div>
+        <div style={{ fontWeight: 500, fontSize: 16.5, letterSpacing: "-.01em" }}>{asset.name}</div>
         {sub !== undefined && (
           <div
             style={{
@@ -242,12 +242,12 @@ export function HoldingRow({
           right
         ) : (
           <>
-            <div className="tnum" style={{ fontWeight: 600, fontSize: 16 }}>
+            <div className="tnum" style={{ fontWeight: 500, fontSize: 16 }}>
               {value}
             </div>
             <div
               className="tnum"
-              style={{ fontSize: 13, fontWeight: 600, color: up ? "var(--pos)" : "var(--neg)" }}
+              style={{ fontSize: 13, fontWeight: 500, color: up ? "var(--pos)" : "var(--neg)" }}
             >
               {(up ? "+" : "") + day.toFixed(2)}%
             </div>
@@ -309,7 +309,7 @@ export function VerifiedBadge({ label = "Recorded & verifiable", onClick }: Veri
       style={{ display: "inline-flex", alignItems: "center", gap: 9, color: "var(--ink)" }}
     >
       <Seal size={21} />
-      <span style={{ fontSize: 13, fontWeight: 600 }}>{label}</span>
+      <span style={{ fontSize: 13, fontWeight: 500 }}>{label}</span>
       {onClick && <Icon name="chevR" size={15} style={{ color: "var(--ink-3)", marginLeft: -2 }} />}
     </button>
   );
@@ -332,7 +332,7 @@ export function Stat({ label, value, accent }: StatProps) {
         className="tnum"
         style={{
           fontSize: 19,
-          fontWeight: 700,
+          fontWeight: 600,
           color: accent || "var(--ink)",
           letterSpacing: "-.01em",
         }}
@@ -360,11 +360,11 @@ export function SectionTitle({ children, action, onAction }: SectionTitleProps) 
         margin: "0 0 10px",
       }}
     >
-      <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700, letterSpacing: "-.02em" }}>
+      <h2 style={{ margin: 0, fontSize: 18, fontWeight: 600, letterSpacing: "-.02em" }}>
         {children}
       </h2>
       {action && (
-        <button onClick={onAction} style={{ fontSize: 14, fontWeight: 600, color: "var(--primary)" }}>
+        <button onClick={onAction} style={{ fontSize: 14, fontWeight: 500, color: "var(--primary)" }}>
           {action}
         </button>
       )}

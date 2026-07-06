@@ -118,7 +118,7 @@ export function MarketScreen({
         <div style={{ flex: 1, minWidth: 0 }}>
           <div
             style={{
-              fontWeight: 600,
+              fontWeight: 500,
               fontSize: 16,
               whiteSpace: "nowrap",
               overflow: "hidden",
@@ -135,10 +135,10 @@ export function MarketScreen({
           <Sparkline data={spark} color={up ? "var(--pos)" : "var(--neg)"} />
         </div>
         <div style={{ textAlign: "right", minWidth: 62 }}>
-          <div className="tnum" style={{ fontWeight: 600, fontSize: 15.5 }}>
+          <div className="tnum" style={{ fontWeight: 500, fontSize: 15.5 }}>
             {shownPrice !== undefined ? usd(shownPrice) : "—"}
           </div>
-          <div className="tnum" style={{ fontSize: 12.5, fontWeight: 600, color: dayColor }}>
+          <div className="tnum" style={{ fontSize: 12.5, fontWeight: 500, color: dayColor }}>
             {(up ? "+" : "") + day.toFixed(2)}%
           </div>
         </div>
@@ -159,10 +159,10 @@ export function MarketScreen({
           gap: 12,
         }}
       >
-        <h1 style={{ margin: 0, fontSize: 28, fontWeight: 800, letterSpacing: "-0.02em" }}>
+        <h1 style={{ margin: 0, fontSize: 28, fontWeight: 600, letterSpacing: "-0.02em" }}>
           Market
         </h1>
-        <span className="tnum" style={{ fontSize: 13, fontWeight: 600, color: "var(--ink-3)" }}>
+        <span className="tnum" style={{ fontSize: 13, fontWeight: 500, color: "var(--ink-3)" }}>
           {list.length} {list.length === 1 ? "result" : "results"}
         </span>
       </div>

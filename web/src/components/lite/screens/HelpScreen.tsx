@@ -40,7 +40,7 @@ function FaqRow({
           textAlign: "left",
         }}
       >
-        <span style={{ flex: 1, fontWeight: 600, fontSize: 15.5, letterSpacing: "-.01em", lineHeight: 1.35 }}>
+        <span style={{ flex: 1, fontWeight: 500, fontSize: 15.5, letterSpacing: "-.01em", lineHeight: 1.35 }}>
           {q}
         </span>
         <Icon
@@ -147,7 +147,7 @@ export function HelpScreen({
             <Icon name="mail" size={20} />
           </span>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontWeight: 700, fontSize: 15 }}>Contact support</div>
+            <div style={{ fontWeight: 600, fontSize: 15 }}>Contact support</div>
             <div style={{ fontSize: 13, color: "var(--ink-2)", marginTop: 2 }}>{SUPPORT_EMAIL}</div>
           </div>
           <Icon name="arrowUR" size={16} style={{ color: "var(--ink-3)", flex: "none" }} />

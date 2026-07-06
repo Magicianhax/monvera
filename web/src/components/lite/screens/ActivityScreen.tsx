@@ -88,7 +88,7 @@ export function ActivityScreen({
       >
         <ActivityGlyph event={e} size={42} />
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontWeight: 600, fontSize: 15 }}>
+          <div style={{ fontWeight: 500, fontSize: 15 }}>
             {verb} {e.symbol}
           </div>
           <div className="mono" style={{ fontSize: 11.5, color: "var(--ink-2)", marginTop: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
@@ -97,11 +97,11 @@ export function ActivityScreen({
         </div>
         {isTrade ? (
           <div className="tnum" style={{ textAlign: "right", flex: "none" }}>
-            <div style={{ fontWeight: 700, fontSize: 15, color: e.kind === "sell" ? "var(--pos)" : "var(--ink)" }}>{usdgLeg}</div>
-            <div style={{ fontSize: 12, fontWeight: 600, marginTop: 1, color: e.kind === "buy" ? "var(--pos)" : "var(--ink-2)" }}>{assetLeg}</div>
+            <div style={{ fontWeight: 600, fontSize: 15, color: e.kind === "sell" ? "var(--pos)" : "var(--ink)" }}>{usdgLeg}</div>
+            <div style={{ fontSize: 12, fontWeight: 500, marginTop: 1, color: e.kind === "buy" ? "var(--pos)" : "var(--ink-2)" }}>{assetLeg}</div>
           </div>
         ) : (
-          <span className="tnum" style={{ fontWeight: 700, fontSize: 15, color: positive ? "var(--pos)" : "var(--ink)", flex: "none" }}>
+          <span className="tnum" style={{ fontWeight: 600, fontSize: 15, color: positive ? "var(--pos)" : "var(--ink)", flex: "none" }}>
             {rightMain}
           </span>
         )}
@@ -141,7 +141,7 @@ export function ActivityScreen({
           </div>
         ) : rows.length === 0 ? (
           <div className="card" style={{ padding: "26px 18px", textAlign: "center", color: "var(--ink-2)" }}>
-            <div style={{ fontSize: 15, fontWeight: 600, color: "var(--ink)" }}>Nothing yet</div>
+            <div style={{ fontSize: 15, fontWeight: 500, color: "var(--ink)" }}>Nothing yet</div>
             <div style={{ fontSize: 13.5, marginTop: 4, lineHeight: 1.5 }}>
               Your buys, sells, and transfers will show up here, each with its on-chain receipt.
             </div>
@@ -150,7 +150,7 @@ export function ActivityScreen({
           <div className="stagger-in" style={{ display: "flex", flexDirection: "column", gap: 18 }}>
             {groups.map((g) => (
               <div key={g.label}>
-                <div style={{ fontSize: 12.5, fontWeight: 700, color: "var(--ink-3)", letterSpacing: ".02em", padding: "0 6px 8px" }}>
+                <div style={{ fontSize: 12.5, fontWeight: 600, color: "var(--ink-3)", letterSpacing: ".02em", padding: "0 6px 8px" }}>
                   {g.label}
                 </div>
                 <div className="card" style={{ padding: 12 }}>

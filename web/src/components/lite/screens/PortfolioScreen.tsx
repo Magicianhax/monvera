@@ -8,26 +8,18 @@
 // Note on P&L: we don't track cost basis on-chain, so we DON'T fabricate an
 // "all time" gain. The stat block shows the real invested total; per-holding
 // rows show approximate current value.
-import { useState, type ReactNode } from "react";
+import { useRef, useState, type ReactNode } from "react";
+import gsap from "gsap";
+import { useGSAP } from "@gsap/react";
 import { usePortfolio, type Holding } from "@/hooks/useBalances";
 import { useSmartAccount } from "@/hooks/useSmartAccount";
-import { Icon, VeraOrb, CountUp, HoldingRow, VerifiedBadge, PriceChart, AssetTile, Donut } from "@/components/design";
-import { haptic } from "@/lib/haptics";
+import { Icon, VeraOrb, CountUp, HoldingRow, VerifiedBadge, PriceChart } from "@/components/design";
 import { displayFor, toTile } from "@/lib/displayAssets";
 import { usd, tokenQty } from "@/lib/format";
 import { portfolioDayCurve } from "@/lib/portfolioCurve";
-import { usePortfolioHistory } from "@/hooks/usePortfolioHistory";
-import { useMarketHistory, type MarketRange } from "@/hooks/useMarket";
-import { boxHead, innerBox } from "./primitives";
+import { boxHead } from "./primitives";
 
-// Time ranges for the portfolio value chart + the "move" label they read as.
-const PORT_RANGES: { label: string; key: MarketRange; moveWord: string }[] = [
-  { label: "1D", key: "1D", moveWord: "today" },
-  { label: "1W", key: "1W", moveWord: "past week" },
-  { label: "1M", key: "1M", moveWord: "past month" },
-  { label: "1Y", key: "1Y", moveWord: "past year" },
-  { label: "All", key: "All", moveWord: "all time" },
-];
+gsap.registerPlugin(useGSAP);
 
 // Ledger section header — strong sans, sits in the 22px gutter with generous
 // top spacing. Optional right-hand meta (e.g. positions count).
@@ -69,7 +61,26 @@ export function PortfolioScreen({
     .sort((a, b) => (b.valueUsd ?? 0) - (a.valueUsd ?? 0));
   const total = port?.totalUsd ?? 0;
 
-  // (Allocation now uses the self-animating Donut; its old GSAP bar reveal is gone.)
+  // Allocation bar reveal — segments grow left-to-right when the data lands
+  // (a state reveal, not decoration). Skipped entirely under reduced motion.
+  const barRef = useRef<HTMLDivElement>(null);
+  useGSAP(
+    () => {
+      if (!priced.length) return;
+      const mm = gsap.matchMedia();
+      mm.add("(prefers-reduced-motion: no-preference)", () => {
+        gsap.from("[data-fx='seg']", {
+          scaleX: 0,
+          transformOrigin: "left center",
+          duration: 0.7,
+          ease: "power3.out",
+          stagger: 0.05,
+        });
+      });
+      return () => mm.revert();
+    },
+    { scope: barRef, dependencies: [priced.length] },
+  );
 
   // ── First-load skeleton — don't flash the empty state before holdings resolve.
   if (portLoading && holdings.length === 0) {
@@ -171,33 +182,13 @@ export function PortfolioScreen({
 
   const allocTotal = priced.reduce((s, h) => s + (h.valueUsd ?? 0), 0) || 1;
 
-  // Portfolio insights (today snapshot) from data we already have.
-  const withDay = priced.filter((h) => h.dayChangePct !== undefined && Number.isFinite(h.dayChangePct));
-  const best = withDay.length ? withDay.reduce((a, b) => ((b.dayChangePct ?? 0) > (a.dayChangePct ?? 0) ? b : a)) : null;
-  const worst = withDay.length ? withDay.reduce((a, b) => ((b.dayChangePct ?? 0) < (a.dayChangePct ?? 0) ? b : a)) : null;
-  const biggest = priced.length ? priced.reduce((a, b) => ((b.valueUsd ?? 0) > (a.valueUsd ?? 0) ? b : a)) : null;
-  const concentration = biggest ? Math.round(((biggest.valueUsd ?? 0) / allocTotal) * 100) : 0;
-
-  // Value chart with time ranges. 1D uses the instant spark-based curve; longer
-  // ranges fetch each holding's history and combine (usePortfolioHistory). The
-  // fetched curve wins when it arrives, so 1D shows instantly then refines.
-  const [rangeIdx, setRangeIdx] = useState(0);
-  const range = PORT_RANGES[rangeIdx];
-  const { data: rangeCurve } = usePortfolioHistory(
-    holdings.map((h) => ({ symbol: h.asset.symbol, valueUsd: h.valueUsd })),
-    cash,
-    range.key,
-  );
-  const dayCurve = portfolioDayCurve([...holdings, { valueUsd: cash }]);
-  const day = rangeCurve ?? (rangeIdx === 0 ? dayCurve : null);
-  // Benchmark: the S&P 500 (SPY) over the same range, to show if you beat it.
-  const { data: spyHist } = useMarketHistory("SPY", range.key);
-  const spyPct = spyHist?.changePct;
-
+  // Today's TOTAL-value curve: holdings' intraday shapes + cash as a flat line,
+  // so the chart, the "Total value" hero, and the scrub value all agree.
+  const day = portfolioDayCurve([...holdings, { valueUsd: cash }]);
   // Chart scrub: while the finger is down, the hero reads the value at that point.
   const [scrub, setScrub] = useState<{ price: number; index: number } | null>(null);
   const heroValue = scrub ? scrub.price : total;
-  // The move shown: over the range, or from range-open to the scrub point.
+  // The move shown: whole-day, or from open to the scrub point.
   const moveUsd = day ? (scrub ? scrub.price - day.curve[0] : day.changeUsd) : 0;
   const movePct = day && day.curve[0] > 0 ? (moveUsd / day.curve[0]) * 100 : 0;
   const moveUp = moveUsd >= 0;
@@ -241,13 +232,13 @@ export function PortfolioScreen({
                 }}
               >
                 <span aria-hidden>{moveUp ? "▲" : "▼"}</span>
-                {`${usd(Math.abs(moveUsd))} · ${Math.abs(movePct).toFixed(2)}% ${range.moveWord}`}
+                {`${usd(Math.abs(moveUsd))} · ${Math.abs(movePct).toFixed(2)}% today`}
               </span>
             </div>
           )}
         </div>
 
-        {/* value curve — full-bleed, scrubbable (drag to read the value) */}
+        {/* today's value curve — full-bleed, scrubbable (drag to read the value) */}
         {day && day.curve.length > 1 && (
           <div style={{ marginTop: 14 }}>
             <PriceChart
@@ -256,56 +247,8 @@ export function PortfolioScreen({
               height={128}
               raw
               onScrub={setScrub}
-              label={`Portfolio value ${range.moveWord}, ${day.changeUsd >= 0 ? "up" : "down"} ${Math.abs(day.changePct).toFixed(1)}%. Touch and drag to read the value at any time.`}
+              label={`Portfolio value today, ${day.changeUsd >= 0 ? "up" : "down"} ${Math.abs(day.changePct).toFixed(1)}%. Touch and drag to read the value at any time.`}
             />
-          </div>
-        )}
-
-        {/* time-range chips */}
-        <div style={{ display: "flex", gap: 8, padding: "12px 22px 0", justifyContent: "center" }}>
-          {PORT_RANGES.map((r, i) => (
-            <button
-              key={r.key}
-              onClick={() => {
-                setRangeIdx(i);
-                setScrub(null);
-              }}
-              className={`chip tap ${rangeIdx === i ? "is-on" : ""}`}
-              aria-pressed={rangeIdx === i}
-              style={{ flex: "none", height: 32, fontSize: 12.5, fontWeight: 600, padding: "0 12px" }}
-            >
-              {r.label}
-            </button>
-          ))}
-        </div>
-
-        {/* vs S&P 500 — did you beat the market over this range? */}
-        {day && spyPct !== undefined && spyPct !== null && !scrub && (
-          <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 8, padding: "12px 22px 0", fontSize: 12.5 }}>
-            {(() => {
-              const beat = day.changePct >= spyPct;
-              return (
-                <>
-                  <span
-                    className="tnum"
-                    style={{
-                      fontWeight: 700,
-                      padding: "3px 9px",
-                      borderRadius: 999,
-                      color: beat ? "var(--pos)" : "var(--neg)",
-                      background: beat
-                        ? "color-mix(in srgb, var(--pos) 12%, transparent)"
-                        : "color-mix(in srgb, var(--neg) 12%, transparent)",
-                    }}
-                  >
-                    {beat ? "Beating" : "Trailing"} the S&P 500
-                  </span>
-                  <span className="tnum" style={{ color: "var(--ink-3)" }}>
-                    You {day.changePct >= 0 ? "+" : ""}{day.changePct.toFixed(1)}% · S&P {spyPct >= 0 ? "+" : ""}{spyPct.toFixed(1)}%
-                  </span>
-                </>
-              );
-            })()}
           </div>
         )}
 
@@ -333,88 +276,68 @@ export function PortfolioScreen({
       >
         Allocation
       </LedgerHeader>
-      {/* Interactive donut — tap a slice to focus it; the center reads the pick. */}
-      <div style={{ display: "flex", justifyContent: "center", padding: "6px 22px 0" }}>
-        {priced.length > 0 ? (
-          (() => {
-            const pickIdx = allocPick ? priced.findIndex((h) => h.asset.symbol === allocPick) : -1;
-            const pick = pickIdx >= 0 ? priced[pickIdx] : null;
-            const pd = pick ? displayFor(pick.asset.symbol, pick.asset.name) : null;
-            return (
-              <Donut
-                size={168}
-                thickness={22}
-                segments={priced.map((h) => ({ value: h.valueUsd ?? 0, color: displayFor(h.asset.symbol, h.asset.name).color }))}
-                activeIndex={pickIdx >= 0 ? pickIdx : null}
-                onSegmentClick={(i) => {
-                  haptic.select();
-                  const sym = priced[i].asset.symbol;
-                  setAllocPick((cur) => (cur === sym ? null : sym));
-                }}
-                center={
-                  pick && pd ? (
-                    <div style={{ textAlign: "center" }}>
-                      <div style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 700, color: "var(--ink-2)" }}>
-                        <span aria-hidden style={{ width: 8, height: 8, borderRadius: 2, background: pd.color }} />
-                        {pd.ticker ?? pick.asset.symbol}
-                      </div>
-                      <div className="tnum" style={{ fontSize: 26, fontWeight: 800, letterSpacing: "-.02em", marginTop: 1 }}>
-                        {Math.round(((pick.valueUsd ?? 0) / allocTotal) * 100)}%
-                      </div>
-                    </div>
-                  ) : (
-                    <div style={{ textAlign: "center" }}>
-                      <div className="tnum" style={{ fontSize: 26, fontWeight: 800, letterSpacing: "-.02em" }}>{priced.length}</div>
-                      <div style={{ fontSize: 11.5, color: "var(--ink-3)", fontWeight: 600, marginTop: 1 }}>
-                        {priced.length === 1 ? "holding" : "holdings"}
-                      </div>
-                    </div>
-                  )
-                }
-              />
-            );
-          })()
-        ) : (
-          <div style={{ width: 168, height: 168, borderRadius: "50%", border: "22px solid var(--surface-2)" }} />
-        )}
+      <div ref={barRef} style={{ padding: "0 22px" }}>
+        <div
+          role="img"
+          aria-label={`Allocation across ${priced.length} priced holdings`}
+          style={{ display: "flex", gap: 2, height: 14, borderRadius: 4, overflow: "hidden" }}
+        >
+          {priced.length ? (
+            priced.map((h) => {
+              const d = displayFor(h.asset.symbol, h.asset.name);
+              const on = allocPick === h.asset.symbol;
+              const dimmed = allocPick !== null && !on;
+              return (
+                <button
+                  key={h.asset.symbol}
+                  data-fx="seg"
+                  aria-label={`${d.name}, ${Math.round(((h.valueUsd ?? 0) / allocTotal) * 100)}% of portfolio`}
+                  aria-pressed={on}
+                  onClick={() => setAllocPick(on ? null : h.asset.symbol)}
+                  style={{
+                    flexGrow: h.valueUsd ?? 0,
+                    flexBasis: 0,
+                    minWidth: 3,
+                    padding: 0,
+                    border: "none",
+                    cursor: "pointer",
+                    background: d.color,
+                    opacity: dimmed ? 0.35 : 1,
+                    transition: "opacity .2s var(--ease-out)",
+                  }}
+                />
+              );
+            })
+          ) : (
+            <span style={{ flex: 1, background: "var(--surface-2)" }} />
+          )}
+        </div>
       </div>
-
-      {/* ── Insights — today's best/worst + concentration (from real day data) ── */}
-      {withDay.length > 0 && best && worst && biggest && (
-        <section style={{ padding: "18px 22px 0" }}>
-          <div className="card" style={{ padding: 12 }}>
-            <div style={{ ...boxHead }}>Insights</div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              {(
-                [
-                  { key: "best", label: "Best today", h: best, val: `${(best.dayChangePct ?? 0) >= 0 ? "+" : ""}${(best.dayChangePct ?? 0).toFixed(2)}%`, color: "var(--pos)" },
-                  { key: "worst", label: "Worst today", h: worst, val: `${(worst.dayChangePct ?? 0) >= 0 ? "+" : ""}${(worst.dayChangePct ?? 0).toFixed(2)}%`, color: (worst.dayChangePct ?? 0) >= 0 ? "var(--pos)" : "var(--neg)" },
-                  { key: "big", label: "Biggest position", h: biggest, val: `${concentration}%`, color: "var(--ink-2)" },
-                ] as const
-              )
-                // "worst" is redundant when there's only one holding (best === worst).
-                .filter((row) => !(row.key === "worst" && best === worst))
-                .map((row) => (
-                  <div
-                    key={row.key}
-                    className="tap"
-                    onClick={() => go("asset", { symbol: row.h.asset.symbol })}
-                    style={{ ...innerBox, cursor: "pointer" }}
-                  >
-                    <AssetTile asset={toTile(row.h.asset.symbol, row.h.asset.name)} size={34} radius={11} />
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 12.5, color: "var(--ink-3)", fontWeight: 600 }}>{row.label}</div>
-                      <div style={{ fontWeight: 600, fontSize: 14.5, marginTop: 1 }}>
-                        {displayFor(row.h.asset.symbol, row.h.asset.name).name}
-                      </div>
-                    </div>
-                    <span className="tnum" style={{ fontWeight: 700, fontSize: 15, color: row.color }}>{row.val}</span>
-                  </div>
-                ))}
-            </div>
+      {/* Tap-reveal line — only takes space once a segment is picked, so the
+          bar sits tight to the Holdings header otherwise. */}
+      {(() => {
+        const pick = priced.find((h) => h.asset.symbol === allocPick);
+        if (!pick) return null;
+        const d = displayFor(pick.asset.symbol, pick.asset.name);
+        return (
+          <div style={{ padding: "10px 22px 0" }}>
+            <span
+              key={pick.asset.symbol}
+              className="anim-rise"
+              style={{ display: "inline-flex", alignItems: "center", gap: 9 }}
+            >
+              <span
+                aria-hidden
+                style={{ width: 9, height: 9, borderRadius: 2, background: d.color, flex: "none" }}
+              />
+              <span style={{ fontSize: 13.5, fontWeight: 700 }}>{d.name}</span>
+              <span className="tnum" style={{ fontSize: 13.5, fontWeight: 700, color: "var(--ink-2)" }}>
+                {Math.round(((pick.valueUsd ?? 0) / allocTotal) * 100)}%
+              </span>
+            </span>
           </div>
-        </section>
-      )}
+        );
+      })()}
 
       {/* ── Holdings — one outer box, each row a mini box inside ── */}
       <section style={{ padding: "18px 22px 0" }}>

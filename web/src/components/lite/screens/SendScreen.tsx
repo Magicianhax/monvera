@@ -154,7 +154,7 @@ export function SendScreen({
                   borderRadius: 5,
                   background: on ? "var(--primary)" : "var(--surface-2)",
                   color: on ? "var(--primary-ink)" : "var(--ink)",
-                  fontWeight: 600,
+                  fontWeight: 500,
                   fontSize: 14,
                   display: "flex",
                   alignItems: "center",
@@ -184,10 +184,10 @@ export function SendScreen({
               value={amount}
               onChange={(e) => { setAmount(e.target.value.replace(/[^0-9.]/g, "")); setConfirming(false); }}
               className="tnum"
-              style={{ flex: 1, minWidth: 0, border: "none", background: "transparent", outline: "none", fontSize: 34, fontWeight: 700, letterSpacing: "-.03em", color: "var(--ink)" }}
+              style={{ flex: 1, minWidth: 0, border: "none", background: "transparent", outline: "none", fontSize: 34, fontWeight: 600, letterSpacing: "-.03em", color: "var(--ink)" }}
             />
-            <span style={{ fontWeight: 700, fontSize: 16, color: "var(--ink-2)" }}>{asset.symbol}</span>
-            <button onClick={setMax} className="tap" style={{ padding: "6px 11px", borderRadius: 4, background: "var(--surface-2)", color: "var(--primary)", fontWeight: 700, fontSize: 13 }}>
+            <span style={{ fontWeight: 600, fontSize: 16, color: "var(--ink-2)" }}>{asset.symbol}</span>
+            <button onClick={setMax} className="tap" style={{ padding: "6px 11px", borderRadius: 4, background: "var(--surface-2)", color: "var(--primary)", fontWeight: 600, fontSize: 13 }}>
               Max
             </button>
           </div>

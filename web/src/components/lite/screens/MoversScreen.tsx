@@ -46,15 +46,15 @@ export function MoversScreen({
       <button key={m.symbol} className="tap" onClick={() => go("asset", { symbol: m.symbol })} style={{ ...innerBox }}>
         <AssetTile asset={tile} size={38} radius={12} />
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontWeight: 600, fontSize: 15, letterSpacing: "-.01em", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{tile.name}</div>
+          <div style={{ fontWeight: 500, fontSize: 15, letterSpacing: "-.01em", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{tile.name}</div>
           <div className="mono" style={{ fontSize: 11.5, color: "var(--ink-3)", marginTop: 2 }}>{m.symbol}</div>
         </div>
         <div style={{ flex: "none", display: "flex", justifyContent: "center", width: 58 }}>
           <Sparkline data={m.spark} color={up ? "var(--pos)" : "var(--neg)"} />
         </div>
         <div className="tnum" style={{ textAlign: "right", minWidth: 58 }}>
-          <div style={{ fontWeight: 600, fontSize: 14.5 }}>{m.price !== undefined ? usd(m.price) : "—"}</div>
-          <div style={{ fontSize: 12, fontWeight: 700, marginTop: 1, color: up ? "var(--pos)" : "var(--neg)" }}>{(up ? "+" : "") + m.day.toFixed(2)}%</div>
+          <div style={{ fontWeight: 500, fontSize: 14.5 }}>{m.price !== undefined ? usd(m.price) : "—"}</div>
+          <div style={{ fontSize: 12, fontWeight: 600, marginTop: 1, color: up ? "var(--pos)" : "var(--neg)" }}>{(up ? "+" : "") + m.day.toFixed(2)}%</div>
         </div>
       </button>
     );

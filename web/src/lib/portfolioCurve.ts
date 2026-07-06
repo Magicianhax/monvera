@@ -64,39 +64,3 @@ export function portfolioDayCurve(holdings: CurveHolding[]): DayCurve | null {
   const changePct = open > 0 ? (changeUsd / open) * 100 : 0;
   return { curve: sum, changeUsd, changePct };
 }
-
-/**
- * Portfolio value curve over ANY range: each holding's price series (real closes
- * for that range) scaled to its current value, plus cash as a flat line. Same
- * honesty as portfolioDayCurve — it's the market value of what you hold now over
- * the window, not cost-basis profit.
- */
-export function combinePortfolioCurve(
-  parts: { valueUsd: number; series?: number[] }[],
-  cash: number,
-  points = 56,
-): DayCurve | null {
-  const priced = parts.filter((p) => p.valueUsd > 0);
-  if (priced.length === 0) return null;
-
-  const sum = new Array<number>(points).fill(0);
-  let anyMovement = false;
-  for (const p of priced) {
-    const s = p.series;
-    if (s && s.length >= 2 && s[s.length - 1] > 0) {
-      anyMovement = true;
-      const scaled = resample(s, points).map((v) => (v / s[s.length - 1]) * p.valueUsd);
-      for (let i = 0; i < points; i++) sum[i] += scaled[i];
-    } else {
-      for (let i = 0; i < points; i++) sum[i] += p.valueUsd;
-    }
-  }
-  if (cash > 0) for (let i = 0; i < points; i++) sum[i] += cash;
-  if (!anyMovement) return null;
-
-  const open = sum[0];
-  const now = sum[sum.length - 1];
-  const changeUsd = now - open;
-  const changePct = open > 0 ? (changeUsd / open) * 100 : 0;
-  return { curve: sum, changeUsd, changePct };
-}

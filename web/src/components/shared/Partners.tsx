@@ -87,7 +87,7 @@ export const PARTNERS: Partner[] = [
 export function PartnerStrip() {
   return (
     <div className="card" style={{ padding: "6px 16px", marginTop: 14 }}>
-      <div style={{ fontSize: 13, fontWeight: 700, color: "var(--ink-2)", padding: "12px 2px 6px" }}>
+      <div style={{ fontSize: 13, fontWeight: 600, color: "var(--ink-2)", padding: "12px 2px 6px" }}>
         The infrastructure behind Monvera
       </div>
       {PARTNERS.map((p, i) => (
@@ -121,7 +121,7 @@ export function PartnerStrip() {
             {p.mark(20)}
           </span>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontWeight: 700, fontSize: 14.5, letterSpacing: "-.01em" }}>{p.name}</div>
+            <div style={{ fontWeight: 600, fontSize: 14.5, letterSpacing: "-.01em" }}>{p.name}</div>
             <div style={{ fontSize: 12.5, color: "var(--ink-2)", marginTop: 2, lineHeight: 1.4 }}>{p.role}</div>
           </div>
           <svg width={15} height={15} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.4} style={{ color: "var(--ink-3)", flex: "none" }} aria-hidden>

@@ -132,7 +132,7 @@ export function TradeScreen({
         </button>
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginLeft: 4 }}>
           <AssetTile asset={d} size={30} />
-          <h1 style={{ margin: 0, fontWeight: 700, fontSize: 17, letterSpacing: "-.01em" }}>{d.name}</h1>
+          <h1 style={{ margin: 0, fontWeight: 600, fontSize: 17, letterSpacing: "-.01em" }}>{d.name}</h1>
         </div>
       </div>
 
@@ -158,14 +158,14 @@ export function TradeScreen({
       ) : (
         <>
           <div className="anim-rise" style={{ padding: "12px 22px 0", textAlign: "center" }}>
-            <div className="tnum" style={{ fontSize: 26, fontWeight: 700, letterSpacing: "-.02em" }}>
+            <div className="tnum" style={{ fontSize: 26, fontWeight: 600, letterSpacing: "-.02em" }}>
               {shownPrice !== undefined ? <CountUp to={shownPrice} /> : "—"}
             </div>
             <div
               className="tnum"
               style={{
                 fontSize: 13,
-                fontWeight: 700,
+                fontWeight: 600,
                 marginTop: 2,
                 color: up ? "var(--pos)" : "var(--neg)",
               }}
@@ -227,7 +227,7 @@ export function TradeScreen({
           >
             <Icon name="clock" size={28} />
           </div>
-          <div style={{ fontSize: 16.5, fontWeight: 700, color: "var(--ink)", marginBottom: 6 }}>
+          <div style={{ fontSize: 16.5, fontWeight: 600, color: "var(--ink)", marginBottom: 6 }}>
             {!holding || heldRaw <= BigInt(0) ? "Nothing to sell here" : "Selling is coming soon"}
           </div>
           <p style={{ fontSize: 14, lineHeight: 1.55 }}>
@@ -242,7 +242,7 @@ export function TradeScreen({
           <div className="anim-rise" style={{ padding: "30px 22px 0", textAlign: "center" }}>
             <div
               className="tnum"
-              style={{ fontSize: 50, fontWeight: 700, letterSpacing: "-.04em" }}
+              style={{ fontSize: 50, fontWeight: 600, letterSpacing: "-.04em" }}
             >
               {sellFetching && !sellQuote ? (
                 <span
@@ -282,7 +282,7 @@ export function TradeScreen({
           <div style={{ padding: "18px 22px 0" }}>
             <div className="card" style={{ padding: 16 }}>
               <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 10 }}>
-                <span style={{ fontSize: 13.5, fontWeight: 600, color: "var(--ink-2)" }}>
+                <span style={{ fontSize: 13.5, fontWeight: 500, color: "var(--ink-2)" }}>
                   Price movement I&apos;ll allow
                 </span>
                 <span className="mono" style={{ fontSize: 12, color: "var(--ink-2)" }}>
@@ -316,7 +316,7 @@ export function TradeScreen({
               }}
             >
               <span>You&apos;ll receive at least</span>
-              <span className="tnum" style={{ fontWeight: 600, color: "var(--ink)" }}>
+              <span className="tnum" style={{ fontWeight: 500, color: "var(--ink)" }}>
                 {usd(sellMinUsd)}
               </span>
             </div>
@@ -376,7 +376,7 @@ export function TradeScreen({
             <div style={{ display: "flex", justifyContent: "center", alignItems: "baseline" }}>
               <span
                 className="tnum"
-                style={{ fontSize: 56, fontWeight: 700, letterSpacing: "-.04em", color: amt ? "var(--ink)" : "var(--ink-3)" }}
+                style={{ fontSize: 56, fontWeight: 600, letterSpacing: "-.04em", color: amt ? "var(--ink)" : "var(--ink-3)" }}
               >
                 $
               </span>
@@ -395,7 +395,7 @@ export function TradeScreen({
                 className="tnum"
                 style={{
                   fontSize: 56,
-                  fontWeight: 700,
+                  fontWeight: 600,
                   letterSpacing: "-.04em",
                   color: amt ? "var(--ink)" : "var(--ink-3)",
                   border: "none",
@@ -453,7 +453,7 @@ export function TradeScreen({
           <div style={{ padding: "18px 22px 0" }}>
             <div className="card" style={{ padding: 16 }}>
               <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 10 }}>
-                <span style={{ fontSize: 13.5, fontWeight: 600, color: "var(--ink-2)" }}>
+                <span style={{ fontSize: 13.5, fontWeight: 500, color: "var(--ink-2)" }}>
                   Price movement I&apos;ll allow
                 </span>
                 <span className="mono" style={{ fontSize: 12, color: "var(--ink-2)" }}>
@@ -487,7 +487,7 @@ export function TradeScreen({
               }}
             >
               <span>You&apos;ll receive at least</span>
-              <span className="tnum" style={{ fontWeight: 600, color: "var(--ink)" }}>
+              <span className="tnum" style={{ fontWeight: 500, color: "var(--ink)" }}>
                 {tokenQty(buyMinOutRaw, dec)} shares
               </span>
             </div>

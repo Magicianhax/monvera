@@ -159,7 +159,7 @@ export function PlacingScreen({ phase }: { phase: string }) {
         ))}
       </div>
 
-      <div style={{ marginTop: 28, display: "inline-flex", alignItems: "center", gap: 8, fontSize: 12.5, fontWeight: 600, color: "var(--ink-2)" }}>
+      <div style={{ marginTop: 28, display: "inline-flex", alignItems: "center", gap: 8, fontSize: 12.5, fontWeight: 500, color: "var(--ink-2)" }}>
         <Seal size={18} /> Gas-free · signed &amp; verified on-chain
       </div>
     </div>

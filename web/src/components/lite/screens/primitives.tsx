@@ -108,7 +108,7 @@ export const iconBtn: CSSProperties = {
 // sit inside. Used by Home / Owned / Activity / Wallet so lists read the same.
 export const boxHead: CSSProperties = {
   fontSize: 13,
-  fontWeight: 700,
+  fontWeight: 600,
   color: "var(--ink-2)",
   padding: "4px 6px 10px",
 };
@@ -172,7 +172,7 @@ export function LogoStack({
             display: "grid",
             placeItems: "center",
             fontSize: Math.round(size * 0.36),
-            fontWeight: 700,
+            fontWeight: 600,
             boxShadow: `0 0 0 1.5px ${ring}`,
             position: "relative",
             zIndex: 0,
@@ -190,9 +190,9 @@ export function VeraTag({ verified = false }: { verified?: boolean }) {
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
       <VeraOrb size={26} />
-      <span style={{ fontWeight: 700, fontSize: 16 }}>Vera</span>
+      <span style={{ fontWeight: 600, fontSize: 16 }}>Vera</span>
       {verified && (
-        <span style={{ marginLeft: 2, display: "inline-flex", alignItems: "center", gap: 5, fontSize: 12, fontWeight: 600, color: "var(--ink-2)" }}>
+        <span style={{ marginLeft: 2, display: "inline-flex", alignItems: "center", gap: 5, fontSize: 12, fontWeight: 500, color: "var(--ink-2)" }}>
           <Seal size={16} /> Verified
         </span>
       )}
