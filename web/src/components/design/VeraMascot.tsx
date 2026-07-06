@@ -4,6 +4,7 @@
 // here as the app's warm face (her own screen, her "thinking" state, empty states).
 // Portrait art (2:3); `size` is the rendered HEIGHT, width follows.
 import type { CSSProperties } from "react";
+import { asset } from "@/lib/assets";
 
 export function VeraMascot({
   size = 120,
@@ -17,7 +18,7 @@ export function VeraMascot({
   return (
     // eslint-disable-next-line @next/next/no-img-element -- static local webp, no loader needed
     <img
-      src="/brand/vera-mascot.webp"
+      src={asset("/brand/vera-mascot.webp")}
       alt="Vera"
       width={Math.round(size * (2 / 3))}
       height={size}

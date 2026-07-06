@@ -23,13 +23,14 @@ import { DemoMount } from "@/components/demo/DemoMount";
 import type { DemoPlay } from "@/components/demo/DemoProvider";
 import { PhoneChrome } from "@/components/site/PhoneChrome";
 import s from "./SiteLanding.module.css";
+import { asset } from "@/lib/assets";
 
 gsap.registerPlugin(useGSAP, ScrollTrigger, TextPlugin);
 
 type Mode = "light" | "dark";
 
 // Hero background slideshow — famous places from countries Monvera serves, shown
-// in order. Images live in public/brand/hero/ (generated from docs/hero-image-prompts.md).
+// in order. Media is hosted on Cloudflare R2 (see lib/assets.ts; prompts in docs/).
 const HERO_SLIDES: { file: string; place: string; mascot: string }[] = [
   { file: "hero-01-tokyo.webp", place: "Tokyo, Japan", mascot: "vera-01-tokyo.webp" },
   { file: "hero-02-tajmahal.webp", place: "Agra, India", mascot: "vera-02-tajmahal.webp" },
@@ -268,7 +269,7 @@ export function SiteLanding() {
             <div
               key={sl.file}
               className={`${s.heroSlide} js-slide`}
-              style={{ backgroundImage: `url(/brand/hero/${sl.file})` }}
+              style={{ backgroundImage: `url(${asset(`/brand/hero/${sl.file}`)})` }}
             />
           ))}
         </div>
@@ -285,7 +286,7 @@ export function SiteLanding() {
         <div className={s.mascotLayer} aria-hidden>
           {HERO_SLIDES.map((sl) => (
             // eslint-disable-next-line @next/next/no-img-element
-            <img key={sl.mascot} className={`${s.mascot} js-mascot`} src={`/brand/hero/${sl.mascot}`} alt="" decoding="async" />
+            <img key={sl.mascot} className={`${s.mascot} js-mascot`} src={asset(`/brand/hero/${sl.mascot}`)} alt="" decoding="async" />
           ))}
         </div>
       </header>

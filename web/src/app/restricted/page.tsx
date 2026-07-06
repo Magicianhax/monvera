@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { asset } from "@/lib/assets";
 
 export const metadata: Metadata = {
   title: "Not available in your region",
@@ -36,7 +37,7 @@ export default function RestrictedPage() {
         }}
       >
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/brand/monvera-icon-white.png" alt="" width={34} height={34} decoding="async" style={{ width: 34, height: 34, display: "block" }} />
+        <img src={asset("/brand/monvera-icon-white.png")} alt="" width={34} height={34} decoding="async" style={{ width: 34, height: 34, display: "block" }} />
       </span>
       <h1 style={{ margin: 0, fontSize: 26, fontWeight: 700, letterSpacing: "-.02em" }}>
         Monvera isn&apos;t available in your region

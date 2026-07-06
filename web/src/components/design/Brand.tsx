@@ -9,6 +9,7 @@
 //   VeraOrb        — Vera's glassy presence (unchanged; product = Monvera, agent = Vera).
 //   AssetTile      — a stock/token tile (real logo on white, monogram fallback).
 import { useState } from "react";
+import { asset } from "@/lib/assets";
 
 export interface MonveraIconProps {
   size?: number;
@@ -21,7 +22,7 @@ export interface MonveraIconProps {
 // Rendered from the brand asset so it stays pixel-faithful; the green mark works on
 // any background, the white knockout sits inside the app-icon tile.
 export function MonveraIcon({ size = 28, variant = "green", className }: MonveraIconProps) {
-  const src = variant === "white" ? "/brand/monvera-icon-white.png" : "/brand/monvera-icon.png";
+  const src = variant === "white" ? asset("/brand/monvera-icon-white.png") : asset("/brand/monvera-icon.png");
   return (
     // eslint-disable-next-line @next/next/no-img-element
     <img
@@ -112,7 +113,7 @@ export interface VeraOrbProps {
 export function VeraOrb({ size = 36, pulse = false }: VeraOrbProps) {
   return (
     <img
-      src="/brand/vera.png"
+      src={asset("/brand/vera.png")}
       alt=""
       width={size}
       height={size}

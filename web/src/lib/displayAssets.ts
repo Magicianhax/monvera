@@ -8,6 +8,7 @@
 // (public S3, keyed by ticker). Symbols with no design entry fall back to sensible
 // defaults + the same Arcus logo, so nothing ever crashes and every stock shows a
 // real logo (monogram only if the image 404s).
+import { asset } from "./assets";
 import type { TileAsset } from "@/components/design";
 
 export interface AssetDisplay extends TileAsset {
@@ -30,12 +31,12 @@ export interface AssetDisplay extends TileAsset {
 }
 
 // Real stock/ETF logos Arcus publishes for Robinhood Chain tokens (public bucket).
-// Stock logos are mirrored into public/logos (see the Arcus branding bucket for
-// the originals) so every asset serves from our own Cloudflare CDN, not a
+// Stock logos are hosted on Cloudflare R2 (mirrored from the Arcus branding bucket;
+// 128px WebP) so every asset serves from our own infrastructure, not a
 // third-party S3 bucket. TokenLogo falls back to a coloured monogram if missing.
-const LOGO_BASE = "/logos";
+const LOGO_BASE = "/logos";  // served from R2 via asset()
 function arcusLogo(symbol: string): string {
-  return `${LOGO_BASE}/${symbol}.webp`;
+  return asset(`${LOGO_BASE}/${symbol}.webp`);
 }
 
 const UP = [4, 5, 5, 6, 7, 7, 8, 9, 9, 10];
@@ -46,7 +47,7 @@ const FLAT = [8, 8, 8, 8, 8, 8, 8, 8, 8, 8];
 // cash tile, which isn't a tradable stock).
 const DISPLAY: Record<string, AssetDisplay> = {
   // Cash — the spendable dollar (USDG, Global Dollar) on Robinhood Chain.
-  USDG: { name: "US Dollar", ticker: "USDG", logo: "/icons/usdg.png", color: "#2c9c6a", kind: "safe", cat: "Cash", desc: "USDG (Global Dollar) is a digital dollar that always aims to be worth $1. It's your spendable cash: add it, invest it, or send it.", price: 1, day: 0, spark: FLAT },
+  USDG: { name: "US Dollar", ticker: "USDG", logo: asset("/icons/usdg.png"), color: "#2c9c6a", kind: "safe", cat: "Cash", desc: "USDG (Global Dollar) is a digital dollar that always aims to be worth $1. It's your spendable cash: add it, invest it, or send it.", price: 1, day: 0, spark: FLAT },
 
   // ── Tech ──────────────────────────────────────────────────────────────────
   AAPL: { name: "Apple", ticker: "AAPL", color: "#3b3f44", kind: "stock", cat: "Tech", desc: "Apple makes the iPhone, Mac, and iPad, and earns a steady, growing income from services like the App Store and iCloud. One of the most valuable companies in the world.", price: 230, day: 0.82, spark: UP },
