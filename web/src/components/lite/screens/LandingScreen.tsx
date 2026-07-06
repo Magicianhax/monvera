@@ -8,6 +8,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useLogin, useModalStatus } from "@privy-io/react-auth";
 import { Icon, MonveraWordmark, AssetTile } from "@/components/design";
+import { VeraMascot } from "@/components/design/VeraMascot";
 import { displayFor } from "@/lib/displayAssets";
 
 type Method = "email" | "google" | "x" | "wallet";
@@ -72,17 +73,29 @@ export function LandingScreen() {
   };
 
   return (
-    <div className="screen screen-pad-top" style={{ justifyContent: "space-between" }}>
+    <div className="screen screen-pad-top" style={{ justifyContent: "space-between", position: "relative", overflow: "hidden" }}>
+      {/* Vera, the brand watermark — big, half off the right edge, behind the
+          content (z 0 vs content z 1), with a soft brand glow beneath her. */}
+      <div aria-hidden style={{ position: "absolute", right: 0, bottom: "21%", zIndex: 0, pointerEvents: "none", transform: "translateX(46%)" }}>
+        <span
+          style={{
+            position: "absolute",
+            inset: "-12%",
+            borderRadius: "50%",
+            background: "radial-gradient(circle, color-mix(in srgb, var(--primary) 30%, transparent), transparent 68%)",
+            filter: "blur(30px)",
+          }}
+        />
+        <VeraMascot size={400} style={{ opacity: 0.3, position: "relative" }} />
+      </div>
+
       {/* hero */}
-      <div style={{ padding: "30px 22px 0" }}>
+      <div style={{ padding: "30px 22px 0", position: "relative", zIndex: 1 }}>
         <div className="anim-rise" style={{ marginBottom: 40 }}>
           <MonveraWordmark size={30} />
         </div>
 
         <div className="anim-rise" style={{ animationDelay: ".05s" }}>
-          <div className="label-eyebrow" style={{ color: "var(--accent)", marginBottom: 18 }}>
-            Investing, in plain words
-          </div>
           <h1 className="display-xl" style={{ margin: 0 }}>
             Own a piece of
             <br />
@@ -115,7 +128,7 @@ export function LandingScreen() {
       {/* actions */}
       <div
         className="anim-rise"
-        style={{ animationDelay: ".18s", padding: "20px 22px calc(26px + env(safe-area-inset-bottom))" }}
+        style={{ animationDelay: ".18s", padding: "20px 22px calc(26px + env(safe-area-inset-bottom))", position: "relative", zIndex: 1 }}
       >
         {error && (
           <div
