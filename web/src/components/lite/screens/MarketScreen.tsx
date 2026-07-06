@@ -49,7 +49,9 @@ export function MarketScreen({
   go: (screen: string, params?: Record<string, unknown>) => void;
   initialFilter?: string;
 }) {
-  const [q, setQ] = useState("");
+  // Theme deep-links (Discover rails etc.) arrive as initialFilter strings the
+  // smart search understands ("ai", "space"); watchlist is the only chip filter.
+  const [q, setQ] = useState(initialFilter && initialFilter !== "watchlist" ? initialFilter : "");
   const [filterIdx, setFilterIdx] = useState(() =>
     initialFilter === "watchlist" ? FILTERS.findIndex((f) => f.label === WATCHLIST_FILTER) : 0,
   );
@@ -162,8 +164,21 @@ export function MarketScreen({
         <h1 style={{ margin: 0, fontSize: 28, fontWeight: 600, letterSpacing: "-0.02em" }}>
           Market
         </h1>
-        <span className="tnum" style={{ fontSize: 13, fontWeight: 500, color: "var(--ink-3)" }}>
-          {list.length} {list.length === 1 ? "result" : "results"}
+        <span style={{ display: "flex", gap: 8, alignItems: "center", flex: "none" }}>
+          <button
+            className="tap"
+            onClick={() => go("discover")}
+            style={{ display: "flex", alignItems: "center", gap: 5, padding: "7px 12px", borderRadius: 99, background: "var(--primary-soft)", color: "var(--primary)", fontSize: 12.5, fontWeight: 600 }}
+          >
+            <Icon name="grid" size={14} /> Discover
+          </button>
+          <button
+            className="tap"
+            onClick={() => go("screener")}
+            style={{ display: "flex", alignItems: "center", gap: 5, padding: "7px 12px", borderRadius: 99, background: "var(--surface-2)", color: "var(--ink)", fontSize: 12.5, fontWeight: 600 }}
+          >
+            <Icon name="sliders" size={14} /> Screener
+          </button>
         </span>
       </div>
 

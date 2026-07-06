@@ -14,6 +14,7 @@ import { useTransactions } from "@/hooks/useTransactions";
 import { useSmartAccount } from "@/hooks/useSmartAccount";
 import { useLegacyRecover } from "@/hooks/useLegacyRecover";
 import { Icon, type IconName, HoldingRow, CountUp, BottomSheet, useToast } from "@/components/design";
+import { SelfCustodyProof } from "@/components/shared/SelfCustodyProof";
 import { TokenLogo } from "@/components/lite/TokenLogo";
 import { ActivityGlyph } from "@/components/lite/ActivityGlyph";
 import { toTile, catFor } from "@/lib/displayAssets";
@@ -320,6 +321,11 @@ export function WalletScreen({
         </section>
       )}
       {events.length > 10 && <Pager page={txSafePage} pageCount={txPageCount} onPage={setTxPage} />}
+
+      {/* self-custody proof — the account is yours, the key is yours */}
+      <section style={{ padding: "26px 22px 0" }}>
+        <SelfCustodyProof />
+      </section>
 
       {/* receive sheet */}
       <BottomSheet open={receiveOpen} onClose={() => setReceiveOpen(false)} title="Receive">

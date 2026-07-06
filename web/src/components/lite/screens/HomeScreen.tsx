@@ -128,6 +128,37 @@ function QuickAction({
   );
 }
 
+// A slim secondary action — icon + label on one line. Sits in a row that spans
+// the same width as the three quick-action cards, surfacing things that would
+// otherwise be buried (Activity, Watchlist, Discover).
+function SlimAction({ icon, label, onClick }: { icon: IconName; label: string; onClick: () => void }) {
+  return (
+    <button
+      className="tap"
+      onClick={onClick}
+      style={{
+        flex: "1 1 0",
+        minWidth: 0,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 7,
+        padding: "10px 8px",
+        background: "var(--glass-bg)",
+        backdropFilter: "var(--glass-blur)",
+        WebkitBackdropFilter: "var(--glass-blur)",
+        borderRadius: "var(--r)",
+        boxShadow: "var(--shadow)",
+      }}
+    >
+      <Icon name={icon} size={16} style={{ color: "var(--ink-2)", flex: "none" }} />
+      <span style={{ fontSize: 12.5, fontWeight: 500, color: "var(--ink)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+        {label}
+      </span>
+    </button>
+  );
+}
+
 // First-load ledger skeleton — mirrors the row grammar (tile · two text lines ·
 // right value) so sections land in place with no blank area or spinner.
 function SkeletonLedger({ rows, tile }: { rows: number; tile: number }) {
@@ -280,6 +311,13 @@ export function HomeScreen({
         {/* Market lives in the bottom nav already — this slot surfaces Autopilot,
             which is otherwise buried in Settings / the Vera screen. */}
         <QuickAction icon="clock" label="Autopilot" sub="Invest on repeat" onClick={() => go("autopilot")} />
+      </div>
+
+      {/* 3b · slim secondary actions — span the same width as the cards above. */}
+      <div style={{ display: "flex", gap: 10, padding: "0 22px 16px" }}>
+        <SlimAction icon="receipt" label="Activity" onClick={() => go("activity")} />
+        <SlimAction icon="star" label="Watchlist" onClick={() => go("market", { filter: "watchlist" })} />
+        <SlimAction icon="grid" label="Discover" onClick={() => go("discover")} />
       </div>
 
       {/* Today's movers — biggest market moves across the universe */}

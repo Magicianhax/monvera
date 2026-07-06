@@ -69,43 +69,58 @@ export function ActivityScreen({
         ? relTime(e.timestamp)
         : "Swap"
       : `${shortAddress(e.counterparty)}${e.timestamp ? ` · ${relTime(e.timestamp)}` : ""}`;
+    // A completed buy can be repeated in one tap. The chip sits beside the row's
+    // main tap area (not nested inside it — buttons can't nest) and reopens the
+    // Trade screen pre-set to buy this same asset.
+    const isBuy = e.kind === "buy";
     return (
-      <button
-        key={`${e.hash}-${i}`}
-        onClick={() =>
-          go("receipt", {
-            kind: e.kind,
-            symbol: e.symbol,
-            assetAmount: e.amount,
-            usdgAmount: e.usdgAmount,
-            counterparty: e.counterparty,
-            txHash: e.hash,
-            ts: e.timestamp,
-          })
-        }
-        className="tap"
-        style={{ ...innerBox }}
-      >
-        <ActivityGlyph event={e} size={42} />
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontWeight: 500, fontSize: 15 }}>
-            {verb} {e.symbol}
+      <div key={`${e.hash}-${i}`} style={{ ...innerBox }}>
+        <button
+          onClick={() =>
+            go("receipt", {
+              kind: e.kind,
+              symbol: e.symbol,
+              assetAmount: e.amount,
+              usdgAmount: e.usdgAmount,
+              counterparty: e.counterparty,
+              txHash: e.hash,
+              ts: e.timestamp,
+            })
+          }
+          className="tap"
+          style={{ display: "flex", alignItems: "center", gap: 12, flex: 1, minWidth: 0, background: "none", border: "none", padding: 0, textAlign: "left", color: "inherit", font: "inherit" }}
+        >
+          <ActivityGlyph event={e} size={42} />
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontWeight: 500, fontSize: 15 }}>
+              {verb} {e.symbol}
+            </div>
+            <div className="mono" style={{ fontSize: 11.5, color: "var(--ink-2)", marginTop: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+              {sub}
+            </div>
           </div>
-          <div className="mono" style={{ fontSize: 11.5, color: "var(--ink-2)", marginTop: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-            {sub}
-          </div>
-        </div>
-        {isTrade ? (
-          <div className="tnum" style={{ textAlign: "right", flex: "none" }}>
-            <div style={{ fontWeight: 600, fontSize: 15, color: e.kind === "sell" ? "var(--pos)" : "var(--ink)" }}>{usdgLeg}</div>
-            <div style={{ fontSize: 12, fontWeight: 500, marginTop: 1, color: e.kind === "buy" ? "var(--pos)" : "var(--ink-2)" }}>{assetLeg}</div>
-          </div>
-        ) : (
-          <span className="tnum" style={{ fontWeight: 600, fontSize: 15, color: positive ? "var(--pos)" : "var(--ink)", flex: "none" }}>
-            {rightMain}
-          </span>
+          {isTrade ? (
+            <div className="tnum" style={{ textAlign: "right", flex: "none" }}>
+              <div style={{ fontWeight: 600, fontSize: 15, color: e.kind === "sell" ? "var(--pos)" : "var(--ink)" }}>{usdgLeg}</div>
+              <div style={{ fontSize: 12, fontWeight: 500, marginTop: 1, color: e.kind === "buy" ? "var(--pos)" : "var(--ink-2)" }}>{assetLeg}</div>
+            </div>
+          ) : (
+            <span className="tnum" style={{ fontWeight: 600, fontSize: 15, color: positive ? "var(--pos)" : "var(--ink)", flex: "none" }}>
+              {rightMain}
+            </span>
+          )}
+        </button>
+        {isBuy && (
+          <button
+            className="tap"
+            onClick={() => go("trade", { symbol: e.symbol, side: "buy" })}
+            aria-label={`Buy ${e.symbol} again`}
+            style={{ flex: "none", height: 32, padding: "0 11px", borderRadius: 999, background: "var(--surface-2)", color: "var(--primary)", fontSize: 12.5, fontWeight: 500, whiteSpace: "nowrap" }}
+          >
+            Buy again
+          </button>
         )}
-      </button>
+      </div>
     );
   };
 

@@ -104,7 +104,16 @@ function Phone({ play, mode }: { play: DemoPlay; mode: Mode }) {
   );
 }
 
-export function SiteLanding() {
+export type VeraStats = { plans: number; invested: number; placed: number };
+
+// Compact USD for the stat band: $0, $1.4K, $2.3M — landing headline scale.
+function compactUsd(n: number): string {
+  if (n >= 1e6) return `$${(n / 1e6).toFixed(n >= 1e7 ? 0 : 1)}M`;
+  if (n >= 1e3) return `$${(n / 1e3).toFixed(n >= 1e4 ? 0 : 1)}K`;
+  return `$${Math.round(n)}`;
+}
+
+export function SiteLanding({ veraStats = null }: { veraStats?: VeraStats | null }) {
   const root = useRef<HTMLDivElement>(null);
   const [mode, setMode] = useState<Mode>("light");
   const [menuOpen, setMenuOpen] = useState(false);
@@ -349,6 +358,31 @@ export function SiteLanding() {
               <p className={s.pillarText}>Every plan Vera signs is written on-chain, so her track record is public and can&apos;t be edited later.</p>
             </div>
           </div>
+          {/* Vera's live on-chain record — the real numbers, read server-side
+              from the same executor log the app and /agent use. */}
+          <div className={s.veraRecord}>
+            <div className={s.veraRecordHead}>
+              <span className={s.veraRecordEyebrow}>Vera&apos;s record, live on-chain</span>
+            </div>
+            <div className={s.veraStats}>
+              <div className={s.veraStat}>
+                <div className={s.veraStatNum}>{(veraStats?.plans ?? 0).toLocaleString("en-US")}</div>
+                <div className={s.veraStatLabel}>Plans signed</div>
+              </div>
+              <div className={s.veraStat}>
+                <div className={s.veraStatNum} style={{ color: "var(--s-primary-d)" }}>{compactUsd(veraStats?.invested ?? 0)}</div>
+                <div className={s.veraStatLabel}>Invested</div>
+              </div>
+              <div className={s.veraStat}>
+                <div className={s.veraStatNum}>{(veraStats?.placed ?? 0).toLocaleString("en-US")}</div>
+                <div className={s.veraStatLabel}>Trades placed</div>
+              </div>
+            </div>
+            <Link href="/agent" className={s.veraRecordLink}>
+              See Vera&apos;s full public record
+              <ArrowUpRight size={16} strokeWidth={2} />
+            </Link>
+          </div>
         </div>
       </section>
 
@@ -458,6 +492,7 @@ export function SiteLanding() {
               <h4>Product</h4>
               <a href="#how">How it works</a>
               <a href="#own">What you own</a>
+              <Link href="/agent">Meet Vera</Link>
               <Link href="/demo">Try the demo</Link>
               <Link href="/app">Open the app</Link>
             </div>

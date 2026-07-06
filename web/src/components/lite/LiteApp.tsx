@@ -23,6 +23,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useInvest } from "@/hooks/useInvest";
 import { Spinner } from "./screens/primitives";
 import { useSmartAccount } from "@/hooks/useSmartAccount";
+import { useWatchlistSync } from "@/hooks/useWatchlistSync";
 import { haptic } from "@/lib/haptics";
 import { TabBar, type TabId, useToast } from "@/components/design";
 import { InstallPrompt } from "@/components/app/InstallPrompt";
@@ -36,6 +37,8 @@ import { PortfolioScreen } from "./screens/PortfolioScreen";
 import { MarketScreen } from "./screens/MarketScreen";
 import { MoversScreen } from "./screens/MoversScreen";
 import { NotificationsScreen } from "./screens/NotificationsScreen";
+import { ScreenerScreen } from "./screens/ScreenerScreen";
+import { DiscoverScreen } from "./screens/DiscoverScreen";
 import { AssetDetailScreen } from "./screens/AssetDetailScreen";
 import { TradeScreen } from "./screens/TradeScreen";
 import { ReceiptScreen } from "./screens/ReceiptScreen";
@@ -63,6 +66,8 @@ type Screen =
   | "market"
   | "movers"
   | "notifications"
+  | "screener"
+  | "discover"
   | "asset"
   | "trade"
   | "receipt"
@@ -104,6 +109,8 @@ export function LiteApp({ demoPlay = null }: { demoPlay?: "invest" | "vera" | nu
   const invest = useInvest();
   const { address } = useSmartAccount();
   const { notify } = useToast();
+  // Keep the device-local watchlist reconciled with the server for this wallet.
+  useWatchlistSync();
 
   const [stack, setStack] = useState<Route[]>([{ screen: "home", params: {} }]);
   const current = stack[stack.length - 1];
@@ -315,6 +322,8 @@ export function LiteApp({ demoPlay = null }: { demoPlay?: "invest" | "vera" | nu
       market: "Market",
       movers: "Movers",
       notifications: "Notifications",
+      screener: "Screener",
+      discover: "Discover",
       asset: "Asset",
       trade: "Trade",
       receipt: "Receipt",
@@ -479,6 +488,12 @@ export function LiteApp({ demoPlay = null }: { demoPlay?: "invest" | "vera" | nu
       break;
     case "notifications":
       view = <NotificationsScreen go={go} />;
+      break;
+    case "screener":
+      view = <ScreenerScreen go={go} />;
+      break;
+    case "discover":
+      view = <DiscoverScreen go={go} />;
       break;
     case "asset":
       view = <AssetDetailScreen go={go} symbol={String(params.symbol ?? "")} />;

@@ -498,19 +498,31 @@ export function AssetDetailScreen({
         </p>
       </BottomSheet>
 
-      {/* CTA — flat sticky bar: solid surface, hairline top */}
+      {/* CTA — floating pill: detached from the edges, frosted, feathered shadow,
+          content scrolls underneath (no full-width solid slab). */}
       <div
         style={{
           position: "sticky",
           bottom: 0,
           marginTop: "auto",
-          padding: "14px 22px calc(16px + env(safe-area-inset-bottom))",
-          background: "var(--surface)",
-          borderTop: "1px solid var(--line)",
+          padding: "8px 18px calc(14px + env(safe-area-inset-bottom))",
+          background: "transparent",
+          pointerEvents: "none",
         }}
       >
+        <div
+          style={{
+            pointerEvents: "auto",
+            background: "var(--glass-bg)",
+            backdropFilter: "var(--glass-blur)",
+            WebkitBackdropFilter: "var(--glass-blur)",
+            borderRadius: "var(--r-xl)",
+            boxShadow: "var(--shadow-lg)",
+            padding: "12px 14px",
+          }}
+        >
         {!holding && !coming && (
-          <div style={{ fontSize: 12.5, color: "var(--ink-3)", marginBottom: 10 }}>
+          <div style={{ fontSize: 12.5, color: "var(--ink-3)", margin: "0 4px 8px" }}>
             You don&apos;t own this yet
           </div>
         )}
@@ -535,6 +547,7 @@ export function AssetDetailScreen({
           >
             {coming ? "Coming soon" : "Buy"}
           </button>
+        </div>
         </div>
       </div>
     </div>

@@ -11,7 +11,7 @@
 //   - Nudge chips   -> re-run allocate() with an adjusted goal/riskTolerance and
 //                      visibly rebuild the plan (the "rethinking" state)
 //   - big button    -> onInvest() (useInvest.invest → per-leg Arcus quotes + one UserOp)
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import gsap from "gsap";
 import { useGSAP } from "@gsap/react";
 import { Icon, VeraOrb, AssetTile, RiskMeter, VerifiedBadge, Crossfade } from "@/components/design";
@@ -83,6 +83,62 @@ function BtStat({ label, value, accent }: { label: string; value: number; accent
         {value.toFixed(1)}%
       </b>
     </span>
+  );
+}
+
+// Explain my risk — an on-tap panel that turns the plan's risk into a plain
+// dollar sentence. When the backtest is in scope we use its real worst dip to
+// say what a rough patch has cost a mix like this; otherwise we fall back to a
+// qualitative line keyed off the risk score. No invented numbers.
+function ExplainRisk({ allocation, amount }: { allocation: AllocateResult; amount: number }) {
+  const [open, setOpen] = useState(false);
+  const drawdownPct = allocation.backtest?.portfolio.maxDrawdownPct;
+  const hasDollars = typeof drawdownPct === "number" && amount > 0;
+  const worstDrop = hasDollars ? (drawdownPct / 100) * amount : 0;
+  const v = Math.max(0, Math.min(100, allocation.riskScore / 100));
+  const lean =
+    v < 40
+      ? "It leans steady, so day to day it should move less than the market."
+      : v < 70
+        ? "It sits in the middle, so expect some ups and downs along the way."
+        : "It leans bold, so it can swing more than the market in both directions.";
+
+  return (
+    <div className="card" style={{ padding: 0, overflow: "hidden" }}>
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className="tap"
+        aria-expanded={open}
+        style={{ width: "100%", display: "flex", alignItems: "center", gap: 11, padding: "15px 16px", background: "none", textAlign: "left" }}
+      >
+        <Icon name="shieldPlain" size={18} stroke={1.9} style={{ color: "var(--accent)", flex: "none" }} />
+        <span style={{ flex: 1, fontSize: 14.5, fontWeight: 500 }}>What could this cost me in a bad stretch?</span>
+        <Icon
+          name="chevD"
+          size={17}
+          style={{ color: "var(--ink-3)", flex: "none", transform: open ? "rotate(180deg)" : "none", transition: "transform .26s var(--ease-soft)" }}
+        />
+      </button>
+      <div style={{ display: "grid", gridTemplateRows: open ? "1fr" : "0fr", transition: "grid-template-rows .3s var(--ease-soft)" }}>
+        <div style={{ overflow: "hidden" }}>
+          <p style={{ margin: 0, padding: "0 16px 16px", fontSize: 13.5, color: "var(--ink-2)", lineHeight: 1.5 }}>
+            {hasDollars ? (
+              <>
+                A rough patch for a mix like this has meant a drop of about{" "}
+                <b className="tnum" style={{ color: "var(--ink)" }}>{usd(worstDrop)}</b> on your{" "}
+                <b className="tnum" style={{ color: "var(--ink)" }}>{usd(amount)}</b> at its worst in the last year. It
+                recovered, but nothing guarantees that.
+              </>
+            ) : (
+              <>
+                {lean} There is not enough public history in this mix yet to put a firm dollar figure on the worst-case
+                dip.
+              </>
+            )}
+          </p>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -315,6 +371,11 @@ export function PlanScreen({
             for a while.
           </p>
         </div>
+      </div>
+
+      {/* explain my risk — turns the risk meter into a plain dollar sentence */}
+      <div style={{ ...recompose, padding: "10px 22px 0" }}>
+        <ExplainRisk allocation={allocation} amount={amount} />
       </div>
 
       {/* backtest — how this exact mix actually behaved over the last year */}

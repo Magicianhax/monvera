@@ -10,6 +10,7 @@ import { Icon, type IconName } from "@/components/design";
 import { useTheme } from "@/hooks/useTheme";
 import { useColorStyle } from "@/hooks/useColorStyle";
 import { useSmartAccount } from "@/hooks/useSmartAccount";
+import { SelfCustodyProof } from "@/components/shared/SelfCustodyProof";
 import { useHaptics, haptic } from "@/lib/haptics";
 import { shortAddress } from "@/lib/format";
 import { iconBtn } from "./primitives";
@@ -158,6 +159,10 @@ export function SettingsScreen({
           <Divider />
           <Row icon="receipt" title="Activity & receipts" onClick={() => go("activity")} right={chev} />
         </div>
+
+        {/* Your money — self-custody proof */}
+        <div style={sectionLabel}>Your money</div>
+        <SelfCustodyProof />
 
         {/* App */}
         <div style={sectionLabel}>App</div>

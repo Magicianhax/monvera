@@ -89,6 +89,9 @@ export function AutopilotScreen({
   const [runs, setRuns] = useState<RunRow[]>([]);
   const [detailRun, setDetailRun] = useState<RunRow | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  // Activity view: collapsed shows the latest 5; "View all" pages 10 at a time.
+  const [runsExpanded, setRunsExpanded] = useState(false);
+  const [runsPage, setRunsPage] = useState(0);
 
   // Load the current autopilot (if any).
   useEffect(() => {
@@ -324,9 +327,17 @@ export function AutopilotScreen({
                   <div className="card" style={{ padding: "26px 18px", textAlign: "center", color: "var(--ink-2)", fontSize: 13.5, lineHeight: 1.5 }}>
                     No runs yet. Vera&apos;s actions will appear here, each one tappable.
                   </div>
-                ) : (
+                ) : (() => {
+                  const PAGE = 10;
+                  const pageCount = Math.max(1, Math.ceil(runs.length / PAGE));
+                  const page = Math.min(runsPage, pageCount - 1);
+                  const visible = runsExpanded
+                    ? runs.slice(page * PAGE, page * PAGE + PAGE)
+                    : runs.slice(0, 5);
+                  return (
+                  <>
                   <div className="card" style={{ padding: "4px 16px" }}>
-                    {runs.map((r, i) => {
+                    {visible.map((r, i) => {
                       const okRun = r.status === "success";
                       const skipped = r.status === "skipped";
                       const when = new Date(r.ranAt * 1000).toLocaleDateString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
@@ -342,7 +353,7 @@ export function AutopilotScreen({
                           key={`${r.ranAt}-${i}`}
                           onClick={() => setDetailRun(r)}
                           className="row tap"
-                          style={{ width: "100%", display: "flex", alignItems: "center", gap: 12, padding: "12px 0", textAlign: "left", borderBottom: i < runs.length - 1 ? "1px solid var(--line-2)" : "none" }}
+                          style={{ width: "100%", display: "flex", alignItems: "center", gap: 12, padding: "12px 0", textAlign: "left", borderBottom: i < visible.length - 1 ? "1px solid var(--line-2)" : "none" }}
                         >
                           {okRun && syms.length > 0 ? (
                             <LogoStack symbols={syms} size={30} max={3} ring="var(--surface)" />
@@ -367,7 +378,57 @@ export function AutopilotScreen({
                       );
                     })}
                   </div>
-                )}
+
+                  {/* Collapsed: a single "View all" when there's more than 5.
+                      Expanded: a 10-per-page pager plus a way back to collapsed. */}
+                  {!runsExpanded && runs.length > 5 && (
+                    <button
+                      className="tap"
+                      onClick={() => { setRunsExpanded(true); setRunsPage(0); }}
+                      style={{ width: "100%", marginTop: 10, padding: "11px 0", textAlign: "center", background: "var(--surface-2)", borderRadius: "var(--r)", fontSize: 13, fontWeight: 600, color: "var(--ink)" }}
+                    >
+                      View all {runs.length} runs
+                    </button>
+                  )}
+                  {runsExpanded && (
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginTop: 12 }}>
+                      <button
+                        className="tap"
+                        onClick={() => { setRunsExpanded(false); setRunsPage(0); }}
+                        style={{ padding: "8px 12px", background: "none", fontSize: 12.5, fontWeight: 500, color: "var(--ink-3)" }}
+                      >
+                        Show less
+                      </button>
+                      {pageCount > 1 && (
+                        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                          <button
+                            className="tap"
+                            disabled={page === 0}
+                            onClick={() => setRunsPage((p) => Math.max(0, p - 1))}
+                            style={{ display: "grid", placeItems: "center", width: 32, height: 32, borderRadius: 99, background: "var(--surface-2)", color: "var(--ink)", opacity: page === 0 ? 0.4 : 1 }}
+                            aria-label="Previous page"
+                          >
+                            <Icon name="chevL" size={16} />
+                          </button>
+                          <span className="tnum" style={{ fontSize: 12.5, fontWeight: 500, color: "var(--ink-2)", minWidth: 54, textAlign: "center" }}>
+                            {page + 1} of {pageCount}
+                          </span>
+                          <button
+                            className="tap"
+                            disabled={page >= pageCount - 1}
+                            onClick={() => setRunsPage((p) => Math.min(pageCount - 1, p + 1))}
+                            style={{ display: "grid", placeItems: "center", width: 32, height: 32, borderRadius: 99, background: "var(--surface-2)", color: "var(--ink)", opacity: page >= pageCount - 1 ? 0.4 : 1 }}
+                            aria-label="Next page"
+                          >
+                            <Icon name="chevR" size={16} />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  </>
+                  );
+                })()}
               </div>
             </>
           )}

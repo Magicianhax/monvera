@@ -38,6 +38,28 @@ function write(next: string[]) {
   listeners.forEach((l) => l());
 }
 
+// ── Remote sync bridge ────────────────────────────────────────────────────────
+// The store itself stays a synchronous localStorage cache (instant, cross-tab).
+// A signed-in session registers a pusher (see useWatchlistSync) so every toggle
+// is mirrored to D1, and the server list is reconciled in on load. When signed
+// out, remotePush is null and the watchlist is simply device-local.
+let remotePush: ((symbol: string, on: boolean) => void) | null = null;
+
+/** Called by the sync hook to wire (or clear) server write-through. */
+export function registerRemotePush(fn: ((symbol: string, on: boolean) => void) | null) {
+  remotePush = fn;
+}
+
+/** Current watched symbols (non-reactive snapshot) — for reconciliation. */
+export function snapshotWatchlist(): string[] {
+  return read();
+}
+
+/** Replace the local cache with a server-reconciled list (no server echo). */
+export function hydrateWatchlist(next: string[]) {
+  write(next);
+}
+
 if (typeof window !== "undefined") {
   window.addEventListener("storage", (e) => {
     if (e.key === KEY) {
@@ -68,5 +90,6 @@ export function toggleWatch(symbol: string): boolean {
   const cur = read();
   const has = cur.includes(symbol);
   write(has ? cur.filter((s) => s !== symbol) : [...cur, symbol]);
+  remotePush?.(symbol, !has);
   return !has;
 }

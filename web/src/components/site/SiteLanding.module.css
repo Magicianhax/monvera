@@ -394,6 +394,37 @@
 .pillarLabel { font-weight: 700; font-size: 16px; margin-top: 12px; }
 .pillarText { color: var(--s-ink-2); font-size: 14.5px; line-height: 1.55; margin-top: 4px; max-width: 34ch; }
 
+/* ── Vera's live on-chain record — a stat band under the trust pillars ─────── */
+.veraRecord {
+  margin: 48px auto 0;
+  max-width: 560px;
+  padding: 26px 28px 22px;
+  border-radius: 24px;
+  background: var(--s-surface);
+  box-shadow: 0 2px 10px rgba(70, 84, 62, 0.05), 0 22px 54px rgba(70, 84, 62, 0.1);
+  text-align: center;
+}
+.veraRecordHead { display: flex; justify-content: center; margin-bottom: 20px; }
+.veraRecordEyebrow {
+  display: inline-flex; align-items: center; gap: 8px;
+  font-size: 12.5px; font-weight: 600; letter-spacing: 0.02em; color: var(--s-ink-2);
+}
+.veraRecordEyebrow::before {
+  content: ""; width: 7px; height: 7px; border-radius: 50%;
+  background: var(--s-primary-d); box-shadow: 0 0 0 4px var(--s-primary-soft);
+}
+.veraStats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.veraStat { min-width: 0; }
+.veraStatNum {
+  font-family: var(--font-fraunces), serif; font-size: clamp(1.7rem, 4vw, 2.3rem);
+  letter-spacing: -0.02em; color: var(--s-ink); line-height: 1;
+}
+.veraStatLabel { font-size: 13px; font-weight: 500; color: var(--s-ink-2); margin-top: 8px; }
+.veraRecordLink {
+  display: inline-flex; align-items: center; gap: 5px; margin-top: 22px;
+  font-size: 13.5px; font-weight: 600; color: var(--s-primary-d);
+}
+
 /* ── Own real companies: a drifting logo field ────────────────────────────── */
 .ownHead { text-align: center; }
 .ownHead .lead { margin-inline: auto; }

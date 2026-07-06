@@ -91,23 +91,67 @@ function downsample(series: number[], n: number): number[] {
 const STATS_TTL_MS = 6 * 60 * 60_000;
 const QUARTER_BARS = 63; // ~3 trading months
 
-let statsCache: { at: number; value: Promise<string> } | null = null;
+/** Structured 12-month stats for one symbol. Numbers are null when the symbol
+ *  has no usable public history (`noData`), so consumers can drop it honestly. */
+export interface SymbolStat {
+  symbol: string;
+  /** Total return over the last ~12 months, percent. */
+  ret1yPct: number | null;
+  /** Return over the last ~3 months, percent (null if history is too short). */
+  ret3mPct: number | null;
+  /** Annualized daily volatility, percent. */
+  volPct: number | null;
+  /** Worst peak-to-trough drop over the period, percent (positive number). */
+  maxDrawdownPct: number | null;
+  /** True when no honest public series exists (tokenized private co / thin listing). */
+  noData: boolean;
+}
 
-async function buildStatsBlock(symbols: string[]): Promise<string> {
+const NO_DATA: Omit<SymbolStat, "symbol"> = {
+  ret1yPct: null,
+  ret3mPct: null,
+  volPct: null,
+  maxDrawdownPct: null,
+  noData: true,
+};
+
+let statsCache: { at: number; value: Promise<SymbolStat[]> } | null = null;
+
+async function buildStatsRows(symbols: string[]): Promise<SymbolStat[]> {
   // One batched sweep (4 upstream calls for the whole universe). A failed
-  // sweep throws so the cache clears and the next allocation retries.
+  // sweep throws so the cache clears and the next caller retries.
   const histories = await getManyHistories(symbols, "1Y");
-  const lines = symbols.map((symbol) => {
-    if (NO_PUBLIC_HISTORY.has(symbol)) return `${symbol}: no public data (tokenized private company)`;
+  return symbols.map((symbol) => {
+    if (NO_PUBLIC_HISTORY.has(symbol)) return { symbol, ...NO_DATA };
     const h = histories.get(symbol);
-    if (!h || h.series.length < MIN_BARS) return `${symbol}: no public data`;
+    if (!h || h.series.length < MIN_BARS) return { symbol, ...NO_DATA };
     const s = h.series;
     const m = seriesStats(s);
     const ret3m = s.length > QUARTER_BARS ? round2((s[s.length - 1] / s[s.length - 1 - QUARTER_BARS] - 1) * 100) : null;
-    const pct = (v: number) => `${v >= 0 ? "+" : ""}${Math.round(v)}%`;
-    return `${symbol}: 1y ${pct(m.returnPct)}${ret3m !== null ? `, 3m ${pct(ret3m)}` : ""}, vol ${Math.round(m.volPct)}%, worst dip -${Math.round(m.maxDrawdownPct)}%`;
+    return { symbol, ret1yPct: m.returnPct, ret3mPct: ret3m, volPct: m.volPct, maxDrawdownPct: m.maxDrawdownPct, noData: false };
   });
-  return lines.join("\n");
+}
+
+/** Cached per-symbol stats — one warm build per instance per TTL window. Rejects
+ *  (and clears the cache) on a failed sweep so the next caller retries. */
+function statsRows(symbols: string[]): Promise<SymbolStat[]> {
+  if (statsCache && Date.now() - statsCache.at < STATS_TTL_MS) return statsCache.value;
+  const value = buildStatsRows(symbols).catch((err) => {
+    statsCache = null;
+    throw err;
+  });
+  statsCache = { at: Date.now(), value };
+  return value;
+}
+
+function promptLine(r: SymbolStat): string {
+  if (r.noData) {
+    return NO_PUBLIC_HISTORY.has(r.symbol)
+      ? `${r.symbol}: no public data (tokenized private company)`
+      : `${r.symbol}: no public data`;
+  }
+  const pct = (v: number) => `${v >= 0 ? "+" : ""}${Math.round(v)}%`;
+  return `${r.symbol}: 1y ${pct(r.ret1yPct!)}${r.ret3mPct !== null ? `, 3m ${pct(r.ret3mPct)}` : ""}, vol ${Math.round(r.volPct!)}%, worst dip -${Math.round(r.maxDrawdownPct!)}%`;
 }
 
 /**
@@ -115,14 +159,18 @@ async function buildStatsBlock(symbols: string[]): Promise<string> {
  * allocation system prompt. Cached; never throws (callers may still race a
  * cold cache, so they should treat failures as "no stats").
  */
-export function universeStatsBlock(symbols: string[]): Promise<string> {
-  if (statsCache && Date.now() - statsCache.at < STATS_TTL_MS) return statsCache.value;
-  const value = buildStatsBlock(symbols).catch((err) => {
-    statsCache = null;
-    throw err;
-  });
-  statsCache = { at: Date.now(), value };
-  return value;
+export async function universeStatsBlock(symbols: string[]): Promise<string> {
+  const rows = await statsRows(symbols);
+  return rows.map(promptLine).join("\n");
+}
+
+/**
+ * The same cached 12-month computation as {@link universeStatsBlock}, exposed as
+ * a structured array for the Screener. Shares the cache, so the two never pay
+ * for the sweep twice.
+ */
+export function universeStatsRows(symbols: string[]): Promise<SymbolStat[]> {
+  return statsRows(symbols);
 }
 
 /**
