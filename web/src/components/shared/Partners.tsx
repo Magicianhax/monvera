@@ -47,16 +47,31 @@ const ArcusMark = (size: number) =>
     { stroke: true },
   );
 
-// Virtuals — a protocol node (hexagon) with an agent core: Vera's identity + AI.
-const VirtualsMark = (size: number) =>
-  svg(
-    size,
-    <>
-      <path d="M12 2.4 20.5 7.2v9.6L12 21.6 3.5 16.8V7.2z" strokeWidth="1.9" strokeLinejoin="round" />
-      <circle cx="12" cy="12" r="3.1" fill="currentColor" stroke="none" />
-    </>,
-    { stroke: true },
-  );
+// Virtuals - their real logomark (the swoosh "V" + dot), traced to a monochrome
+// alpha mask so it renders in currentColor and adapts to any theme, matching the
+// other marks. Single source of truth: change it here, it updates the landing +
+// Help screen everywhere. (Source: virtuals.io official mark.)
+const VIRTUALS_MASK =
+  "data:image/png;base64,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";
+const VirtualsMark = (size: number) => (
+  <span
+    aria-hidden
+    style={{
+      display: "block",
+      width: size * 1.49, // the swoosh is landscape (149x100)
+      height: size,
+      background: "currentColor",
+      WebkitMaskImage: `url("${VIRTUALS_MASK}")`,
+      maskImage: `url("${VIRTUALS_MASK}")`,
+      WebkitMaskRepeat: "no-repeat",
+      maskRepeat: "no-repeat",
+      WebkitMaskSize: "contain",
+      maskSize: "contain",
+      WebkitMaskPosition: "center",
+      maskPosition: "center",
+    }}
+  />
+);
 
 export const PARTNERS: Partner[] = [
   {
