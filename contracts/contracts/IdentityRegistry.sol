@@ -17,6 +17,7 @@ contract IdentityRegistry is ERC721, Ownable {
     mapping(uint256 => uint256) public reputationScore; // agentId => aggregate feedback
 
     event AgentRegistered(uint256 indexed agentId, address indexed owner, string agentCard);
+    event AgentCardUpdated(uint256 indexed agentId, string agentCard);
     event FeedbackGiven(uint256 indexed agentId, uint16 score, bytes32 indexed planId);
 
     constructor() ERC721("Stax Agent Identity", "STAXID") Ownable(msg.sender) {}
@@ -36,6 +37,14 @@ contract IdentityRegistry is ERC721, Ownable {
     function tokenURI(uint256 agentId) public view override returns (string memory) {
         _requireOwned(agentId);
         return _agentCard[agentId];
+    }
+
+    /// @notice Update an agent's card URI (e.g. when the endpoint domain changes),
+    /// so a domain move never requires redeploying the registry. Owner only.
+    function setAgentCard(uint256 agentId, string calldata agentCard) external onlyOwner {
+        _requireOwned(agentId);
+        _agentCard[agentId] = agentCard;
+        emit AgentCardUpdated(agentId, agentCard);
     }
 
     function exists(uint256 agentId) external view returns (bool) {

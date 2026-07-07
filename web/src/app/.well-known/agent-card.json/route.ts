@@ -16,7 +16,7 @@ const ZERO = "0x0000000000000000000000000000000000000000";
 
 const AGENT_ID = Number(process.env.NEXT_PUBLIC_STAX_AGENT_ID || "1");
 const IDENTITY_REGISTRY = (
-  process.env.NEXT_PUBLIC_IDENTITY_REGISTRY || "0x51ed96d67b175edacf475622b4abc2221f368cbb"
+  process.env.NEXT_PUBLIC_IDENTITY_REGISTRY || "0x751ae640cfa816404b017fbb8234dd21abafbbdc"
 ).toLowerCase();
 
 // Last-known agent signer, used only if the on-chain read is unavailable.

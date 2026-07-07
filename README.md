@@ -69,7 +69,7 @@ you ──goal──▶ Vera (Virtuals inference)
 | Contract | Address | Role |
 |---|---|---|
 | Executor + InferenceVerifier | [`0x7ff1a5ee19330c165146488a7ad8af6cb41da1df`](https://robinhoodchain.blockscout.com/address/0x7ff1a5ee19330c165146488a7ad8af6cb41da1df) | Verifies Vera's EIP-712 risk signature and records every plan, batched with the trades. |
-| IdentityRegistry (ERC-8004) | [`0x51ed96d67b175edacf475622b4abc2221f368cbb`](https://robinhoodchain.blockscout.com/address/0x51ed96d67b175edacf475622b4abc2221f368cbb) | Vera's verifiable agent identity (agent #1). |
+| IdentityRegistry (ERC-8004) | [`0x751ae640cfa816404b017fbb8234dd21abafbbdc`](https://robinhoodchain.blockscout.com/address/0x751ae640cfa816404b017fbb8234dd21abafbbdc) | Vera's verifiable agent identity (agent #1). |
 
 Solidity sources live in [`contracts/`](contracts/).
 
