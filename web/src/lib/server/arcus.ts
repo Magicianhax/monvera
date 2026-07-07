@@ -17,6 +17,7 @@ import "server-only";
 
 import type { Address, Hex } from "viem";
 import { CHAIN_ID } from "@/lib/chain";
+import { assetBySymbol, USDG } from "@/lib/tokens";
 
 const ROUTER = process.env.ARCUS_ROUTER_URL || "https://router.spot.arcus.xyz";
 // Our affiliate/referral code (revenue on routed volume) — public, not a secret.
@@ -84,6 +85,56 @@ export async function getPrice(
   });
   const q = pick(await routerGet("/v1/price", params));
   return q ? { liquidityAvailable: true, buyAmount: BigInt(q.buyAmount) } : { liquidityAvailable: false, buyAmount: BigInt(0) };
+}
+
+// ── Liquidity pre-screen ──────────────────────────────────────────────────────
+// A token can be "buyable" in our registry yet have no live RFQ liquidity right
+// now (a maker pulled out, a listing went cold). If Vera proposes such a token,
+// the invest fails at execution ("No liquidity for SOXX"). So before building a
+// plan we probe which symbols actually have liquidity and only allocate over
+// those. This covers both Vera (interactive) and Autopilot, which share the
+// allocator. The indicative /v1/price probe needs no taker and is cheap; results
+// are cached briefly so a plan request rarely pays for the whole sweep.
+const PROBE_MICRO = BigInt(10_000_000); // $10 of USDG — a "is there any liquidity" signal
+const LIQUID_TTL_MS = 90_000;
+// Probe with a FIRM quote (not indicative /v1/price): some tokens quote a price
+// but have no firm-executable quote (no tx/toSign), which is exactly what fails
+// at invest time ("No liquidity for SOXX"). The taker is a throwaway placeholder
+// — liquidity availability is taker-independent and nothing here is signed.
+const PROBE_TAKER = "0x000000000000000000000000000000000000dEaD" as const;
+// Per-symbol cache so repeated picks across plans don't re-probe within the TTL.
+const liquidCache = new Map<string, { at: number; liquid: boolean }>();
+
+async function probeLiquid(symbol: string): Promise<boolean> {
+  const hit = liquidCache.get(symbol);
+  if (hit && Date.now() - hit.at < LIQUID_TTL_MS) return hit.liquid;
+  const asset = assetBySymbol(symbol);
+  if (!asset) return false;
+  let liquid: boolean;
+  try {
+    const q = await getQuote(USDG.address as Address, asset.address, PROBE_MICRO, PROBE_TAKER);
+    liquid = q.liquidityAvailable;
+  } catch {
+    // Transient probe failure: don't exclude on a blip (execution guards it).
+    return true;
+  }
+  liquidCache.set(symbol, { at: Date.now(), liquid });
+  return liquid;
+}
+
+/**
+ * The subset of `symbols` with live, firm-executable Arcus liquidity right now
+ * (per-symbol cache, ~90s). A symbol is EXCLUDED only on a definitive "no firm
+ * quote" answer; a probe that throws (network/transient) is treated as liquid so
+ * we never over-filter on a blip. Returns null if EVERY symbol came back
+ * illiquid (router likely unreachable), so callers can fall back to the picks
+ * rather than block a plan on a total outage.
+ */
+export async function liquidSymbols(symbols: string[]): Promise<Set<string> | null> {
+  const flags = await Promise.all(symbols.map(async (s) => [s, await probeLiquid(s)] as const));
+  const liquid = new Set(flags.filter(([, ok]) => ok).map(([s]) => s));
+  if (symbols.length > 0 && liquid.size === 0) return null;
+  return liquid;
 }
 
 export interface ArcusQuote {

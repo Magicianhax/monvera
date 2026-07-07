@@ -149,21 +149,26 @@ export function useInvest(): UseInvest {
           );
         }
 
-        // 2. One firm Arcus quote per leg (taker = the embedded EOA).
+        // 2. One firm Arcus quote per leg (taker = the embedded EOA). The plan
+        // is pre-screened for liquidity, but a maker can pull between showing the
+        // plan and tapping invest: skip a leg that lost liquidity and buy the
+        // rest, rather than failing the whole basket. Other errors still throw.
         setPhase("planning");
         const quotes = [];
         for (let i = 0; i < legs.length; i++) {
           if (legAmounts[i] <= BigInt(0)) continue;
-          quotes.push({
-            leg: legs[i],
-            amountMicro: legAmounts[i],
-            quote: await fetchArcusQuote({
+          try {
+            const quote = await fetchArcusQuote({
               side: "buy",
               symbol: legs[i].symbol,
               sellAmount: legAmounts[i],
               taker: eoa,
-            }),
-          });
+            });
+            quotes.push({ leg: legs[i], amountMicro: legAmounts[i], quote });
+          } catch (e) {
+            if (e instanceof Error && /no liquidity/i.test(e.message)) continue;
+            throw e;
+          }
         }
         if (quotes.length === 0) throw new Error("No tradable holdings in this plan.");
 

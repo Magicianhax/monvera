@@ -99,11 +99,10 @@ export async function runAutopilot(
     const asset = assetBySymbol(legs[i].symbol);
     if (!asset) continue; // AI universe is pinned to the registry, but stay safe
     const q = await getQuote(USDG.address as `0x${string}`, asset.address, legAmounts[i], taker);
-    if (!q.liquidityAvailable || !q.tx || !q.toSign) {
-      const reason = `No liquidity for ${legs[i].symbol}.`;
-      await logRun({ userId: working.userId, ranAt: now, amountUsd: working.amountUsd, assessedRiskBps, status: "error", reason });
-      return { ok: false, reason };
-    }
+    // The allocator pre-screens for liquidity, but a maker can pull between the
+    // plan and this run. Skip a leg that lost liquidity and invest the rest,
+    // rather than failing the whole scheduled run.
+    if (!q.liquidityAvailable || !q.tx || !q.toSign) continue;
     quotes.push({ symbol: legs[i].symbol, amountMicro: legAmounts[i], q });
   }
   if (quotes.length === 0) {
