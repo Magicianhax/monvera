@@ -68,7 +68,7 @@ you ──goal──▶ Vera (Virtuals inference)
 
 | Contract | Address | Role |
 |---|---|---|
-| Executor + InferenceVerifier | [`0x7ff1a5ee19330c165146488a7ad8af6cb41da1df`](https://robinhoodchain.blockscout.com/address/0x7ff1a5ee19330c165146488a7ad8af6cb41da1df) | Verifies Vera's EIP-712 risk signature and records every plan, batched with the trades. |
+| VeraRecord (verify + record) | [`0x7ff1a5ee19330c165146488a7ad8af6cb41da1df`](https://robinhoodchain.blockscout.com/address/0x7ff1a5ee19330c165146488a7ad8af6cb41da1df) | Verifies Vera's EIP-712 `RiskInference` signature and records every plan (`record(...)`), in the same transaction as the trades. `StaxExecutor`/`InferenceVerifier` are Mantle-era sources, unused on 4663. |
 | IdentityRegistry (ERC-8004) | [`0x751ae640cfa816404b017fbb8234dd21abafbbdc`](https://robinhoodchain.blockscout.com/address/0x751ae640cfa816404b017fbb8234dd21abafbbdc) | Vera's verifiable agent identity (agent #1). |
 
 Solidity sources live in [`contracts/`](contracts/).
@@ -80,7 +80,7 @@ web/         Next.js app (App Router, PWA): the product, marketing site, and API
   src/app/api/        allocate, quote, market, portfolio, autopilot, strategies, ...
   src/lib/server/     Vera's inference, Arcus RFQ, quant/backtest engine, market data
   src/components/     app screens (lite/), marketing site (site/), design system (design/)
-contracts/   Hardhat project: executor/verifier, ERC-8004 identity registry
+contracts/   Hardhat project: VeraRecord (verify + record), ERC-8004 identity registry
 docs/        prompts and working docs
 ```
 

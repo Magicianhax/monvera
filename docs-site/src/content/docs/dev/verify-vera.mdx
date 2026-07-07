@@ -7,6 +7,9 @@ import { Aside, Steps, Tabs, TabItem, LinkCard } from '@astrojs/starlight/compon
 
 You can prove that Vera authored a plan's risk assessment without trusting Monvera. Read her agent card, read `agentSigner()` live on the `VeraRecord` contract, pull a `RecommendationCommitted` log from Blockscout, then ECDSA-recover the signer of the EIP-712 `RiskInference` payload and assert it equals `agentSigner()`. Every value below is on-chain or on a public endpoint.
 
+<figure class="shot"><img src="/screens/vera-record.webp" alt="Vera's in-app profile: Verified agent number 1, the IdentityRegistry link, and her live on-chain record" class="phone-shot" /><figcaption>Vera in the app: verified agent #1, her IdentityRegistry link, and her record read live on-chain.</figcaption></figure>
+
+
 Two signatures back a plan, and they are never the same. Vera signs the `RiskInference` risk assessment, which proves she authored that exact risk call. The user separately signs the ERC-4337 user operation and token permits, which authorize the spend. This page verifies the first signature. It proves authorship, not that the plan makes money.
 
 ## Vera has two on-chain identities
