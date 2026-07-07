@@ -1,0 +1,47 @@
+---
+title: "Rank every company by performance"
+description: "The screener ranks all 95 companies and funds by four figures from real price history, so you can sort instead of guess."
+---
+
+import { Steps, Aside } from '@astrojs/starlight/components';
+
+The screener ranks all 95 companies and funds by four figures drawn from real price history, so you can sort the whole list instead of guessing. All 95 (86 stocks and 9 funds) appear in one sortable table, and you decide which figure to order them by.
+
+<figure class="shot">
+  <img src="/screens/screener.webp" alt="The screener ranking companies by performance" class="phone-shot" />
+  <figcaption>The screener, ranking companies by real performance.</figcaption>
+</figure>
+
+
+## What the four figures mean
+
+Each column is a plain measure of how a company's price has behaved. Sort by any of them to bring the top or bottom of that measure to the front.
+
+- **1-year return.** How much the price changed over the last twelve months, as a percentage. A company at plus 40 percent rose over the year; one at minus 15 percent fell.
+- **3-month return.** The same idea over the last three months, so you can see recent moves separately from the full year.
+- **Volatility.** How much the price bounces around. A higher number means bigger swings up and down, which is a rougher ride to hold.
+- **Max drawdown.** The biggest drop from a past high to the low that followed, as a percentage. It tells you the worst fall a holder would have sat through.
+
+A company with no price history for a figure is flagged as such rather than shown a made-up number, so an empty cell means the data is missing, not zero.
+
+## Sort the list
+
+<Steps>
+
+1. Open the screener screen.
+
+2. Tap the column you want to order by: 1-year return, 3-month return, volatility, or max drawdown.
+
+3. Tap the same column again to flip between highest-first and lowest-first.
+
+4. Tap any row to open that company, see its full chart, and [save it to your watchlist](/use/build-a-watchlist/) or [buy it](/use/buy-or-sell-a-single-stock/).
+
+</Steps>
+
+<Aside type="caution">
+These are past figures, not predictions. A company that rose the most last year can fall this year, and a low-volatility company can still lose you money. The figures help you compare what already happened, nothing more. For why past numbers are not promises, see [backtests are history, not promises](/safety/backtests-are-history-not-promises/).
+</Aside>
+
+## Turn a shortlist into a plan
+
+Once the screener has narrowed the list, you have two ways forward. Buy a single company on its own at its live price, or hand Vera a goal and let her [build a diversified plan](/use/make-your-first-plan/) that may include companies you found here. Nothing on the screener is a recommendation; it is a way to sort real figures.

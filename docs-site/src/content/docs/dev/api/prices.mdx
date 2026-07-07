@@ -1,0 +1,78 @@
+---
+title: "Get live USD prices"
+description: "GET /api/prices returns the current on-chain USD spot for every asset, read from Chainlink feeds, with assets that have no feed marked source none."
+---
+
+import { Tabs, TabItem, Aside, LinkCard } from '@astrojs/starlight/components';
+
+`GET /api/prices` returns the current USD spot for every asset, read on-chain from each token's Chainlink price feed. Assets with no live feed report `source: "none"` and omit `priceUsd`, rather than showing a faked number.
+
+- **Method and path**: `GET https://monvera.best/api/prices`
+- **Auth**: none (public)
+- **Rate limit**: 60 requests per 60 seconds per IP
+
+Feeds use 8 decimals and are already corporate-action adjusted (splits, dividends), so the feed value is the token's full USD price. Reads fold into one `eth_call` through Multicall3 on chain 4663.
+
+## Parameters
+
+This route takes no parameters. It prices the whole universe on every call.
+
+## Returns
+
+`{ prices, asOf }`.
+
+`prices` maps each asset symbol to an `AssetPrice`:
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `symbol` | string | The asset ticker. |
+| `priceUsd` | number | USD per whole token. Omitted when the asset has no live feed or the price is stale. |
+| `source` | string | `"chainlink"` when a fresh feed answered, `"none"` when there is no usable live price. |
+
+`asOf` is the ISO timestamp of the response.
+
+<Aside type="note" title="Roughly half the universe has no feed yet">
+On this chain many assets do not have a Chainlink feed published yet, so they return `source: "none"` with no `priceUsd`. Trading still quotes those live through an Arcus RFQ (see [/api/quote](/dev/api/quote/)); this route reports only what has an on-chain feed. A price older than about 4.5 days is treated as stale and also returns `source: "none"`, so an equity feed does not value your holdings to zero over a long weekend.
+</Aside>
+
+## Example request
+
+<Tabs>
+<TabItem label="curl">
+
+```bash
+curl "https://monvera.best/api/prices"
+```
+
+</TabItem>
+<TabItem label="fetch">
+
+```javascript
+const { prices, asOf } = await fetch(
+  "https://monvera.best/api/prices",
+).then((r) => r.json());
+
+console.log(prices.AAPL.priceUsd, prices.AAPL.source);
+```
+
+</TabItem>
+</Tabs>
+
+## Example response
+
+```json
+{
+  "prices": {
+    "AAPL": { "symbol": "AAPL", "priceUsd": 231.02, "source": "chainlink" },
+    "NVDA": { "symbol": "NVDA", "priceUsd": 171.84, "source": "chainlink" },
+    "SPY": { "symbol": "SPY", "priceUsd": 614.03, "source": "chainlink" },
+    "SGOV": { "symbol": "SGOV", "priceUsd": 100.41, "source": "chainlink" },
+    "SPCX": { "symbol": "SPCX", "source": "none" }
+  },
+  "asOf": "2026-07-08T14:03:11.204Z"
+}
+```
+
+The `SPCX` entry shows the honest shape for an asset with no live feed: `source: "none"` and no `priceUsd` key.
+
+<LinkCard title="Where prices come from" href="/how/where-prices-come-from/" description="Chainlink feeds and Arcus RFQ quotes, and why some assets show no feed." />

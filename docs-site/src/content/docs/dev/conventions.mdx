@@ -1,0 +1,64 @@
+---
+title: "Base URL, JSON, and rate limits"
+description: "The base URL is https://monvera.best, every body is JSON, rate limits are fixed 60-second windows per route, and no response ever returns a private key."
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+The base URL is `https://monvera.best`, every request and response body is JSON, and every route enforces a fixed 60-second rate-limit window. Public routes count per IP; token-gated routes count per user id. No response ever returns a private key, a seed phrase, or a session-signer secret.
+
+## Requests and responses are JSON
+
+Send `Content-Type: application/json` on any route with a body, and read `application/json` back. POST bodies carry their arguments as JSON fields, for example `{"goal":"...","amountUsdg":"250"}` on `/api/allocate`. Amounts in USDG are strings of 6-decimal units, since USDG (`0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168`) has 6 decimals. Stock and ETF tokens are 18-decimal ERC-20 tokens on chain 4663.
+
+Errors use one shape from the shared responder: `{"error":"<message>"}`. The status code carries the meaning (400, 401, 429, 451, 500). See [errors](/dev/errors/) for the exact bodies.
+
+<Aside type="danger">
+No Monvera route returns a private key, a seed phrase, or a session-signer secret in any field. The account is a non-custodial smart account; signing happens client-side through Privy. If an example shows a key in a response, it is fabricated.
+</Aside>
+
+## Rate limits are 60-second windows
+
+Each route allows a fixed number of requests per 60-second window. Public routes count per client IP; gated routes count per authenticated user id. Exceeding a limit returns `429 {"error":"Too many requests. Please slow down a moment."}` with a `Retry-After` header in seconds.
+
+### Public routes (per IP)
+
+| Route | Limit per 60s |
+|---|---|
+| `/api/prices` | 60 |
+| `/api/market` | 60 |
+| `/api/screener` | 60 |
+| `/api/vera-record` | 30 |
+| `/api/transactions` | 30 |
+| `/api/portfolio` | 30 |
+| `/api/activity` | 30 |
+| `/api/strategies` | 30 |
+| `/api/backtest` | 20 |
+
+### Token-gated routes (per user id)
+
+| Route | Limit per 60s |
+|---|---|
+| `/api/pimlico` | 600 |
+| `/api/watchlist` (POST) | 60 |
+| `/api/quote` | 30 |
+| `/api/commit-plan` | 20 |
+| `/api/autopilot` (POST) | 20 |
+| `/api/alerts` (POST) | 20 |
+| `/api/allocate` | 12 |
+| `/api/autopilot/run` | 6 |
+
+<Aside type="note">
+`/api/autopilot/run` also holds an in-flight lock: a second run while one is executing returns `429` with `Retry-After: 30`. `/api/alerts` POST rejects with a `400` once a user has 20 or more active alerts, independent of the rate limit.
+</Aside>
+
+## The example story reused across these docs
+
+Every request example on these pages uses one coherent story so field values line up across routes:
+
+- An account holding Apple (AAPL) and Nvidia (NVDA).
+- A plan named "Steady Growth" over four holdings: Apple (AAPL), Nvidia (NVDA), the S&P 500 (SPY), and US Treasuries (SGOV).
+- Chain 4663, amounts in USDG (6-decimal), stock and ETF tokens 18-decimal.
+- Token addresses: AAPL `0xaF3D76f1834A1d425780943C99Ea8A608f8a93f9`, NVDA `0xd0601CE157Db5bdC3162BbaC2a2C8aF5320D9EEC`, SPY `0x117cc2133c37B721F49dE2A7a74833232B3B4C0C`, SGOV `0x92FD66527192E3e61d4DDd13322Aa222DE86F9B5`.
+
+The catalog at `GET /api/market` is the source of truth for all 95 asset addresses. Read it with the [public quickstart](/dev/quickstart/).

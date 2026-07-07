@@ -1,0 +1,86 @@
+---
+title: "Read an account's Monvera invest activity"
+description: "GET /api/activity returns an account's AI invests recorded on-chain by the executor, newest first."
+---
+
+import { Aside, Tabs, TabItem, Badge, LinkCard } from '@astrojs/starlight/components';
+
+<Badge text="GET" variant="tip" /> <Badge text="Public" variant="note" /> `https://monvera.best/api/activity`
+
+GET an account's Monvera invest activity, newest first: each AI invest that settled through the executor and recorded an `AllocationExecuted` log on chain 4663. Public chain data, no token. Rate limited to 30 requests per 60 seconds per IP.
+
+The feed lists AI invests only. Direct manual buys route through the DEX rather than the executor, so they are not attributable from the executor log and are not listed here. Use [an account's token transfers](/dev/api/transactions/) for the full transfer history.
+
+## What it returns
+
+An `activity` array, newest first, where each row is one recorded invest: the USDG spent, how many legs it filled, and the transaction that settled and recorded it. Empty history returns an empty array, not an error.
+
+## Parameters
+
+| Name | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| `address` | address | yes | none | The account whose invests to read. A missing or invalid address returns 400. |
+
+## Returns
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `activity` | array | Recorded invests, newest first. |
+| `activity[].kind` | string | Always `"invest"`. |
+| `activity[].usdc` | number | USDG spent on the invest (6-decimal amount as a number). |
+| `activity[].legCount` | number | Number of legs the invest filled. |
+| `activity[].txHash` | bytes32 | The transaction that settled and recorded the invest. Open it on Blockscout. |
+| `activity[].blockNumber` | number | Block the invest landed in. |
+
+## Example request
+
+<Tabs>
+<TabItem label="curl">
+
+```bash
+curl "https://monvera.best/api/activity?address=0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045"
+```
+
+</TabItem>
+<TabItem label="fetch">
+
+```javascript
+const res = await fetch(
+  "https://monvera.best/api/activity?address=0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045"
+);
+const { activity } = await res.json();
+```
+
+</TabItem>
+</Tabs>
+
+## Example response
+
+The example is one invest of the "Steady Growth" basket (Apple, Nvidia, the S&P 500, US Treasuries), four legs, 100 USDG.
+
+```json
+{
+  "activity": [
+    {
+      "kind": "invest",
+      "usdc": 100,
+      "legCount": 4,
+      "txHash": "0x5a1b2c3d4e5f60718293a4b5c6d7e8f90112233445566778899aabbccddeeff0",
+      "blockNumber": 2431902
+    }
+  ]
+}
+```
+
+Open the `txHash` at `https://robinhoodchain.blockscout.com/tx/<txHash>` to read the `AllocationExecuted` log for yourself.
+
+## Failure paths
+
+- A missing or invalid `address` returns 400 `{"error":"A valid wallet address is required."}`.
+- Over 30 requests in 60 seconds from one IP returns 429 `{"error":"Too many requests. Please slow down a moment."}` with a `Retry-After` header.
+- An account with no invests returns an empty `activity` array.
+
+## Related
+
+<LinkCard title="Vera's on-chain track record" href="/dev/api/vera-record/" description="Her recorded recommendations, executed volume, and reputation." />
+<LinkCard title="An account's token transfers" href="/dev/api/transactions/" description="Incoming and outgoing transfers for any address." />

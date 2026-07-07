@@ -1,0 +1,47 @@
+---
+title: "Glossary"
+description: "What each translated Monvera term maps to under the hood: account is a smart account, free is gas sponsored, buy is a swap, and USDG settles every trade."
+---
+
+import { LinkCard } from '@astrojs/starlight/components';
+
+Newcomer pages translate the crypto terms so a first-timer is not asked to learn a wallet. This page maps each translated term to what it really is, once, for developers who need the true noun. Each entry links to where the real mechanism is documented.
+
+## Account is a smart account
+
+Your Monvera "account" is a non-custodial smart account (ERC-4337). Monvera cannot move your funds without your approval, and the address is readable on Blockscout. Your holdings and positions for any address are public at [`/api/portfolio?address=`](/dev/api/portfolio/). See [Your account and recovery](/safety/your-account-and-recovery/).
+
+## Free is gas sponsored
+
+"Free to invest" means the network gas cost is sponsored, not that trading has no cost. Monvera pays the ERC-4337 gas through Pimlico, so you never fund gas. You still pay the live market spread on each trade. See [What it costs](/safety/what-it-costs/).
+
+## Buy is a swap
+
+A "buy" is an on-chain swap routed through an Arcus spot RFQ quote, settling from USDG into the asset token. A "sell" swaps back to USDG. The firm quote, route, and expiry come from [`POST /api/quote`](/dev/api/quote/).
+
+## A company name and logo is a token
+
+The company name and logo you see is a real tokenized stock or fund: an 18-decimal ERC-20 token in the ERC-8056 family. The catalog of all 95 assets (86 stocks and 9 ETFs) with addresses is at [`/api/market`](/dev/api/market/).
+
+## Today's price is an RFQ quote
+
+The price shown before you trade is a firm Arcus spot RFQ quote in USDG, not an indicative feed number. Only firm quotes execute, and each carries an expiry, so a stale quote is refused at commit. Chainlink feeds (8-decimal, corporate-action adjusted) provide chart and reference prices where published. See [Where prices come from](/how/where-prices-come-from/).
+
+## A plan is a basket
+
+A "plan" is a named basket of asset tokens with per-leg weights, reasons, and a risk read. The canonical example is the plan "Steady Growth" over Apple (AAPL), Nvidia (NVDA), the S&P 500 (SPY), and US Treasuries (SGOV). A draft plan comes from [`POST /api/allocate`](/dev/api/allocate/).
+
+## USDG is the settlement currency
+
+USDG (Global Dollar) is the 6-decimal stablecoin every trade settles in, at address [`0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168`](https://robinhoodchain.blockscout.com/address/0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168) on chain 4663. Amounts in the API are USDG base units (6 decimals). See [Network and addresses](/dev/network-and-addresses/).
+
+## Your sign-in is Privy
+
+"Sign in" is Privy (email or social login) provisioning and recovering your smart account. Gated API routes take the Privy access token as `Authorization: Bearer <privy-token>`. Monvera never asks for or shows a private key. See [Authentication](/dev/authentication/).
+
+## Vera signs the risk assessment; you sign the spend
+
+Two signatures back a plan and are never blurred. Vera signs the EIP-712 `RiskInference` risk assessment, which proves her `agentSigner()` authored that exact risk call. You separately sign the ERC-4337 user operation and token permits, which authorize the spend. Recover and check Vera's signature on [Verify Vera yourself](/dev/verify-vera/).
+
+<LinkCard title="Network and addresses" href="/dev/network-and-addresses/" description="Chain values and every contract address, each Blockscout-linked." />
+<LinkCard title="Verify Vera yourself" href="/dev/verify-vera/" description="Recover a plan's signer and assert it equals the live agentSigner()." />

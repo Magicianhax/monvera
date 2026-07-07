@@ -1,0 +1,35 @@
+---
+title: "The stack behind a Monvera trade"
+description: "Each piece maps to what it does for you: Robinhood Chain settles, Arcus prices and routes in USDG, Virtuals runs Vera, your sign-in holds your account, a relayer covers gas, Chainlink supplies prices."
+---
+
+import { LinkCard } from '@astrojs/starlight/components';
+
+Six pieces carry a Monvera trade, and each maps to one job. Robinhood Chain is where trades settle, Arcus prices and routes them, Virtuals runs Vera and holds her identity, your sign-in holds your account, a relayer covers the gas, and Chainlink supplies the price data. This page names each piece with its plain twin and points to where it is documented in depth.
+
+## Robinhood Chain: where trades settle
+
+Robinhood Chain (chain id 4663, an Ethereum L2) is the network your trades settle on. Your holdings and Vera's signed records live here, at addresses you can open on the Blockscout explorer. The full list of chain values and contract addresses is on [network and addresses](/dev/network-and-addresses/).
+
+## Arcus: today's real price and route
+
+Arcus spot RFQ is the trade venue that gives today's real price and the route to fill it, quoted in USDG (the dollar-value currency every trade settles in). Only firm Arcus quotes execute, and each carries an expiry, so a plan re-quotes right before it commits. See [where prices come from](/how/where-prices-come-from/).
+
+## Virtuals: where Vera thinks and holds her identity
+
+Virtuals provides Vera's inference (her reasoning) and her canonical on-chain identity. Her ERC-8004 identity is registered on Base (`8453:58228`) via Virtuals ACP, and she is also agent #1 in Monvera's own `IdentityRegistry` on chain 4663. Both identities are documented on [Verify Vera](/dev/verify-vera/).
+
+## Your sign-in: your account, held by you
+
+Your sign-in provider (Privy) is how you get an account without a seed phrase, using email or a social login. The account itself is a non-custodial smart account: Monvera cannot move your money without your approval. If you lose your phone, you recover the same account by signing in again the same way. See [your account and recovery](/safety/your-account-and-recovery/).
+
+## The relayer: why investing is free to you
+
+The relayer (Pimlico) sponsors the gas for the ERC-4337 user operation (the batched transaction), which is why investing costs you no network fee. The trade and the record are batched into that one sponsored user operation, so Vera's signed assessment lands in the same transaction as the buys. See [how the plan is signed and recorded](/how/accountable-ai/). What Monvera does and does not charge is on [what it costs](/safety/what-it-costs/).
+
+## Chainlink: the price data
+
+Chainlink supplies the reference price data, through 8-decimal feeds adjusted for corporate actions where a feed is published. Assets with no Chainlink feed are shown as such rather than given a faked number. See [where prices come from](/how/where-prices-come-from/).
+
+<LinkCard title="How the plan is signed and recorded" href="/how/accountable-ai/" description="One gas-sponsored transaction trades via Arcus and records Vera's signed assessment via VeraRecord." />
+<LinkCard title="Network and addresses" href="/dev/network-and-addresses/" description="Chain 4663, the RPC and explorer, USDG, and every contract address, each Blockscout-linked." />

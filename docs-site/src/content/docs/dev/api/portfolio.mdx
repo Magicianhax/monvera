@@ -1,0 +1,103 @@
+---
+title: "Read an account's holdings and value"
+description: "GET /api/portfolio returns cash, positions, and total value for any account address, fully priced on the server."
+---
+
+import { Aside, Tabs, TabItem, Badge, LinkCard } from '@astrojs/starlight/components';
+
+<Badge text="GET" variant="tip" /> <Badge text="Public" variant="note" /> `https://monvera.best/api/portfolio`
+
+GET the fully valued holdings for any account address: its USDG cash, each asset position with its live price and 1-day move, and the totals. One server-side multicall reads every balance and the prices come from the same spot source as `/api/prices`, so the response needs no client-side math. Public chain data, no token. Rate limited to 30 requests per 60 seconds per IP.
+
+## What it returns
+
+A cash figure, an invested figure, a total, and a `holdings` array sorted by value (largest first, unpriced last). Positions of zero are omitted. A single unreadable token is skipped rather than failing the whole response, and its `priceUsd` fields are `null` when no price is available.
+
+## Parameters
+
+| Name | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| `address` | address | yes | none | The account to value. A missing or invalid address returns 400. |
+
+## Returns
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `cashUsd` | number | USDG balance (6-decimal), as a number. |
+| `investedUsd` | number | Sum of priced holding values. |
+| `totalUsd` | number | `cashUsd + investedUsd`. |
+| `holdings` | array | Non-zero positions, largest value first. |
+| `holdings[].symbol` | string | Registry symbol, for example `AAPL`. |
+| `holdings[].raw` | string | Raw token balance as a decimal string (bigint-safe). |
+| `holdings[].qty` | number | Human quantity (token decimals applied). |
+| `holdings[].priceUsd` | number \| null | Live spot price, or null when unpriced. |
+| `holdings[].valueUsd` | number \| null | `qty * priceUsd`, or null when unpriced. |
+| `holdings[].dayChangePct` | number \| null | 1-day move for the row, or null. |
+| `holdings[].spark` | number[] \| null | Intraday sparkline points, or null. |
+| `asOf` | string | ISO timestamp the snapshot was built. |
+
+## Example request
+
+The canonical example account holds Apple (AAPL) and Nvidia (NVDA).
+
+<Tabs>
+<TabItem label="curl">
+
+```bash
+curl "https://monvera.best/api/portfolio?address=0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045"
+```
+
+</TabItem>
+<TabItem label="fetch">
+
+```javascript
+const res = await fetch(
+  "https://monvera.best/api/portfolio?address=0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045"
+);
+const { cashUsd, investedUsd, totalUsd, holdings } = await res.json();
+```
+
+</TabItem>
+</Tabs>
+
+## Example response
+
+```json
+{
+  "cashUsd": 42.5,
+  "investedUsd": 207.5,
+  "totalUsd": 250,
+  "holdings": [
+    {
+      "symbol": "AAPL",
+      "raw": "540000000000000000",
+      "qty": 0.54,
+      "priceUsd": 227.5,
+      "valueUsd": 122.85,
+      "dayChangePct": 0.83,
+      "spark": [226.1, 226.9, 227.5]
+    },
+    {
+      "symbol": "NVDA",
+      "raw": "610000000000000000",
+      "qty": 0.61,
+      "priceUsd": 138.75,
+      "valueUsd": 84.64,
+      "dayChangePct": -1.12,
+      "spark": [140.3, 139.1, 138.75]
+    }
+  ],
+  "asOf": "2026-07-08T14:32:07.918Z"
+}
+```
+
+## Failure paths
+
+- A missing or invalid `address` returns 400 `{"error":"Valid ?address required."}`.
+- Over 30 requests in 60 seconds from one IP returns 429 `{"error":"Too many requests. Please slow down a moment."}` with a `Retry-After` header.
+- An account with no assets returns `cashUsd`/`investedUsd`/`totalUsd` of 0 and an empty `holdings` array.
+
+## Related
+
+<LinkCard title="An account's transfers" href="/dev/api/transactions/" description="Incoming and outgoing token transfers for any address." />
+<LinkCard title="An account's Monvera activity" href="/dev/api/activity/" description="AI invests recorded on-chain for any address." />

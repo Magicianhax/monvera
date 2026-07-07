@@ -1,0 +1,103 @@
+---
+title: "Autopilot run history API"
+description: "GET /api/autopilot/runs to read the audit trail of your Autopilot runs, newest first."
+---
+
+import { Aside, Tabs, TabItem } from '@astrojs/starlight/components';
+
+`GET /api/autopilot/runs` returns the audit trail of your Autopilot runs, newest first, up to 20. It requires a Privy bearer token. The trail is append-only and records every run, whether it settled, was skipped by a bound, or errored, so you can reconcile what Autopilot did against what you authorized.
+
+<Aside type="note" title="Token required">
+The request needs `Authorization: Bearer <privy-token>`. A missing or bad token returns `401 {"error":"Please sign in to continue."}`. See [Authentication](/dev/authentication/) for how to obtain the token and the full public-versus-gated matrix.
+</Aside>
+
+<Aside type="caution" title="Region-gated">
+This route is geo-restricted. A request from a blocked region returns `451 {"error":"Monvera is not available in your region."}`. Availability is covered at [Where Monvera is available](/start/where-its-available/).
+</Aside>
+
+Base URL: `https://monvera.best`.
+
+## Read your run history
+
+`GET /api/autopilot/runs` returns your last 20 runs, newest first.
+
+<Tabs>
+<TabItem label="curl">
+```bash
+curl https://monvera.best/api/autopilot/runs \
+  -H "Authorization: Bearer $MONVERA_TOKEN"
+```
+</TabItem>
+<TabItem label="fetch">
+```js
+const res = await fetch("https://monvera.best/api/autopilot/runs", {
+  headers: { Authorization: `Bearer ${token}` },
+});
+const { runs } = await res.json();
+```
+</TabItem>
+</Tabs>
+
+Response:
+
+```json
+{
+  "runs": [
+    {
+      "userId": "did:privy:abc123",
+      "ranAt": 1751884800,
+      "amountUsd": 25,
+      "assessedRiskBps": 4200,
+      "status": "success",
+      "txHash": "0xabc123…",
+      "holdings": [
+        { "symbol": "AAPL", "weightPct": 30, "amountUsd": 7.5 },
+        { "symbol": "NVDA", "weightPct": 30, "amountUsd": 7.5 },
+        { "symbol": "SPY", "weightPct": 25, "amountUsd": 6.25 },
+        { "symbol": "SGOV", "weightPct": 15, "amountUsd": 3.75 }
+      ]
+    },
+    {
+      "userId": "did:privy:abc123",
+      "ranAt": 1751280000,
+      "amountUsd": 25,
+      "assessedRiskBps": 4200,
+      "status": "skipped",
+      "reason": "Not enough cash for this run."
+    }
+  ]
+}
+```
+
+The `holdings` above are the "Steady Growth" basket: Apple (AAPL), Nvidia (NVDA), the S&P 500 (SPY), and US Treasuries (SGOV).
+
+## Response fields
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `runs` | array | Up to 20 run records, newest first. |
+
+Each run:
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `userId` | string | Your Privy user id. |
+| `ranAt` | number | Unix seconds when the run executed. |
+| `amountUsd` | number | The USD amount the run targeted. |
+| `assessedRiskBps` | number \| undefined | Vera's assessed risk for the run, in basis points. |
+| `status` | `"success"` \| `"skipped"` \| `"error"` | How the run ended. |
+| `reason` | string \| undefined | Why a `skipped` or `error` run did not settle. |
+| `txHash` | string \| undefined | The settling transaction hash on chain 4663, present on a `success` run. Open it on [Blockscout](https://robinhoodchain.blockscout.com) to check the trades and the recorded risk assessment. |
+| `holdings` | array \| undefined | The legs of a `success` run, each `{ symbol, weightPct, amountUsd }`. |
+
+A `success` run's `txHash` is the checkable end of the record: it names the exact transaction that both bought the holdings and recorded Vera's signed risk assessment, in one transaction on Robinhood Chain (chain 4663).
+
+## Errors you can hit
+
+| Status | Body | When |
+| --- | --- | --- |
+| 401 | `{"error":"Please sign in to continue."}` | Missing or invalid bearer token. |
+| 451 | `{"error":"Monvera is not available in your region."}` | Request from a blocked region. See [Where Monvera is available](/start/where-its-available/). |
+| 500 | `{"error":"Something went wrong. Please try again."}` | Store read failed. |
+
+To trigger a run, use [POST /api/autopilot/run](/dev/api/autopilot-run/). To read or change the bounds, use [/api/autopilot](/dev/api/autopilot/).

@@ -1,0 +1,15 @@
+{
+  // Monvera docs — a static Astro/Starlight site served from Cloudflare Workers
+  // static assets (assets-only Worker, no server script). Deploy: `npm run deploy`.
+  // Custom domain docs.monvera.best is attached via the Cloudflare dashboard/API.
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "monvera-docs",
+  "compatibility_date": "2026-07-07",
+  "assets": {
+    "directory": "./dist",
+    // serve Starlight's built 404.html for unknown paths
+    "not_found_handling": "404-page"
+  },
+  // wrangler provisions the DNS record + cert for this custom domain on deploy
+  "routes": [{ "pattern": "docs.monvera.best", "custom_domain": true }]
+}

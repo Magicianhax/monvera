@@ -556,6 +556,7 @@ export function SiteLanding({ veraStats = null }: { veraStats?: VeraStats | null
               <Link href="/agent">Meet Vera</Link>
               <Link href="/demo">Try the demo</Link>
               <Link href="/app">Open the app</Link>
+              <a href="https://docs.monvera.best">Docs</a>
             </div>
             <div className={s.footerCol}>
               <h4>Built on</h4>

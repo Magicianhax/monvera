@@ -1,0 +1,6 @@
+# Monvera docs
+User-agent: *
+Allow: /
+
+Sitemap: https://docs.monvera.best/sitemap-index.xml
+# Curated map for AI assistants: https://docs.monvera.best/llms.txt

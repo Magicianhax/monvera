@@ -1,0 +1,86 @@
+---
+title: "Your first live result with no token"
+description: "Call GET /api/market for the catalog of 95 assets, then GET /api/screener to rank them, with no account and no token."
+---
+
+import { Steps, Tabs, TabItem, Aside, LinkCard } from '@astrojs/starlight/components';
+
+Two public GET requests get you a live result without a token: `GET /api/market` returns the catalog of 95 tokenized assets (86 stocks and 9 ETFs) with live prices, and `GET /api/screener` ranks that same catalog by four metrics from real price history. Both read from the production app at `https://monvera.best`, so the numbers you see are the numbers the app shows.
+
+<Aside type="note">
+Public read routes need no `Authorization` header. Rate limits apply per IP: `market` and `screener` each allow 60 requests per 60 seconds. See [conventions](/dev/conventions/) for the full table.
+</Aside>
+
+## Read the catalog of 95 assets
+
+`GET /api/market` returns every tradable asset with its symbol, name, live price, and metadata. Pass `symbol` to fetch one asset and `range` to control the price-history window.
+
+<Tabs>
+<TabItem label="curl">
+```bash
+curl "https://monvera.best/api/market"
+```
+</TabItem>
+<TabItem label="fetch">
+```js
+const res = await fetch("https://monvera.best/api/market");
+const market = await res.json();
+console.log(market);
+```
+</TabItem>
+</Tabs>
+
+To pull a single asset with a one-year price window, add the query parameters. This example reads Apple (AAPL), one of the four holdings in the canonical "Steady Growth" plan:
+
+<Tabs>
+<TabItem label="curl">
+```bash
+curl "https://monvera.best/api/market?symbol=AAPL&range=1y"
+```
+</TabItem>
+<TabItem label="fetch">
+```js
+const res = await fetch("https://monvera.best/api/market?symbol=AAPL&range=1y");
+const aapl = await res.json();
+console.log(aapl);
+```
+</TabItem>
+</Tabs>
+
+The catalog is the source of truth for token addresses. On chain 4663, AAPL is the 18-decimal ERC-20 token at `0xaF3D76f1834A1d425780943C99Ea8A608f8a93f9`, and every asset settles in USDG (6 decimals) at `0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168`. Assets with no Chainlink feed yet are flagged in the response, not faked.
+
+## Rank the catalog by four real metrics
+
+`GET /api/screener` returns the same 95 assets ranked by four figures computed from real price history: one-year return (`ret1yPct`), three-month return (`ret3mPct`), volatility (`volPct`), and maximum drawdown (`maxDrawdownPct`). Assets with no data are flagged, not scored.
+
+<Tabs>
+<TabItem label="curl">
+```bash
+curl "https://monvera.best/api/screener"
+```
+</TabItem>
+<TabItem label="fetch">
+```js
+const res = await fetch("https://monvera.best/api/screener");
+const ranked = await res.json();
+// Each row carries ret1yPct, ret3mPct, volPct, maxDrawdownPct
+console.log(ranked);
+```
+</TabItem>
+</Tabs>
+
+Sort or filter these rows client-side to build your own view. The four columns are the same ones the in-app screener ranks by, so a ranking you compute here matches what a user sees.
+
+## What to read next
+
+<Steps>
+
+1. To turn a goal into a signed, executable plan, you need a Privy bearer token. See the [authenticated quickstart](/dev/authenticated-quickstart/).
+
+2. To learn which routes are public and which are token-gated, read [authentication](/dev/authentication/).
+
+3. To verify Vera's on-chain identity and recover the signer of a plan yourself, read [verify Vera](/dev/verify-vera/).
+
+</Steps>
+
+Monvera is not available in the US, Canada, the UK, or Switzerland, and nothing here is investment advice. See [where Monvera is available](/start/where-its-available/) for the full statement. Public market and screener reads are not geo-gated; the account and trading routes are.

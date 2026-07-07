@@ -1,0 +1,26 @@
+---
+title: "Backtests are history, not promises"
+description: "A backtest shows what a rule did on past prices. It is history, not a promise, and the raw numbers are open at /api/strategies."
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+A backtest shows what a rule would have done on past prices. It is history, not a promise. The raw numbers behind every strategy are open for anyone to read at [https://monvera.best/api/strategies](https://monvera.best/api/strategies), so you can check the figures instead of taking a chart on faith.
+
+## What a backtest is
+
+A backtest runs a fixed rule over real price history and reports what that rule returned in the past. When a strategy shows a past return, that number came from running its rule across real prices of companies like Apple (AAPL) and the S&P 500 (SPY) over a past window. It is a measurement of history, and it is real. It is a record of what already happened.
+
+## What a backtest is not
+
+A backtest is not a forecast of what you will earn. The future does not repeat the past on schedule. A rule that returned well over the last few years can return badly over the next few, and a backtest cannot tell you which. It does not include every cost, every gap in trading, or every event that has not happened yet. Treat the number as a fact about the past and nothing more.
+
+<Aside type="caution" title="A good backtest is not a good outcome">
+Judge a strategy by its rule and its assumptions, not only by its past return. A high past number can come from a narrow window that will not repeat. The plan you invest can still lose money.
+</Aside>
+
+## Check the numbers yourself
+
+The raw JSON is public, so you do not have to trust a summary. Open [https://monvera.best/api/strategies](https://monvera.best/api/strategies) to read each strategy's rule, its assumptions, and its walk-forward backtest as plain data. For how these strategies are built and what the assumptions mean, see [open strategies and backtests](/how/open-strategies-and-backtests/).
+
+Whatever a backtest shows, you can still lose money on a live plan. See [can I lose money](/safety/can-i-lose-money/). For the full standing on availability and advice, see [where it works](/start/where-its-available/).

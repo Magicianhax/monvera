@@ -1,0 +1,64 @@
+---
+title: "Open strategies and walk-forward backtests"
+description: "Monvera's rule-based strategies each carry a walk-forward backtest with its assumptions, and the raw JSON is public at /api/strategies."
+---
+
+import { Aside, Tabs, TabItem, LinkCard } from '@astrojs/starlight/components';
+
+Monvera's strategies are rule-based, and each one carries a walk-forward backtest with its assumptions stated. The raw numbers are public at `/api/strategies`, so you can read the rule and its history rather than take a chart on faith.
+
+## Rule-based, not discretionary
+
+Each strategy is a fixed rule over the 95-asset universe, not a per-day human call. Because the rule is fixed, its history can be replayed the same way every time, which is what makes a backtest meaningful here. The strategies live at [monvera.best/strategies](https://monvera.best/strategies), and the machine-readable version is `/api/strategies`.
+
+## What walk-forward means, and its limits
+
+A walk-forward backtest applies the rule forward through time, using only the price history available up to each point, then measures what the rule would have done next. That avoids scoring a rule on data it would not have had at decision time. Each backtest ships with its assumptions so you can see what it did and did not account for.
+
+<Aside type="caution">
+A backtest is history, not a promise. It shows what a rule did on past prices, and past prices do not predict future ones. See [backtests are history, not promises](/safety/backtests-are-history-not-promises/).
+</Aside>
+
+## Read the strategies and run a backtest
+
+`/api/strategies` returns the strategies with their backtests, and `POST /api/backtest` runs a walk-forward backtest for a strategy rule. Both are public (no token).
+
+<Tabs>
+<TabItem label="curl">
+
+```bash
+# The open strategies with their backtests (public GET)
+curl "https://monvera.best/api/strategies"
+
+# A walk-forward backtest for a strategy rule (public POST)
+curl -X POST "https://monvera.best/api/backtest" \
+  -H "Content-Type: application/json" \
+  -d '{"strategy":"steady-growth"}'
+```
+
+</TabItem>
+<TabItem label="fetch">
+
+```js
+// The open strategies with their backtests (public GET)
+const strategies = await (
+  await fetch("https://monvera.best/api/strategies")
+).json();
+
+// A walk-forward backtest for a strategy rule (public POST)
+const backtest = await (
+  await fetch("https://monvera.best/api/backtest", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ strategy: "steady-growth" }),
+  })
+).json();
+```
+
+</TabItem>
+</Tabs>
+
+`/api/strategies` is rate limited to 30 requests per 60 seconds per IP, and `/api/backtest` to 20 requests per 60 seconds per IP. A caller over the limit gets `429` with `{"error":"Too many requests. Please slow down a moment."}` and a `Retry-After` header.
+
+<LinkCard title="How Vera decides" href="/how/how-vera-decides/" description="Vera reasons over the same real price history these strategies backtest against." />
+<LinkCard title="Where prices come from" href="/how/where-prices-come-from/" description="The Chainlink feeds and Arcus quotes behind the price history." />

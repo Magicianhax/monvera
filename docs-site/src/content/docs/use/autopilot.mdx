@@ -1,0 +1,49 @@
+---
+title: "Invest on a schedule with Autopilot"
+description: "Autopilot invests a set amount on a schedule you choose, and can never step outside the four hard limits you set."
+---
+
+import { Steps, Aside } from '@astrojs/starlight/components';
+
+Autopilot invests a set amount on a schedule you choose, and it can never step outside four hard limits you set. It is for people who want to invest a little at a regular pace, like $20 every week, without opening the app each time. You set the limits once, and every run has to stay inside them.
+
+<div class="shot-row">
+  <figure class="shot"><img src="/screens/autopilot-setup.webp" alt="The Autopilot setup with templates, a goal, an amount, a cadence, and a risk ceiling" class="phone-shot" /><figcaption>Set the four limits, or start from a template.</figcaption></figure>
+  <figure class="shot"><img src="/screens/autopilot-config.webp" alt="Autopilot configured to invest fifty dollars a week into big tech" class="phone-shot" /><figcaption>A configured plan: $50 a week, bolder risk.</figcaption></figure>
+</div>
+
+
+## The four limits Autopilot cannot cross
+
+Autopilot checks all four of these before every single run, and skips the run rather than break any of them.
+
+- **Amount per run.** How much to invest each time, for example $20. No run can spend more than this.
+- **Cadence.** How often it runs, for example once a week or once a month. It never runs more often than you set.
+- **Risk ceiling.** The most risk you will accept. Vera assesses the risk of each scheduled buy, and if that assessment comes back above your ceiling, Autopilot skips the run instead of investing.
+- **Total spend cap.** The most Autopilot may ever invest in total across all runs. Once the running total reaches this cap, Autopilot stops on its own.
+
+Because all four are checked every run, Autopilot cannot quietly spend more, run more often, or take more risk than you allowed.
+
+## What each run does
+
+<Steps>
+
+1. When a scheduled time arrives, Autopilot asks Vera for a plan for the amount per run.
+
+2. Vera builds the basket and assesses its risk, the same way she does when you [make a plan yourself](/use/make-your-first-plan/).
+
+3. Autopilot checks the four limits. If the risk is above your ceiling, or the spend cap is reached, it skips the run.
+
+4. If every limit passes, Autopilot invests the amount and records the run.
+
+</Steps>
+
+Every run shows up in your Autopilot history with its date, amount, and the basket it bought, so you can check each buy against the limits you set. Each run is a real invest, recorded on-chain the same way as a plan you invest by hand.
+
+<Aside type="caution">
+Autopilot invests real money on its own schedule, and you can still lose money because prices fall. It does not promise a profit, and it is not advice. See [can I lose money?](/safety/can-i-lose-money/) before you switch it on, and [what it costs](/safety/what-it-costs/) for the market spread you pay on each run.
+</Aside>
+
+## Turn it on, and off
+
+You start Autopilot by setting those four limits and giving it standing permission to invest for you, and you can switch it off at any time. Switching it off stops every future run at once. That is covered in [set and switch off Autopilot limits](/use/set-and-revoke-autopilot-limits/).

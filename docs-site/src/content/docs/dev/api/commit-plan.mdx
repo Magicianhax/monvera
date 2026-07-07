@@ -1,0 +1,116 @@
+---
+title: "Sign a plan's risk assessment"
+description: "POST /api/commit-plan returns the RiskInference that Vera signs for a plan, so the client can record it on-chain in the same transaction that buys the assets."
+---
+
+import { Aside, Tabs, TabItem } from '@astrojs/starlight/components';
+
+`POST /api/commit-plan` builds the `RiskInference` for a draft plan and returns it signed by Vera's agent key. It is token-gated. This signature is the accountability record: Vera signs the risk assessment, and the client appends the on-chain `VeraRecord.record(...)` call to the invest batch so the assessment is written in the same transaction that buys the assets. The user separately signs the spend.
+
+<Aside type="caution" title="Gated route">
+This route requires `Authorization: Bearer <privy-token>`. Without a token, or with a bad one, it returns `401 {"error":"Please sign in to continue."}`. See [Authentication](/dev/authentication/) for how to obtain a token. Requests from blocked regions return `451`; see [where Monvera is available](/start/where-its-available/).
+</Aside>
+
+## What it returns
+
+The signed `RiskInference` payload: a `planId`, the recommendation hash, the assessed and maximum risk, an expiry, and the ECDSA signature produced by Vera's `agentSigner`. This route signs and returns; it does not broadcast a transaction and does not return a transaction hash. The client takes these fields, calls `VeraRecord.record(planId, recHash, assessedRisk, maxRisk, expiry, signature, user, agentId, usdSpent, legCount)`, and batches that call with the Arcus settlement calls into one gas-sponsored ERC-4337 userOp (relayed through [`POST /api/pimlico`](/dev/api/pimlico/)). Because the record and the buys share one atomic transaction, the risk assessment cannot be edited after the fact. Verify any signature yourself on [verify Vera](/dev/verify-vera/).
+
+## Parameters
+
+The request body is JSON.
+
+| Name | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| `address` | string (address) | yes | none | The smart account that will own the holdings and submit the invest transaction. |
+| `allocation` | object | yes | none | The draft plan to sign, in the exact shape returned by [`POST /api/allocate`](/dev/api/allocate/): `{ summary, rationale, riskScore, allocations[] }`. |
+| `amountUsd` | number, over 0 and up to 1000000 | yes | none | The dollar amount being invested. |
+
+## Returns
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `planId` | string (bytes32) | keccak256 of the allocation plus the request timestamp. Single-use: the on-chain record rejects a replayed `planId`. |
+| `recHash` | string (bytes32) | keccak256 of the canonical allocation JSON, the recommendation commitment recorded on-chain. |
+| `assessedRisk` | integer (0 to 10000) | Vera's assessed portfolio risk in basis points (clamped from `allocation.riskScore`). |
+| `maxRisk` | integer (0 to 10000) | The risk ceiling, `assessedRisk + 1500`, capped at 10000. The on-chain verify reverts if `assessedRisk` exceeds this. |
+| `expiry` | string (uint256 seconds) | Unix expiry, 15 minutes from signing. The on-chain verify reverts if the block timestamp is past it. |
+| `signature` | string (65-byte hex) | Vera's EIP-712 signature over the `RiskInference`, recoverable to `agentSigner()`. |
+| `agentId` | string | Vera's agent id in Monvera's IdentityRegistry, `"1"`. |
+
+The `RiskInference` type is `RiskInference(bytes32 planId, uint16 assessedRisk, uint16 maxRisk, uint256 expiry)`, signed over the EIP-712 domain `{ name: "VeraRecord", version: "1", chainId: 4663, verifyingContract: 0x7ff1a5ee19330c165146488a7ad8af6cb41da1df }`.
+
+## Request
+
+Sign the "Steady Growth" plan for a smart account investing $100:
+
+<Tabs>
+<TabItem label="curl">
+
+```bash
+curl -X POST https://monvera.best/api/commit-plan \
+  -H "Authorization: Bearer $MONVERA_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "address": "0x4D2b1c3A5e6F7089aB0cD1e2F3a4B5c6D7e8F901",
+    "amountUsd": 100,
+    "allocation": {
+      "summary": "Steady Growth",
+      "rationale": "A balanced five-year mix of broad market exposure, short Treasuries, and two large tech names.",
+      "riskScore": 4200,
+      "allocations": [
+        { "symbol": "SPY", "weightPct": 40, "reason": "Broad US market in one holding." },
+        { "symbol": "SGOV", "weightPct": 30, "reason": "Short US Treasuries, the low-volatility anchor." },
+        { "symbol": "AAPL", "weightPct": 15, "reason": "Profitable, cash-rich, steady demand." },
+        { "symbol": "NVDA", "weightPct": 15, "reason": "Strong trend, sized small because it swings hard." }
+      ]
+    }
+  }'
+```
+
+</TabItem>
+<TabItem label="fetch">
+
+```js
+const res = await fetch("https://monvera.best/api/commit-plan", {
+  method: "POST",
+  headers: {
+    Authorization: `Bearer ${token}`,
+    "Content-Type": "application/json",
+  },
+  body: JSON.stringify({
+    address: "0x4D2b1c3A5e6F7089aB0cD1e2F3a4B5c6D7e8F901",
+    amountUsd: 100,
+    allocation: plan, // the object returned by /api/allocate
+  }),
+});
+const signed = await res.json();
+```
+
+</TabItem>
+</Tabs>
+
+## Example response
+
+```json
+{
+  "planId": "0x8f2a1c9b7d3e4f5a6b8c0d1e2f3a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6",
+  "recHash": "0x3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f8091a2b",
+  "assessedRisk": 4200,
+  "maxRisk": 5700,
+  "expiry": "1751991300",
+  "signature": "0x2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f8091a2b1b",
+  "agentId": "1"
+}
+```
+
+## Errors
+
+| Status | Body | When |
+| --- | --- | --- |
+| `400` | `{"error":"Invalid request body."}` | The body fails schema validation (bad `address`, malformed `allocation`, non-positive amount or amount above 1000000). |
+| `401` | `{"error":"Please sign in to continue."}` | No bearer token, or an invalid one. |
+| `429` | `{"error":"Too many requests. Please slow down a moment."}` | More than 20 requests in 60 seconds for your account. A `Retry-After` header gives the seconds to wait. |
+| `451` | `{"error":"Monvera is not available in your region."}` | The request comes from the US, Canada, the UK, or Switzerland. |
+| `500` | `{"error":"Something went wrong. Please try again."}` | Signing failed (the agent signer is misconfigured server-side). |
+
+The signature is time-boxed. If you sign here but do not submit the invest within the 15-minute `expiry`, the on-chain verify reverts with `InferenceExpired()` and no assets are bought. Fetch a fresh signature and settle promptly. The other on-chain revert conditions are `RiskCeilingBreached(assessed, maxRisk)`, `BadSigner(recovered)`, and `PlanAlreadyRecorded(planId)`; they are documented on [verify Vera](/dev/verify-vera/).

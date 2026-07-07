@@ -1,0 +1,246 @@
+---
+title: "Verify Vera yourself"
+description: "Recover the signer of any recorded plan from its RiskInference payload and assert it equals the live agentSigner() on VeraRecord."
+---
+
+import { Aside, Steps, Tabs, TabItem, LinkCard } from '@astrojs/starlight/components';
+
+You can prove that Vera authored a plan's risk assessment without trusting Monvera. Read her agent card, read `agentSigner()` live on the `VeraRecord` contract, pull a `RecommendationCommitted` log from Blockscout, then ECDSA-recover the signer of the EIP-712 `RiskInference` payload and assert it equals `agentSigner()`. Every value below is on-chain or on a public endpoint.
+
+Two signatures back a plan, and they are never the same. Vera signs the `RiskInference` risk assessment, which proves she authored that exact risk call. The user separately signs the ERC-4337 user operation and token permits, which authorize the spend. This page verifies the first signature. It proves authorship, not that the plan makes money.
+
+## Vera has two on-chain identities
+
+Vera is registered in two places, and the live agent card labels only the Base entry as canonical. Document both; do not call the 4663 registry "canonical" unless the published card changes.
+
+| Identity | Chain | Registry | Agent id | Role |
+| --- | --- | --- | --- | --- |
+| Canonical ERC-8004 | Base (8453) | `0x8004a169fb4a3325136eb29fa0ceb6d2e539a432` | `58228` | Canonical identity, registered via Virtuals ACP |
+| Monvera IdentityRegistry | Robinhood Chain (4663) | `0x751ae640cfa816404b017fbb8234dd21abafbbdc` | `1` | The agent id recorded with every plan on 4663 |
+
+The signature you recover on this page is checked against `agentSigner()` on `VeraRecord` (chain 4663). The Base entry is Vera's portable ERC-8004 identity and is declared in `registrations[0]` of her agent card. See [Network and addresses](/dev/network-and-addresses/) for every value and its Blockscout link.
+
+## What the agent card declares
+
+`GET /.well-known/agent-card.json` returns Vera's discovery document, cached `s-maxage=3600`. It is a custom shape, not the generic A2A schema, so read the fields that exist:
+
+<Tabs>
+<TabItem label="curl">
+
+```sh
+curl https://monvera.best/.well-known/agent-card.json
+```
+
+</TabItem>
+<TabItem label="fetch">
+
+```js
+const card = await fetch(
+  'https://monvera.best/.well-known/agent-card.json',
+).then((r) => r.json());
+```
+
+</TabItem>
+</Tabs>
+
+The top-level fields, in order:
+
+| Field | Type or value | What it holds |
+| --- | --- | --- |
+| `name` | `"Vera"` | The agent name |
+| `description` | string | Human-readable summary; read the live card for exact text |
+| `image` | `"https://monvera.best/icon-512.png"` | Avatar |
+| `active` | `true` | Whether the agent is live |
+| `persona` | `{ role, blurb }` | Human-readable role and blurb |
+| `services` | `{ web: { url } }` | The web app URL |
+| `endpoints` | `{ app, agent, strategies }` | App, agent-card, and strategies URLs |
+| `supportedTrust` | `["reputation"]` | The trust model Vera declares |
+| `skills` | 5 slugs | `portfolio-allocation`, `plain-language-allocation`, `dca-autopilot`, `trading-strategy`, `risk-management` |
+| `domains` | `["finance","investing","real-world-assets"]` | Subject domains |
+| `x402` | `false` | No x402 payment gating |
+| `registrations` | array | On-chain identity registrations (below) |
+| `metadata` | object | Chain, contracts, and the current signer (below) |
+
+`registrations[0]` is Vera's canonical ERC-8004 identity, verbatim:
+
+```json
+{
+  "agentId": 58228,
+  "agentRegistry": "eip155:8453:0x8004a169fb4a3325136eb29fa0ceb6d2e539a432",
+  "note": "Canonical ERC-8004 identity, registered via Virtuals ACP."
+}
+```
+
+`metadata` carries the values you need to verify a record on 4663:
+
+```json
+{
+  "version": "2.3",
+  "chain": "robinhood-chain",
+  "chainId": 4663,
+  "app": "https://monvera.best/app",
+  "demo": "https://monvera.best/demo",
+  "agentPage": "https://monvera.best/agent",
+  "explorer": "https://robinhoodchain.blockscout.com",
+  "identityRegistry": "0x751ae640cfa816404b017fbb8234dd21abafbbdc",
+  "agentId": 1,
+  "agentSigner": "0xe532105523d4eD559c3a53E3E82D616bE1a085c5"
+}
+```
+
+<Aside type="caution">
+`metadata.agentSigner` is the last known signer. It can rotate. Read `agentSigner()` live from `VeraRecord` before you assert equality; do not hardcode this address as permanent.
+</Aside>
+
+## The struct Vera signs
+
+Vera signs an EIP-712 `RiskInference` typed message. The type and domain are fixed by the deployed `VeraRecord` contract:
+
+```solidity
+// Type hash
+keccak256("RiskInference(bytes32 planId,uint16 assessedRisk,uint16 maxRisk,uint256 expiry)")
+```
+
+Fields in order: `bytes32 planId`, `uint16 assessedRisk`, `uint16 maxRisk`, `uint256 expiry`.
+
+```json
+{
+  "name": "VeraRecord",
+  "version": "1",
+  "chainId": 4663,
+  "verifyingContract": "0x7ff1a5ee19330c165146488a7ad8af6cb41da1df"
+}
+```
+
+On-chain, `VeraRecord.record(...)` recovers the signer of this payload and reverts if it is wrong. The revert order is `InferenceExpired()` when `block.timestamp > expiry`, then `RiskCeilingBreached(assessed, maxRisk)` when `assessedRisk > maxRisk`, then `BadSigner(recovered)` when the recovered address is not `agentSigner()`. A single-use `planId` also reverts with `PlanAlreadyRecorded(planId)` before verification, so a plan cannot be recorded twice. The record and the Arcus settle calls are batched into one gas-sponsored ERC-4337 user operation, so the signed risk assessment lands in the same transaction as the buys.
+
+<Aside type="note">
+On chain 4663 the deployed contract is `VeraRecord` and the entrypoint is `VeraRecord.record(...)`. The Mantle-era `StaxExecutor.investWithAI` and `LegFilled` event are not used here. The events emitted on 4663 are `RecommendationCommitted` and `AllocationExecuted`.
+</Aside>
+
+## Recover the signer and check it
+
+<Steps>
+
+1. **Read `agentSigner()` live.** It can rotate, so read it rather than trusting the card.
+
+   ```js
+   import {
+     createPublicClient,
+     http,
+     parseAbiItem,
+     recoverTypedDataAddress,
+   } from 'viem';
+
+   const VERA_RECORD = '0x7ff1a5ee19330c165146488a7ad8af6cb41da1df';
+
+   const client = createPublicClient({
+     transport: http('https://rpc.mainnet.chain.robinhood.com'),
+   });
+
+   const agentSigner = await client.readContract({
+     address: VERA_RECORD,
+     abi: [parseAbiItem('function agentSigner() view returns (address)')],
+     functionName: 'agentSigner',
+   });
+   ```
+
+2. **Fetch the signed payload and signature.** `GET /api/vera-record?user=<address>` returns each recorded plan with its `RiskInference` fields and Vera's signature.
+
+   <Tabs>
+   <TabItem label="curl">
+
+   ```sh
+   curl "https://monvera.best/api/vera-record?user=0xaF3D76f1834A1d425780943C99Ea8A608f8a93f9"
+   ```
+
+   </TabItem>
+   <TabItem label="fetch">
+
+   ```js
+   const res = await fetch(
+     'https://monvera.best/api/vera-record?user=0xaF3D76f1834A1d425780943C99Ea8A608f8a93f9',
+   ).then((r) => r.json());
+
+   // Pick one recorded plan (field names follow the /api/vera-record response)
+   const record = res.records[0];
+   const { planId, assessedRisk, maxRisk, expiry, signature } = record;
+   ```
+
+   </TabItem>
+   </Tabs>
+
+3. **Confirm the plan is on-chain.** Pull `RecommendationCommitted` logs from the deploy block. Public RPC caps `eth_getLogs` at 10,000 blocks, so scan in chunks of 9,999.
+
+   ```js
+   const event = parseAbiItem(
+     'event RecommendationCommitted(bytes32 indexed planId, address indexed user, bytes32 recHash, uint16 riskScore, uint256 agentId)',
+   );
+
+   const DEPLOY_BLOCK = 2429508n;
+   const STEP = 9999n;
+   const latest = await client.getBlockNumber();
+
+   let logs = [];
+   for (let from = DEPLOY_BLOCK; from <= latest; from += STEP + 1n) {
+     const to = from + STEP > latest ? latest : from + STEP;
+     logs = logs.concat(
+       await client.getLogs({ address: VERA_RECORD, event, fromBlock: from, toBlock: to }),
+     );
+   }
+
+   const onChain = logs.find((l) => l.args.planId === planId);
+   // onChain.args.riskScore should equal assessedRisk; onChain.args.agentId is 1n
+   ```
+
+4. **Recover the signer and assert.** Recover the address that signed the `RiskInference` payload and compare it to the live `agentSigner()`.
+
+   ```js
+   const recovered = await recoverTypedDataAddress({
+     domain: {
+       name: 'VeraRecord',
+       version: '1',
+       chainId: 4663,
+       verifyingContract: VERA_RECORD,
+     },
+     types: {
+       RiskInference: [
+         { name: 'planId', type: 'bytes32' },
+         { name: 'assessedRisk', type: 'uint16' },
+         { name: 'maxRisk', type: 'uint16' },
+         { name: 'expiry', type: 'uint256' },
+       ],
+     },
+     primaryType: 'RiskInference',
+     message: { planId, assessedRisk, maxRisk, expiry: BigInt(expiry) },
+     signature,
+   });
+
+   const authored = recovered.toLowerCase() === agentSigner.toLowerCase();
+   // authored === true means Vera's agentSigner authored this exact risk assessment
+   ```
+
+</Steps>
+
+When `authored` is `true` and the same `planId` appears in a `RecommendationCommitted` log, you have confirmed two things without trusting Monvera: Vera's signer authored that exact risk assessment, and it was recorded on-chain in the transaction that ran the trades. You can browse the same records for any address at the Blockscout contract page, [`0x7ff1a5ee19330c165146488a7ad8af6cb41da1df`](https://robinhoodchain.blockscout.com/address/0x7ff1a5ee19330c165146488a7ad8af6cb41da1df).
+
+## Reputation reads zero until feedback is written
+
+`reputationScore(agentId)` on the IdentityRegistry returns `0` until feedback is written, because the score is owner-updated through feedback, not computed live. Do not read a nonzero score as proof of anything yet.
+
+```js
+const IDENTITY_REGISTRY = '0x751ae640cfa816404b017fbb8234dd21abafbbdc';
+
+const score = await client.readContract({
+  address: IDENTITY_REGISTRY,
+  abi: [parseAbiItem('function reputationScore(uint256 agentId) view returns (uint256)')],
+  functionName: 'reputationScore',
+  args: [1n],
+});
+// score is 0n until feedback is written for agent #1
+```
+
+`/api/vera-record` returns the same live score alongside the recovered signer, the agent id, the verification event, and Vera's recent recommendations, so you do not have to reassemble history from log chunks yourself.
+
+<LinkCard title="Network and addresses" href="/dev/network-and-addresses/" description="Every chain value, RPC, explorer, and contract address, each Blockscout-linked." />
+<LinkCard title="Verify the record: /api/vera-record" href="/dev/api/vera-record/" description="The full response shape you fetch the signed payload and reputation score from." />

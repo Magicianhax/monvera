@@ -1,0 +1,44 @@
+---
+title: "Error and restriction responses"
+description: "Every error is JSON of shape {\"error\":\"...\"}; here are the exact 400, 401, 429, 451, and 5xx bodies and what triggers each."
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Every error is JSON of one shape from the shared responder, `{"error":"<message>"}`, and the status code carries the meaning. The bodies below are the literal strings returned in production; match against the status code, not the message text, since some routes pass a custom 400 message.
+
+## The status codes and their bodies
+
+| Status | Body | Triggered by |
+|---|---|---|
+| 400 | `{"error":"Invalid request."}` | A malformed or missing field in the request. Some routes pass a more specific message in the same shape. |
+| 401 | `{"error":"Please sign in to continue."}` | A gated route with no bearer token, or a bad or expired Privy token. |
+| 429 | `{"error":"Too many requests. Please slow down a moment."}` | The route's 60-second rate-limit window is exceeded. Carries a `Retry-After` header in seconds. |
+| 451 | `{"error":"Monvera is not available in your region."}` | An API request from a blocked region. See below. |
+| 500 | `{"error":"Something went wrong. Please try again."}` | An unexpected server error. Retry; if it persists, contact support. |
+
+Error messages never expose internals and never carry a private key or secret.
+
+## 400 on a malformed body
+
+`400 {"error":"Invalid request."}` means the request body failed validation. On `/api/allocate`, a missing `goal` or `amountUsdg` returns 400. On `/api/alerts`, a POST returns 400 once the account already has 20 or more active alerts, independent of the rate limit. Fix the body and resend.
+
+## 401 with no token or a bad token
+
+`401 {"error":"Please sign in to continue."}` comes from any token-gated route when the `Authorization: Bearer <privy-token>` header is missing, malformed, or carries an expired token. Refresh the Privy access token and resend. See [authentication](/dev/authentication/) for how to obtain one.
+
+## 429 with a Retry-After header
+
+`429 {"error":"Too many requests. Please slow down a moment."}` means you exceeded a route's per-window limit. Read the `Retry-After` header (seconds) and wait that long before retrying. `/api/autopilot/run` returns `429` with `Retry-After: 30` when a run is already in flight, even under the request limit. The full per-route numbers are in [conventions](/dev/conventions/).
+
+## 451 from a blocked region
+
+`451 {"error":"Monvera is not available in your region."}` is returned for API requests from the US, Canada, the UK, or Switzerland. Middleware reads the Cloudflare `CF-IPCountry` header and blocks before any account exists. Only `/app`, `/api/quote`, `/api/allocate`, `/api/autopilot`, and `/api/pimlico` are geo-gated; page paths rewrite to `/restricted` with the same 451 status, and public market, price, and screener reads are not gated. See [where Monvera is available](/start/where-its-available/).
+
+## Failures a caller will actually hit
+
+<Aside type="caution">
+`commit-plan` can revert on-chain after it accepts your request, and the revert rolls back the whole transaction so nothing is spent. The verify path reverts with, in order: `PlanAlreadyRecorded(planId)` if the `planId` was already committed, `InferenceExpired()` if the block timestamp is past `expiry`, `RiskCeilingBreached(assessed, maxRisk)` if `assessedRisk` exceeds `maxRisk`, and `BadSigner(recovered)` if the recovered signer is not the current `agentSigner()`. A quote that expires before commit is the common cause of an expired inference, so allocate and commit close together.
+</Aside>
+
+If something looks wrong that these codes do not explain, contact Monvera on X at [@monvera_best](https://x.com/monvera_best) and see [get help](/safety/get-help/).

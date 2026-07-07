@@ -1,0 +1,25 @@
+---
+title: "Firm quotes then a signed plan"
+description: "Monvera has no /api/invest-plan route; firm per-leg quotes come from /api/quote and the signed risk assessment comes from /api/commit-plan."
+---
+
+import { Aside, LinkCard, CardGrid } from '@astrojs/starlight/components';
+
+Monvera has no `/api/invest-plan` route. The step it implies, firm executable quotes plus the plan's signed risk assessment, is two real routes: [`POST /api/quote`](/dev/api/quote/) for a firm per-leg price, and [`POST /api/commit-plan`](/dev/api/commit-plan/) for the `RiskInference` that Vera signs. Do not code against `/api/invest-plan`; it returns nothing because it does not exist.
+
+<Aside type="caution" title="No such endpoint">
+Earlier drafts named a combined `/api/invest-plan`. The deployed API does not have one. Use the two routes below.
+</Aside>
+
+## The gated invest flow, in order
+
+1. [`POST /api/allocate`](/dev/api/allocate/) turns a goal and an amount into a named draft plan (legs, weights, reasons, a risk score).
+2. [`POST /api/quote`](/dev/api/quote/) returns a firm Arcus RFQ quote per leg in USDG, with the Permit2 intent to sign and the settlement call. Fetch it right before you settle.
+3. [`POST /api/commit-plan`](/dev/api/commit-plan/) returns the `RiskInference` signed by Vera's agent key. The client appends the on-chain `VeraRecord.record(...)` call to the invest batch and settles it as one gas-sponsored ERC-4337 userOp through [`POST /api/pimlico`](/dev/api/pimlico/), so Vera's signed risk assessment is written in the same transaction that buys the assets.
+
+Vera signs the risk assessment; the user signs the spend. These are two different signatures. You can recover and check Vera's signature yourself on [verify Vera](/dev/verify-vera/).
+
+<CardGrid>
+	<LinkCard title="Get a firm price" href="/dev/api/quote/" description="POST /api/quote: a firm Arcus RFQ quote for one asset in USDG." />
+	<LinkCard title="Sign the risk assessment" href="/dev/api/commit-plan/" description="POST /api/commit-plan: the RiskInference Vera signs for a plan." />
+</CardGrid>

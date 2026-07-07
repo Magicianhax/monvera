@@ -1,0 +1,102 @@
+---
+title: "Read an account's token transfers"
+description: "GET /api/transactions returns incoming and outgoing token transfers for any account address, newest first."
+---
+
+import { Aside, Tabs, TabItem, Badge, LinkCard } from '@astrojs/starlight/components';
+
+<Badge text="GET" variant="tip" /> <Badge text="Public" variant="note" /> `https://monvera.best/api/transactions`
+
+GET the incoming and outgoing token transfers for any account address, newest first, up to 50. Transfers are labeled with Monvera's symbols (USDG, AAPL, NVDA) when the token is in the catalog. Public chain data, no token. Rate limited to 30 requests per 60 seconds per IP.
+
+The response names which indexed source served it in a `source` field: Alchemy when an `ALCHEMY_API_KEY` is configured, otherwise the keyless Blockscout fallback. Both read the same on-chain transfers.
+
+## What it returns
+
+A `transactions` array (newest first, deduped, capped at 50) and a `source` string. Direction is relative to the queried account: `"out"` means the account sent, `"in"` means it received.
+
+## Parameters
+
+| Name | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| `address` | address | yes | none | The account whose transfers to read. A missing or invalid address returns 400. |
+
+## Returns
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `transactions` | array | Transfers, newest first, up to 50. |
+| `transactions[].hash` | bytes32 | Transaction hash. Open it on Blockscout. |
+| `transactions[].direction` | string | `"in"` or `"out"`, relative to the queried account. |
+| `transactions[].symbol` | string | Catalog symbol when known, else the on-chain asset symbol. |
+| `transactions[].amount` | number | Human amount moved. |
+| `transactions[].counterparty` | string | The other party (recipient if out, sender if in). |
+| `transactions[].tokenAddress` | string | Token contract address. |
+| `transactions[].blockNumber` | number | Block the transfer landed in. |
+| `transactions[].timestamp` | number \| undefined | Unix seconds, when resolvable. |
+| `source` | string | `"alchemy"` or `"blockscout"`. |
+
+## Example request
+
+<Tabs>
+<TabItem label="curl">
+
+```bash
+curl "https://monvera.best/api/transactions?address=0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045"
+```
+
+</TabItem>
+<TabItem label="fetch">
+
+```javascript
+const res = await fetch(
+  "https://monvera.best/api/transactions?address=0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045"
+);
+const { transactions, source } = await res.json();
+```
+
+</TabItem>
+</Tabs>
+
+## Example response
+
+```json
+{
+  "transactions": [
+    {
+      "hash": "0x5a1b2c3d4e5f60718293a4b5c6d7e8f90112233445566778899aabbccddeeff0",
+      "direction": "in",
+      "symbol": "AAPL",
+      "amount": 0.54,
+      "counterparty": "0x7ff1a5ee19330c165146488a7ad8af6cb41da1df",
+      "tokenAddress": "0xaf3d76f1834a1d425780943c99ea8a608f8a93f9",
+      "blockNumber": 2431902,
+      "timestamp": 1751985127
+    },
+    {
+      "hash": "0x1c2d3e4f5061728394a5b6c7d8e9f0011223344556677889900aabbccddeeff1",
+      "direction": "out",
+      "symbol": "USDG",
+      "amount": 100,
+      "counterparty": "0x7ff1a5ee19330c165146488a7ad8af6cb41da1df",
+      "tokenAddress": "0x5fc5360d0400a0fd4f2af552add042d716f1d168",
+      "blockNumber": 2431902,
+      "timestamp": 1751985127
+    }
+  ],
+  "source": "blockscout"
+}
+```
+
+Open any `hash` at `https://robinhoodchain.blockscout.com/tx/<hash>` to confirm the transfer.
+
+## Failure paths
+
+- A missing or invalid `address` returns 400 `{"error":"A valid wallet address is required."}`.
+- Over 30 requests in 60 seconds from one IP returns 429 `{"error":"Too many requests. Please slow down a moment."}` with a `Retry-After` header.
+- An account with no transfers, or an upstream that returns nothing, yields an empty `transactions` array with the `source` still set.
+
+## Related
+
+<LinkCard title="An account's holdings" href="/dev/api/portfolio/" description="Cash, positions, and total value for any address." />
+<LinkCard title="An account's Monvera activity" href="/dev/api/activity/" description="AI invests recorded on-chain for any address." />

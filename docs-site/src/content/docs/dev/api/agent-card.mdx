@@ -1,0 +1,122 @@
+---
+title: "Read Vera's agent card"
+description: "GET /.well-known/agent-card.json returns Vera's on-chain identity, signer, registrations, and metadata as a discovery document."
+---
+
+import { Tabs, TabItem, Aside, LinkCard } from '@astrojs/starlight/components';
+
+`GET /.well-known/agent-card.json` returns Vera's ERC-8004 discovery document: her name, skills, registrations, and the on-chain values an agent or crawler needs to check her, including her live agent signer.
+
+- **Method and path**: `GET https://monvera.best/.well-known/agent-card.json`
+- **Auth**: none (public)
+- **Rate limit**: none; cached at the edge with `Cache-Control: public, s-maxage=3600, stale-while-revalidate=21600`
+
+The card is served dynamically, not from a static file. Two fields are read live from chain 4663 on every request: `metadata.agentSigner` from the VeraRecord contract's `agentSigner()`, and `metadata.identityRegistry` from chain config. Read the card to learn the current signer instead of hardcoding it, because the signer can rotate.
+
+## Parameters
+
+This route takes no parameters.
+
+## Returns
+
+A JSON object with these top-level fields, in order:
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `name` | string | Vera. |
+| `description` | string | What Vera does, in one paragraph. |
+| `image` | string | `https://monvera.best/icon-512.png`. |
+| `active` | boolean | `true`. |
+| `persona` | object | `{ role, blurb }`. |
+| `services` | object | `{ web: { url } }`. |
+| `endpoints` | object | `{ app, agent, strategies }`, all on `monvera.best`. |
+| `supportedTrust` | string[] | `["reputation"]`. |
+| `skills` | string[] | Five skill ids (portfolio-allocation, plain-language-allocation, dca-autopilot, trading-strategy, risk-management). |
+| `domains` | string[] | `["finance", "investing", "real-world-assets"]`. |
+| `x402` | boolean | `false`. Vera does not gate this identity behind an x402 payment. |
+| `registrations` | object[] | One entry: Vera's canonical ERC-8004 identity on Base. |
+| `metadata` | object | Chain, registry, and live signer values (below). |
+
+`registrations[0]` records the canonical identity: `agentId` 58228 in registry `eip155:8453:0x8004a169fb4a3325136eb29fa0ceb6d2e539a432` on Base, registered via Virtuals ACP. `metadata` carries `version`, `chain`, `chainId` (4663), `app`, `demo`, `agentPage`, `explorer`, `identityRegistry` (Monvera's own IdentityRegistry on 4663), `agentId` (defaults to 1), `agentSigner` (read live), and a `note`.
+
+<Aside type="note" title="Two identities, documented honestly">
+The card labels Vera's Base identity (`8453:58228`) as canonical, and also lists her as agent #1 in Monvera's IdentityRegistry `0x751ae640cfa816404b017fbb8234dd21abafbbdc` on chain 4663. Both are real. See [Verify Vera](/dev/verify-vera/) for the runnable chain from this card to a recovered signer.
+</Aside>
+
+## Example request
+
+<Tabs>
+<TabItem label="curl">
+
+```bash
+curl https://monvera.best/.well-known/agent-card.json
+```
+
+</TabItem>
+<TabItem label="fetch">
+
+```javascript
+const res = await fetch("https://monvera.best/.well-known/agent-card.json");
+const card = await res.json();
+console.log(card.metadata.agentSigner);
+```
+
+</TabItem>
+</Tabs>
+
+## Example response
+
+```json
+{
+  "name": "Vera",
+  "description": "AI broker for real tokenized stocks on Robinhood Chain. You tell Vera a goal in plain words; she builds a diversified portfolio of tokenized stocks (traded via the Arcus spot RFQ venue), signs every recommendation with EIP-712, and places it gasless (ERC-4337). Autopilot runs the strategy on a schedule inside hard user-set bounds: amount, cadence, risk ceiling, spend cap. Every run is checked against those limits before anything signs. Non-custodial; the user holds the tokens.",
+  "image": "https://monvera.best/icon-512.png",
+  "active": true,
+  "persona": {
+    "role": "your investing assistant",
+    "blurb": "I build plans from real, named companies and funds. Every plan I make is signed and recorded, so my track record can't be edited after the fact."
+  },
+  "services": {
+    "web": { "url": "https://monvera.best" }
+  },
+  "endpoints": {
+    "app": "https://monvera.best",
+    "agent": "https://monvera.best/agent",
+    "strategies": "https://monvera.best/api/strategies"
+  },
+  "supportedTrust": ["reputation"],
+  "skills": [
+    "portfolio-allocation",
+    "plain-language-allocation",
+    "dca-autopilot",
+    "trading-strategy",
+    "risk-management"
+  ],
+  "domains": ["finance", "investing", "real-world-assets"],
+  "x402": false,
+  "registrations": [
+    {
+      "agentId": 58228,
+      "agentRegistry": "eip155:8453:0x8004a169fb4a3325136eb29fa0ceb6d2e539a432",
+      "note": "Canonical ERC-8004 identity, registered via Virtuals ACP. Registration file: https://api.acp.virtuals.io/agents/019f2d81-921d-7951-a4f7-50f9d228c47b/erc8004"
+    }
+  ],
+  "metadata": {
+    "version": "2.3",
+    "chain": "robinhood-chain",
+    "chainId": 4663,
+    "app": "https://monvera.best",
+    "demo": "https://monvera.best/demo",
+    "agentPage": "https://monvera.best/agent",
+    "explorer": "https://robinhoodchain.blockscout.com",
+    "identityRegistry": "0x751ae640cfa816404b017fbb8234dd21abafbbdc",
+    "agentId": 1,
+    "agentSigner": "0xe532105523d4eD559c3a53E3E82D616bE1a085c5",
+    "note": "Vera holds this agentId in Monvera's IdentityRegistry on Robinhood Chain, plus canonical ERC-8004 identity 8453:58228 on Base (registry 0x8004a169fb4a3325136eb29fa0ceb6d2e539a432, via Virtuals ACP). Every recommendation carries her EIP-712 RiskInference signature, verified and permanently recorded by the VeraRecord contract in the same transaction as the trades. Values here are read live from chain config; agentSigner is read from the InferenceVerifier on-chain."
+  }
+}
+```
+
+If the on-chain read for the signer is unavailable (RPC hiccup or the contract is not deployed on the target chain), `metadata.agentSigner` falls back to the last-known signer `0xe532105523d4eD559c3a53E3E82D616bE1a085c5` and the request still succeeds.
+
+<LinkCard title="Verify Vera yourself" href="/dev/verify-vera/" description="Read this card, recover the signer of a plan, and confirm it equals agentSigner() on chain 4663." />

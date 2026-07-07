@@ -1,0 +1,105 @@
+---
+title: "Get market history for charts"
+description: "GET /api/market returns a per-asset day summary with sparklines, or a full price series with metadata for one symbol and range."
+---
+
+import { Tabs, TabItem, Aside, LinkCard } from '@astrojs/starlight/components';
+
+`GET /api/market` returns real market history for charts. With no `symbol` it returns a one-day change and sparkline for every asset. With a `symbol` it returns the full closing-price series for one range, plus asset-level metadata.
+
+- **Method and path**: `GET https://monvera.best/api/market`
+- **Auth**: none (public)
+- **Rate limit**: 60 requests per 60 seconds per IP
+
+## Parameters
+
+| Name | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| `symbol` | string | No | (none) | A ticker in the universe, for example `AAPL`. Omit it to get the day summary for every asset. |
+| `range` | string | No | `1M` | One of `1D`, `1W`, `1M`, `1Y`, `All`. Only used in symbol mode. |
+
+An unknown `symbol` returns `400 {"error":"Unknown symbol."}`. An unrecognized `range` returns `400 {"error":"Unknown range."}`.
+
+## Returns
+
+**Summary mode** (no `symbol`): `{ summary, asOf }`. `summary` maps each asset symbol to `{ dayChangePct, spark }`, where `spark` is a downsampled 1-day close series (up to 20 points) for row sparklines. Assets with no live source have no entry in `summary`.
+
+**Symbol mode**: `{ series, timestamps, changePct, meta, asOf }`.
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `series` | number[] \| null | Closing prices in USD, oldest to newest. `null` when no source exists or the upstream failed. |
+| `timestamps` | number[] \| null | Unix-seconds per close, aligned to `series`, when available. |
+| `changePct` | number \| null | Percent change across the range. `1D` is measured against the previous session close. |
+| `meta` | object \| null | Asset facts: `fiftyTwoWeekHigh`, `fiftyTwoWeekLow`, `dayHigh`, `dayLow`, `volume`, `exchange`. Any field is omitted when the source did not provide it. |
+| `asOf` | string | ISO timestamp of the response. |
+
+<Aside type="note" title="Honest gaps">
+Some assets have no honest public series (tokenized private companies, thin listings). In symbol mode those return `series: null` rather than a faked line, and in summary mode they are absent from `summary`. See [Where prices come from](/how/where-prices-come-from/).
+</Aside>
+
+## Example request
+
+<Tabs>
+<TabItem label="curl">
+
+```bash
+# Day summary for every asset
+curl "https://monvera.best/api/market"
+
+# One-year series for Apple
+curl "https://monvera.best/api/market?symbol=AAPL&range=1Y"
+```
+
+</TabItem>
+<TabItem label="fetch">
+
+```javascript
+// Day summary for every asset
+const summary = await fetch("https://monvera.best/api/market").then((r) => r.json());
+
+// One-year series for Apple
+const aapl = await fetch(
+  "https://monvera.best/api/market?symbol=AAPL&range=1Y",
+).then((r) => r.json());
+```
+
+</TabItem>
+</Tabs>
+
+## Example response
+
+Summary mode (`GET /api/market`):
+
+```json
+{
+  "summary": {
+    "AAPL": { "dayChangePct": 0.82, "spark": [228.4, 228.9, 229.1, 230.2, 231.0] },
+    "NVDA": { "dayChangePct": -1.14, "spark": [174.2, 173.6, 172.9, 172.1, 171.8] },
+    "SPY": { "dayChangePct": 0.31, "spark": [612.1, 612.7, 613.0, 613.6, 614.0] },
+    "SGOV": { "dayChangePct": 0.01, "spark": [100.4, 100.4, 100.4, 100.4, 100.4] }
+  },
+  "asOf": "2026-07-08T14:03:11.204Z"
+}
+```
+
+Symbol mode (`GET /api/market?symbol=AAPL&range=1Y`):
+
+```json
+{
+  "series": [188.4, 191.2, 195.7, 201.3, 231.0],
+  "timestamps": [1720396800, 1723075200, 1725753600, 1728345600, 1751983200],
+  "changePct": 22.61,
+  "meta": {
+    "fiftyTwoWeekHigh": 242.1,
+    "fiftyTwoWeekLow": 169.2,
+    "dayHigh": 231.4,
+    "dayLow": 228.0,
+    "volume": 41283900,
+    "exchange": "NasdaqGS"
+  },
+  "asOf": "2026-07-08T14:03:11.204Z"
+}
+```
+
+<LinkCard title="Get live prices" href="/dev/api/prices/" description="Current on-chain USD spot for every asset, separate from this chart history." />

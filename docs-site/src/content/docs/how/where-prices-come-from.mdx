@@ -1,0 +1,56 @@
+---
+title: "Where Monvera's prices come from"
+description: "Prices come from Chainlink 8-decimal corporate-action-adjusted feeds where published, plus live Arcus RFQ quotes; assets with no feed are shown honestly."
+---
+
+import { Aside, Tabs, TabItem, LinkCard } from '@astrojs/starlight/components';
+
+Monvera shows two kinds of price: a Chainlink reference price where a feed is published, and a live Arcus RFQ quote (the request-for-quote price that a trade actually executes at). Assets with no Chainlink feed are shown as such rather than given a faked number.
+
+## Chainlink reference feeds
+
+Chainlink feeds give the displayed reference price for assets that have one. These feeds are 8-decimal and adjusted for corporate actions (splits and similar), so the number on the chart tracks the real instrument rather than a raw, unadjusted tick. Chainlink is the price-data provider in the stack; see [the stack](/how/the-stack/).
+
+<Aside type="note">
+Not every one of the 95 assets (86 stocks and 9 ETFs) has a published Chainlink feed yet. Monvera marks an asset with no feed instead of inventing a price for it, so a missing feed reads as missing, not as zero or as a guess.
+</Aside>
+
+## Arcus RFQ quotes for what a trade costs
+
+The executable price comes from Arcus spot RFQ, in USDG (the dollar-value currency every trade settles in). Arcus returns two kinds of number: an indicative price for display, and a firm quote that can actually execute. Only firm quotes execute, and a firm quote carries an expiry, so a plan re-quotes right before it commits. If a quote has expired by the time the transaction runs, the trade reverts rather than filling at a stale price; this is one of the [failure paths](/how/accountable-ai/) the record path enforces.
+
+## Read the prices yourself
+
+The catalog and its prices are public reads (no token). Live and historical prices for charts come from `/api/prices`, and the catalog with current prices and metadata comes from `/api/market`.
+
+<Tabs>
+<TabItem label="curl">
+
+```bash
+# Current and historical prices (public)
+curl "https://monvera.best/api/prices"
+
+# Catalog with current prices and metadata (public)
+curl "https://monvera.best/api/market?symbol=AAPL"
+```
+
+</TabItem>
+<TabItem label="fetch">
+
+```js
+// Current and historical prices (public)
+const prices = await (await fetch("https://monvera.best/api/prices")).json();
+
+// Catalog with current prices and metadata (public)
+const market = await (
+  await fetch("https://monvera.best/api/market?symbol=AAPL")
+).json();
+```
+
+</TabItem>
+</Tabs>
+
+Both routes are public GETs, rate limited to 60 requests per 60 seconds per IP. A caller over the limit gets `429` with `{"error":"Too many requests. Please slow down a moment."}` and a `Retry-After` header.
+
+<LinkCard title="How Vera decides" href="/how/how-vera-decides/" description="Vera reasons over about twelve months of real price history and these live prices, and can be wrong." />
+<LinkCard title="The stack behind a trade" href="/how/the-stack/" description="Where Chainlink and Arcus sit relative to Robinhood Chain, Virtuals, your sign-in, and the relayer." />

@@ -1,0 +1,107 @@
+---
+title: "Rank the universe by performance"
+description: "GET /api/screener returns the buyable assets with real 12-month figures, one-year and three-month return, volatility, and worst drawdown, so you can sort them."
+---
+
+import { Tabs, TabItem, Aside, LinkCard } from '@astrojs/starlight/components';
+
+`GET /api/screener` returns every buyable asset with four real figures computed from 12 months of price history, so you can rank them instead of guessing. Assets with no honest public history are dropped from the response, never ranked on a faked series.
+
+- **Method and path**: `GET https://monvera.best/api/screener`
+- **Auth**: none (public)
+- **Rate limit**: 60 requests per 60 seconds per IP
+
+The screener shares its cached computation with Vera's allocation prompt, so a page of clients costs at most one upstream build per window.
+
+## Parameters
+
+This route takes no parameters. It returns the whole buyable set.
+
+## Returns
+
+`{ assets, asOf }`.
+
+`assets` is an array of stat rows, one per buyable asset that has usable history:
+
+| Column | Type | Description |
+| --- | --- | --- |
+| `symbol` | string | The asset ticker, for example `NVDA`. |
+| `ret1yPct` | number \| null | Total return over the last ~12 months, percent. |
+| `ret3mPct` | number \| null | Return over the last ~3 months, percent. `null` when history is too short. |
+| `volPct` | number | Annualized daily volatility, percent. |
+| `maxDrawdownPct` | number | Worst peak-to-trough drop over the period, percent (a positive number). |
+| `noData` | boolean | Always `false` in the response. |
+
+`asOf` is the ISO timestamp of the response.
+
+<Aside type="note" title="No-data rows are excluded, not returned">
+The stat layer marks assets with no honest public series as `noData: true`, and this route filters those out before responding. So every row you receive has real figures, and `noData` is always `false`. The total row count is therefore the buyable assets that have usable history, which can be fewer than the full 95 assets on a given day. See [Use the screener](/use/use-the-screener/).
+</Aside>
+
+## Example request
+
+<Tabs>
+<TabItem label="curl">
+
+```bash
+curl "https://monvera.best/api/screener"
+```
+
+</TabItem>
+<TabItem label="fetch">
+
+```javascript
+const { assets } = await fetch(
+  "https://monvera.best/api/screener",
+).then((r) => r.json());
+
+// Sort by one-year return, highest first
+const ranked = [...assets].sort((a, b) => (b.ret1yPct ?? 0) - (a.ret1yPct ?? 0));
+```
+
+</TabItem>
+</Tabs>
+
+## Example response
+
+```json
+{
+  "assets": [
+    {
+      "symbol": "NVDA",
+      "ret1yPct": 38.42,
+      "ret3mPct": 9.61,
+      "volPct": 41.27,
+      "maxDrawdownPct": 22.84,
+      "noData": false
+    },
+    {
+      "symbol": "AAPL",
+      "ret1yPct": 22.61,
+      "ret3mPct": 5.18,
+      "volPct": 24.03,
+      "maxDrawdownPct": 15.42,
+      "noData": false
+    },
+    {
+      "symbol": "SPY",
+      "ret1yPct": 14.07,
+      "ret3mPct": 3.22,
+      "volPct": 12.88,
+      "maxDrawdownPct": 8.19,
+      "noData": false
+    },
+    {
+      "symbol": "SGOV",
+      "ret1yPct": 4.91,
+      "ret3mPct": 1.24,
+      "volPct": 0.41,
+      "maxDrawdownPct": 0.06,
+      "noData": false
+    }
+  ],
+  "asOf": "2026-07-08T14:03:11.204Z"
+}
+```
+
+<LinkCard title="Get the open strategies" href="/dev/api/strategies/" description="Rule-based baskets built from the same 12-month figures, each with a walk-forward backtest." />

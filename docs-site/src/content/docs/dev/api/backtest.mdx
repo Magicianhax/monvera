@@ -1,0 +1,125 @@
+---
+title: "Backtest a basket over the last 12 months"
+description: "POST /api/backtest runs a public 12-month, monthly-rebalanced simulation of a weighted basket against buy-and-hold SPY."
+---
+
+import { Aside, Tabs, TabItem, Badge, LinkCard } from '@astrojs/starlight/components';
+
+<Badge text="POST" variant="success" /> <Badge text="Public" variant="note" /> `https://monvera.best/api/backtest`
+
+POST a weighted basket and get its 12-month simulated performance against buy-and-hold SPY. The route uses public equity history only (no inference, no user funds), so it takes no token. It is rate limited to 20 requests per 60 seconds per IP.
+
+<Aside type="caution" title="History, not a promise">
+A backtest shows what a fixed rule would have done on past prices. It is not a forecast. See [Backtests are history, not promises](/safety/backtests-are-history-not-promises/).
+</Aside>
+
+## What it returns
+
+A `backtest` object holding the simulated portfolio curve, the SPY benchmark curve, and their return, volatility, drawdown, and Sharpe stats. The engine starts at 100, renormalizes weights over the covered subset, drifts positions with daily closes, and rebalances every ~21 trading days (monthly).
+
+If less than half the basket's weight has usable public history, or SPY history is missing, `backtest` is `null` rather than a misleading partial result.
+
+## Request body
+
+`application/json`. The one canonical example is the "Steady Growth" basket: Apple (AAPL), Nvidia (NVDA), the S&P 500 (SPY), and US Treasuries (SGOV).
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `allocations` | array | yes | 1 to 20 legs. |
+| `allocations[].symbol` | string | yes | A tradable ticker (for example `AAPL`). Unknown symbols return 400. |
+| `allocations[].weightPct` | number | yes | Positive, up to 100. Weights renormalize over the legs that have history. |
+
+## Returns
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `backtest` | object \| null | Null when covered weight is below 50% or SPY history is missing. |
+| `backtest.period` | string | Always `"1Y"`. |
+| `backtest.rebalance` | string | Always `"monthly"`. |
+| `backtest.coveragePct` | number | Share of basket weight that had real history to test (0 to 100). |
+| `backtest.excluded` | string[] | Symbols left out because no honest public series exists. |
+| `backtest.portfolio` | object | Simulated basket: `returnPct`, `volPct`, `maxDrawdownPct`, `sharpe`, `curve` (60 points, normalized to 100). |
+| `backtest.benchmark` | object | Same stats for buy-and-hold SPY, plus `symbol: "SPY"`. |
+
+## Example request
+
+<Tabs>
+<TabItem label="curl">
+
+```bash
+curl https://monvera.best/api/backtest \
+  -H "Content-Type: application/json" \
+  -d '{
+    "allocations": [
+      { "symbol": "AAPL", "weightPct": 35 },
+      { "symbol": "NVDA", "weightPct": 25 },
+      { "symbol": "SPY",  "weightPct": 25 },
+      { "symbol": "SGOV", "weightPct": 15 }
+    ]
+  }'
+```
+
+</TabItem>
+<TabItem label="fetch">
+
+```javascript
+const res = await fetch("https://monvera.best/api/backtest", {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({
+    allocations: [
+      { symbol: "AAPL", weightPct: 35 },
+      { symbol: "NVDA", weightPct: 25 },
+      { symbol: "SPY", weightPct: 25 },
+      { symbol: "SGOV", weightPct: 15 },
+    ],
+  }),
+});
+const { backtest } = await res.json();
+```
+
+</TabItem>
+</Tabs>
+
+## Example response
+
+The `curve` arrays hold 60 points each, trimmed here for space.
+
+```json
+{
+  "backtest": {
+    "period": "1Y",
+    "rebalance": "monthly",
+    "coveragePct": 100,
+    "excluded": [],
+    "portfolio": {
+      "returnPct": 22.41,
+      "volPct": 18.9,
+      "maxDrawdownPct": 12.07,
+      "sharpe": 1.18,
+      "curve": [100, 101.3, 99.8, 104.2, 108.6, 115.9, 122.41]
+    },
+    "benchmark": {
+      "symbol": "SPY",
+      "returnPct": 14.22,
+      "volPct": 12.68,
+      "maxDrawdownPct": 8.31,
+      "sharpe": 1.05,
+      "curve": [100, 100.9, 100.1, 102.8, 105.4, 110.7, 114.22]
+    }
+  }
+}
+```
+
+## Failure paths
+
+- A malformed body, a non-array `allocations`, an unknown `symbol`, or a `weightPct` outside 0 to 100 returns 400 `{"error":"Invalid request body."}`.
+- A basket whose covered weight falls below 50% returns 200 with `{"backtest": null}`. Check for null before reading stats. The `excluded` array on a non-null result names any legs dropped for having no public series.
+- Over 20 requests in 60 seconds from one IP returns 429 `{"error":"Too many requests. Please slow down a moment."}` with a `Retry-After` header.
+
+See [Response envelope and rate limits](/dev/conventions/) for the shared shapes.
+
+## Related
+
+<LinkCard title="Open strategies" href="/dev/api/strategies/" description="The rule-based strategies with their walk-forward backtests." />
+<LinkCard title="Open strategies and backtests" href="/how/open-strategies-and-backtests/" description="How the strategies are simulated and what the assumptions are." />

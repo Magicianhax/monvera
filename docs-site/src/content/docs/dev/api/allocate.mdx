@@ -1,0 +1,118 @@
+---
+title: "Turn a goal into a draft plan"
+description: "POST /api/allocate turns a plain-language goal and an amount into a named draft basket of real assets, each leg with a weight, a reason, and a risk read."
+---
+
+import { Aside, Tabs, TabItem } from '@astrojs/starlight/components';
+
+`POST /api/allocate` turns a plain-language goal and a dollar amount into a draft basket: a named allocation over real assets, each leg with a weight, a one-line reason, and a blended risk score. It is token-gated. This is the first step of the accountable-AI flow; [`POST /api/commit-plan`](/dev/api/commit-plan/) signs the plan afterward.
+
+<Aside type="caution" title="Gated route">
+This route requires `Authorization: Bearer <privy-token>`. Without a token, or with a bad one, it returns `401 {"error":"Please sign in to continue."}`. See [Authentication](/dev/authentication/) for how to obtain a token. Requests from blocked regions return `451`; see [where Monvera is available](/start/where-its-available/).
+</Aside>
+
+## What it returns
+
+A draft allocation only. Vera reasons over the buyable universe and twelve months of real price history, filters her picks to assets with live Arcus liquidity, and normalizes the weights to sum to 100. Nothing is signed and nothing is spent here. A best-effort walk-forward backtest of the mix against SPY is attached when history is available. A draft plan is an option with reasons and a risk read, not advice; see [is this investment advice](/safety/is-this-investment-advice/).
+
+## Parameters
+
+The request body is JSON.
+
+| Name | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| `goal` | string (1 to 600 chars) | yes | none | The goal in plain words, for example "grow my money steadily for five years". |
+| `amountUsd` | number, over 0 and up to 1000000 | yes | none | The dollar amount to allocate. |
+| `riskTolerance` | `"conservative"` \| `"balanced"` \| `"aggressive"` | no | inferred from the goal | An explicit risk preference. When omitted, Vera infers it from the goal text. |
+
+## Returns
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `summary` | string | A short plain-language headline for the plan. |
+| `rationale` | string | Two to four plain sentences explaining the plan. |
+| `riskScore` | integer (0 to 10000) | The blended portfolio risk in basis points (broad ETFs land around 3000 to 4500, single tech stocks around 5000 to 7000). |
+| `allocations` | array | The basket. Each leg is `{ symbol, weightPct, reason }`. Weights sum to 100. |
+| `backtest` | object \| null | A one-year monthly-rebalanced backtest of the mix versus SPY, or `null` when under half the weight has usable history. See [`POST /api/backtest`](/dev/api/backtest/) for the shape. |
+| `amountUsd` | number | Echo of the requested amount. |
+| `model` | string | The inference model id that produced the plan. |
+
+## Request
+
+Build the canonical "Steady Growth" plan from $100:
+
+<Tabs>
+<TabItem label="curl">
+
+```bash
+curl -X POST https://monvera.best/api/allocate \
+  -H "Authorization: Bearer $MONVERA_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "goal": "grow my money steadily for five years",
+    "amountUsd": 100,
+    "riskTolerance": "balanced"
+  }'
+```
+
+</TabItem>
+<TabItem label="fetch">
+
+```js
+const res = await fetch("https://monvera.best/api/allocate", {
+  method: "POST",
+  headers: {
+    Authorization: `Bearer ${token}`,
+    "Content-Type": "application/json",
+  },
+  body: JSON.stringify({
+    goal: "grow my money steadily for five years",
+    amountUsd: 100,
+    riskTolerance: "balanced",
+  }),
+});
+const plan = await res.json();
+```
+
+</TabItem>
+</Tabs>
+
+## Example response
+
+```json
+{
+  "summary": "Steady Growth",
+  "rationale": "A balanced mix built for a five-year horizon. Most of the money sits in broad market exposure and short Treasuries, with two large tech names for growth. Tokenized stocks track the real share price.",
+  "riskScore": 4200,
+  "allocations": [
+    { "symbol": "SPY", "weightPct": 40, "reason": "Broad US market in one holding, up over the last year with milder swings than single stocks." },
+    { "symbol": "SGOV", "weightPct": 30, "reason": "Short US Treasuries, the low-volatility anchor of the plan." },
+    { "symbol": "AAPL", "weightPct": 15, "reason": "A profitable, cash-rich company with steady demand." },
+    { "symbol": "NVDA", "weightPct": 15, "reason": "Strong one-year and three-month trend, sized small because it swings hard." }
+  ],
+  "backtest": {
+    "period": "1Y",
+    "rebalance": "monthly",
+    "coveragePct": 100,
+    "excluded": [],
+    "portfolio": { "returnPct": 18.4, "volPct": 12.1, "maxDrawdownPct": 9.7, "sharpe": 1.32, "curve": [100, 101.2] },
+    "benchmark": { "symbol": "SPY", "returnPct": 21.0, "volPct": 13.6, "maxDrawdownPct": 11.2, "sharpe": 1.28, "curve": [100, 101.0] }
+  },
+  "amountUsd": 100,
+  "model": "venice-uncensored"
+}
+```
+
+The `symbol` values shown in-app are the real company and fund names: SPY is shown as "S&P 500" and SGOV as "US Treasuries". Backtests are history, not promises; see [backtests are history](/safety/backtests-are-history-not-promises/).
+
+## Errors
+
+| Status | Body | When |
+| --- | --- | --- |
+| `400` | `{"error":"Invalid request body."}` | The body fails schema validation (missing `goal` or `amountUsd`, goal over 600 chars, amount not positive or above 1000000, bad `riskTolerance`). |
+| `401` | `{"error":"Please sign in to continue."}` | No bearer token, or an invalid one. |
+| `429` | `{"error":"Too many requests. Please slow down a moment."}` | More than 12 requests in 60 seconds for your account. A `Retry-After` header gives the seconds to wait. |
+| `451` | `{"error":"Monvera is not available in your region."}` | The request comes from the US, Canada, the UK, or Switzerland. |
+| `500` | `{"error":"Something went wrong. Please try again."}` | The model produced no usable plan, or every pick lacked live liquidity. Rephrasing the goal often clears it. |
+
+The `backtest` field failing never fails the request: a price-history outage returns `backtest: null` and the plan still comes back.

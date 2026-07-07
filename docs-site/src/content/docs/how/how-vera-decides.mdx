@@ -1,0 +1,33 @@
+---
+title: "How Vera decides, and where she can be wrong"
+description: "Vera reasons over about twelve months of real price history and live Chainlink prices; she can be wrong, and her signature proves authorship, not correctness."
+---
+
+import { Aside, LinkCard } from '@astrojs/starlight/components';
+
+Vera builds a plan by reasoning over about twelve months of real price history plus live prices, then attaching a plain risk read to each holding. She is not clairvoyant. She can be wrong, and nothing about signing a plan changes that.
+
+## What Vera reasons over
+
+Vera works from two inputs, both real and both checkable. The first is about twelve months of real equity price history for each asset, the same history the [screener](/use/use-the-screener/) and [backtests](/how/open-strategies-and-backtests/) draw from. The second is live prices at plan time: Chainlink feeds where a feed is published, and firm Arcus RFQ quotes for the executable price. Where those prices come from, and which assets have no Chainlink feed, is documented on [where prices come from](/how/where-prices-come-from/).
+
+From that, Vera produces a named plan (for example "Steady Growth" over Apple, Nvidia, the S&P 500, and US Treasuries), a one-line reason per holding, and an assessed risk. The assessed risk is what she signs into the `RiskInference` struct, bounded by a risk ceiling, when the plan is recorded on-chain.
+
+## Where Vera can be wrong
+
+Vera's inputs are backward-looking, and past prices do not predict future ones. Twelve months of history captures how an asset moved; it does not tell you how it will move. A plan Vera assessed as steady can still fall, because these are real companies and real prices, and prices fall. You can lose money; see [can I lose money](/safety/can-i-lose-money/).
+
+Vera outputs options with reasons and a risk read, not directives. A plan is a basket you judge before you commit, not a recommendation to act on. Nothing Vera returns is investment advice.
+
+## What a signature does and does not prove
+
+<Aside type="caution">
+Vera signs the risk assessment; you sign the spend. Her signature proves she authored that exact assessment at that time. It does not prove the assessment is correct, and it does not promise a return.
+</Aside>
+
+The on-chain record makes Vera's track record honest, not infallible. Because her signed assessment is recorded in the same transaction as the trades (see [how the plan is signed and recorded](/how/accountable-ai/)), her calls cannot be quietly deleted or rewritten after the fact. That accountability means a wrong call stays on the record too. The value of the signature is that you can hold the assessment to what actually happened, not that the assessment was right.
+
+For the honest read on backtests as history rather than promises, see [backtests are history, not promises](/safety/backtests-are-history-not-promises/).
+
+<LinkCard title="Where prices come from" href="/how/where-prices-come-from/" description="Chainlink feeds and live Arcus RFQ quotes, with assets that have no feed shown honestly." />
+<LinkCard title="Open strategies and backtests" href="/how/open-strategies-and-backtests/" description="Rule-based strategies with walk-forward backtests, raw JSON at /api/strategies." />
