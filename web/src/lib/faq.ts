@@ -19,7 +19,7 @@ export const FAQ: FaqItem[] = [
   },
   {
     q: "How do I know Vera's plans actually work?",
-    a: "Every plan is backtested against 12 months of real market history before you invest, and shown next to the S&P 500 so you can compare. We also publish our own rule-based strategies in the open, with honest walk-forward backtests, at monvera.xyz/strategies. Past results never promise the future, but nothing here is a black box.",
+    a: "Every plan is backtested against 12 months of real market history before you invest, and shown next to the S&P 500 so you can compare. We also publish our own rule-based strategies in the open, with honest walk-forward backtests, at monvera.best/strategies. Past results never promise the future, but nothing here is a black box.",
   },
   {
     q: "What does it cost?",

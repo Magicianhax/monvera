@@ -46,19 +46,19 @@ export async function GET() {
     name: VERA.name,
     description:
       "AI broker for real tokenized stocks on Robinhood Chain. You tell Vera a goal in plain words; she builds a diversified portfolio of tokenized stocks (traded via the Arcus spot RFQ venue), signs every recommendation with EIP-712, and places it gasless (ERC-4337). Autopilot runs the strategy on a schedule inside hard user-set bounds: amount, cadence, risk ceiling, spend cap. Every run is checked against those limits before anything signs. Non-custodial; the user holds the tokens.",
-    image: "https://monvera.xyz/icon-512.png",
+    image: "https://monvera.best/icon-512.png",
     active: true,
     persona: {
       role: VERA.role,
       blurb: VERA.blurb,
     },
     services: {
-      web: { url: "https://monvera.xyz" },
+      web: { url: "https://monvera.best" },
     },
     endpoints: {
-      app: "https://monvera.xyz",
-      agent: "https://monvera.xyz/agent",
-      strategies: "https://monvera.xyz/api/strategies",
+      app: "https://monvera.best",
+      agent: "https://monvera.best/agent",
+      strategies: "https://monvera.best/api/strategies",
     },
     supportedTrust: ["reputation"],
     skills: [
@@ -81,9 +81,9 @@ export async function GET() {
       version: "2.3",
       chain: "robinhood-chain",
       chainId: CHAIN_ID,
-      app: "https://monvera.xyz",
-      demo: "https://monvera.xyz/demo",
-      agentPage: "https://monvera.xyz/agent",
+      app: "https://monvera.best",
+      demo: "https://monvera.best/demo",
+      agentPage: "https://monvera.best/agent",
       explorer: EXPLORER_URL,
       identityRegistry: registryLive ? IDENTITY_REGISTRY : null,
       agentId: AGENT_ID,

@@ -15,8 +15,22 @@ interface Env {
   AUTOPILOT_CRON_SECRET?: string;
 }
 
+const nextFetch = (handler as { fetch: typeof fetch }).fetch;
+
 export default {
-  fetch: (handler as { fetch: typeof fetch }).fetch,
+  // Canonicalize the host before the app runs: www and the workers.dev origin
+  // both 301 to the apex, so shared links, SEO, and Privy origins resolve to one
+  // host. Everything else falls straight through to the OpenNext handler.
+  // (Cron self-invocation uses the WORKER_SELF_REFERENCE service binding, not the
+  // public host, so it is unaffected.)
+  fetch(request: Request, env: Env, ctx: unknown) {
+    const url = new URL(request.url);
+    if (url.hostname === "www.monvera.best" || url.hostname.endsWith(".workers.dev")) {
+      url.hostname = "monvera.best";
+      return Response.redirect(url.toString(), 301);
+    }
+    return (nextFetch as (r: Request, e: Env, c: unknown) => Response | Promise<Response>)(request, env, ctx);
+  },
 
   // Fired by Cloudflare on the schedule in wrangler.jsonc. Self-invokes the
   // Next.js cron route through the service binding so the OpenNext runtime
@@ -26,7 +40,7 @@ export default {
     if (!secret) return; // crons not configured on this deployment
     const cron = (event as { cron?: string }).cron ?? "";
     const hit = (path: string) =>
-      env.WORKER_SELF_REFERENCE.fetch(`https://monvera.xyz${path}`, {
+      env.WORKER_SELF_REFERENCE.fetch(`https://monvera.best${path}`, {
         headers: { authorization: `Bearer ${secret}` },
       });
     // every 15 min: price alerts; on the hour: autopilot too.

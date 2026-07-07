@@ -10,7 +10,7 @@ Monvera is an AI broker for real tokenized stocks on **Robinhood Chain**. Tell *
 your AI agent, a goal in plain words. She builds a diversified portfolio of real companies,
 signs it on-chain, and invests it in one tap: gasless, non-custodial, from $1.
 
-### [Live at monvera.xyz](https://monvera.xyz)
+### [Live at monvera.best](https://monvera.best)
 
 </div>
 
@@ -26,8 +26,8 @@ Most "AI trading" products ask you to trust a black box. Monvera makes the AI ac
   verified and recorded **on-chain in the same transaction as the trades**. Her track record
   cannot be edited after the fact.
 - **Open strategies.** Monvera publishes its own rule-based strategies with honest,
-  walk-forward backtests at [`/strategies`](https://monvera.xyz/strategies), raw JSON at
-  [`/api/strategies`](https://monvera.xyz/api/strategies). No look-ahead, no cherry-picking.
+  walk-forward backtests at [`/strategies`](https://monvera.best/strategies), raw JSON at
+  [`/api/strategies`](https://monvera.best/api/strategies). No look-ahead, no cherry-picking.
 - **Honest UI.** Plans ship with a plain-language risk read, backtests are labeled
   "history, not a promise", and the app never shows a number it cannot back on-chain.
 
