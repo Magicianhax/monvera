@@ -8,6 +8,7 @@
 // to 50 / 100 / 300 bps (the on-chain amountOutMinimum is the real protection).
 // On success we route to the plain-words receipt.
 import { useEffect, useState } from "react";
+import { parseUnits } from "viem";
 import { ALL_ASSETS, isTradable, type Asset } from "@/lib/tokens";
 import { useQuote, useSellQuote } from "@/hooks/useQuote";
 import { useSwap } from "@/hooks/useSwap";
@@ -67,10 +68,25 @@ export function TradeScreen({
   const { data: quote, isFetching } = useQuote(side === "buy" ? asset : null, n, address ?? undefined);
   const swap = useSwap();
 
-  // Sell side: percentage of the held position to sell (default 100%).
+  // Sell side: a typed dollar amount wins; empty falls back to a percentage of
+  // the held position (default 100%, so the sheet still opens pre-filled).
   const [sellPct, setSellPct] = useState(100);
+  const [sellAmt, setSellAmt] = useState("");
   const heldRaw = holding?.raw ?? BigInt(0);
-  const sellRaw = (heldRaw * BigInt(Math.round(sellPct))) / BigInt(100);
+  const sellDecimals = asset.decimals ?? 18;
+  const pricePer = holding?.priceUsd ?? shownPrice;
+  const typedUsd = sellAmt ? parseFloat(sellAmt) || 0 : null;
+  const sellRaw = (() => {
+    if (!holding || heldRaw <= BigInt(0)) return BigInt(0);
+    if (typedUsd !== null) {
+      if (!pricePer || pricePer <= 0 || typedUsd <= 0) return BigInt(0);
+      const qtyWanted = typedUsd / pricePer;
+      // At or past the whole position: sell exactly what's held (no dust).
+      if (qtyWanted >= holding.qty) return heldRaw;
+      return parseUnits(qtyWanted.toFixed(Math.min(sellDecimals, 18)), sellDecimals);
+    }
+    return (heldRaw * BigInt(Math.round(sellPct))) / BigInt(100);
+  })();
   const sellQty = holding ? fromUnits(sellRaw, asset.decimals ?? 18) : 0;
   const { data: sellQuote, isFetching: sellFetching } = useSellQuote(
     side === "sell" && sellable ? asset : null,
@@ -238,23 +254,42 @@ export function TradeScreen({
         </div>
       ) : side === "sell" ? (
         <>
-          {/* sell amount */}
+          {/* sell amount — the big number IS the input (tap to type a custom amount);
+              empty falls back to the selected percentage of the position */}
           <div className="anim-rise" style={{ padding: "30px 22px 0", textAlign: "center" }}>
-            <div
-              className="tnum"
-              style={{ fontSize: 50, fontWeight: 600, letterSpacing: "-.04em" }}
-            >
-              {sellFetching && !sellQuote ? (
-                <span
-                  className="skeleton"
-                  style={{ display: "inline-block", width: 150, height: 44, borderRadius: 6, verticalAlign: "middle" }}
-                  aria-label="Getting a price"
-                />
-              ) : sellQuote ? (
-                <CountUp to={sellQuote.expectedUsd} />
-              ) : (
-                "—"
-              )}
+            <div style={{ display: "flex", justifyContent: "center", alignItems: "baseline" }}>
+              <span
+                className="tnum"
+                style={{ fontSize: 50, fontWeight: 600, letterSpacing: "-.04em", color: sellAmt ? "var(--ink)" : "var(--ink-3)" }}
+              >
+                $
+              </span>
+              <input
+                inputMode="decimal"
+                placeholder={pricePer && pricePer > 0 ? (fromUnits(sellRaw, sellDecimals) * pricePer).toFixed(2) : "0"}
+                value={sellAmt}
+                onChange={(e) => {
+                  // digits + a single decimal point only
+                  const v = e.target.value.replace(/[^0-9.]/g, "").replace(/(\..*)\./g, "$1");
+                  setSellAmt(v);
+                  if (swap.error) swap.reset();
+                }}
+                aria-label="Amount to sell in dollars"
+                className="tnum"
+                style={{
+                  fontSize: 50,
+                  fontWeight: 600,
+                  letterSpacing: "-.04em",
+                  color: sellAmt ? "var(--ink)" : "var(--ink-3)",
+                  border: "none",
+                  background: "transparent",
+                  outline: "none",
+                  padding: 0,
+                  textAlign: "left",
+                  width: `${Math.max(1, (sellAmt || (pricePer && pricePer > 0 ? (fromUnits(sellRaw, sellDecimals) * pricePer).toFixed(2) : "0")).length)}ch`,
+                  caretColor: "var(--primary)",
+                }}
+              />
             </div>
             <div className="tnum" style={{ fontSize: 13.5, color: "var(--ink-2)", marginTop: 4 }}>
               {`Selling ${tokenQty(sellRaw, asset.decimals ?? 18)} ${d.ticker ?? asset.symbol}`}
@@ -264,13 +299,16 @@ export function TradeScreen({
             </div>
           </div>
 
-          {/* sell percentage */}
+          {/* sell percentage — shortcuts; typing a dollar amount overrides them */}
           <div style={{ display: "flex", gap: 8, padding: "18px 22px 0", justifyContent: "center" }}>
             {[25, 50, 75, 100].map((p) => (
               <button
                 key={p}
-                className={`chip tap ${sellPct === p ? "is-dark" : ""}`}
-                onClick={() => setSellPct(p)}
+                className={`chip tap ${sellPct === p && !sellAmt ? "is-dark" : ""}`}
+                onClick={() => {
+                  setSellPct(p);
+                  setSellAmt("");
+                }}
                 style={{ height: 38 }}
               >
                 {p === 100 ? "All" : `${p}%`}
@@ -362,9 +400,13 @@ export function TradeScreen({
                 second={<span>Sell{sellQuote ? ` for ${usd(sellQuote.expectedUsd)}` : ""}</span>}
               />
             </button>
-            {!swap.busy && !canSell && (!sellQuote || sellFetching) && (
+            {!swap.busy && !canSell && (
               <div style={{ textAlign: "center", marginTop: 10, fontSize: 12.5, color: "var(--ink-3)" }}>
-                Getting a price…
+                {typedUsd !== null && sellRaw <= BigInt(0)
+                  ? "Enter an amount"
+                  : !sellQuote || sellFetching
+                    ? "Getting a price…"
+                    : null}
               </div>
             )}
           </div>

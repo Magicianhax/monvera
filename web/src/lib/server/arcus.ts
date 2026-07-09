@@ -46,20 +46,32 @@ interface RouterResponse {
   errors?: unknown[];
 }
 
-/** Pick the recommended venue quote, else the one with the largest buyAmount. */
-function pick(r: RouterResponse): VenueQuote | null {
-  const all = r.all ?? [];
-  if (all.length === 0) return null;
-  if (r.recommended) {
-    const match = all.find((q) => q.venue === r.recommended && q.buyAmount);
-    if (match) return match;
-  }
-  return all
-    .filter((q) => q.buyAmount)
-    .reduce<VenueQuote | null>(
-      (best, q) => (!best || BigInt(q.buyAmount) > BigInt(best.buyAmount) ? q : best),
-      null,
-    );
+/** The best of `venues` by buyAmount, preferring `recommended` when it qualifies. */
+function best(venues: VenueQuote[], recommended?: string): VenueQuote | null {
+  if (venues.length === 0) return null;
+  const rec = recommended && venues.find((q) => q.venue === recommended);
+  if (rec) return rec;
+  return venues.reduce((top, q) => (BigInt(q.buyAmount) > BigInt(top.buyAmount) ? q : top));
+}
+
+/** Pick a venue for an indicative price. Any venue that quotes a size will do. */
+function pickPriced(r: RouterResponse): VenueQuote | null {
+  return best((r.all ?? []).filter((q) => q.buyAmount), r.recommended);
+}
+
+/**
+ * Pick a venue we can actually execute. We settle every fill inside one batched,
+ * gas-sponsored userOp, so we need the venue to hand back a client-submittable
+ * `tx` (we splice the taker signature into it) plus the `toSign` intent.
+ *
+ * The router's `recommended` venue is currently always `arcus`, its own RFQ flow,
+ * where *the router* submits settlement server-side. It returns `toSign` but no
+ * `tx`, so it is unusable here — trusting `recommended` blindly made every buy and
+ * sell report "No liquidity". Prefer `recommended` only among submittable venues.
+ */
+function pickExecutable(r: RouterResponse): VenueQuote | null {
+  const submittable = (r.all ?? []).filter((q) => q.buyAmount && q.tx?.to && q.tx?.data && q.toSign);
+  return best(submittable, r.recommended);
 }
 
 async function routerGet(path: string, params: URLSearchParams): Promise<RouterResponse> {
@@ -83,7 +95,7 @@ export async function getPrice(
     buyToken,
     sellAmount: sellAmount.toString(),
   });
-  const q = pick(await routerGet("/v1/price", params));
+  const q = pickPriced(await routerGet("/v1/price", params));
   return q ? { liquidityAvailable: true, buyAmount: BigInt(q.buyAmount) } : { liquidityAvailable: false, buyAmount: BigInt(0) };
 }
 
@@ -168,7 +180,7 @@ export async function getQuote(
   });
   if (REFERRAL) params.set("referralCode", REFERRAL);
 
-  const q = pick(await routerGet("/v1/quote", params));
+  const q = pickExecutable(await routerGet("/v1/quote", params));
   if (!q || !q.tx || !q.toSign) {
     return { liquidityAvailable: false, buyAmount: BigInt(0), minBuyAmount: BigInt(0), needsAllowance: false, toSign: null, tx: null, quoteId: null };
   }

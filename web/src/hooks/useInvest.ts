@@ -60,16 +60,35 @@ export interface UseInvest {
 }
 
 async function postJson<T>(url: string, body: unknown): Promise<T> {
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "content-type": "application/json", ...(await authHeader()) },
-    body: JSON.stringify(body),
-  });
+  // Long calls (allocate runs ~20s of inference) are a big window for a network
+  // blip — a VPN reconnect makes the browser kill every in-flight request with
+  // a bare TypeError ("Failed to fetch") even though the server finishes fine.
+  // Retry once on that transport-level failure; HTTP errors are never retried.
+  let res: Response;
+  try {
+    res = await postOnce(url, body);
+  } catch (err) {
+    if (!(err instanceof TypeError)) throw err;
+    await new Promise((r) => setTimeout(r, 1500));
+    try {
+      res = await postOnce(url, body);
+    } catch {
+      throw new Error("Connection dropped mid-request. Check your network and try again.");
+    }
+  }
   const json = await res.json();
   if (!res.ok) {
     throw new Error(typeof json?.error === "string" ? json.error : "Something went wrong.");
   }
   return json as T;
+}
+
+async function postOnce(url: string, body: unknown): Promise<Response> {
+  return fetch(url, {
+    method: "POST",
+    headers: { "content-type": "application/json", ...(await authHeader()) },
+    body: JSON.stringify(body),
+  });
 }
 
 export function useInvest(): UseInvest {
