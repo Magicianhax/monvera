@@ -18,6 +18,8 @@ export default defineConfig({
       logo: { src: './src/assets/monvera-icon.png', alt: 'Monvera' },
       favicon: '/favicon.png',
       customCss: ['./src/styles/brand.css'],
+      // Starlight ships no og:image; DocsHead adds a per-page card.
+      components: { Head: './src/components/DocsHead.astro' },
       social: [{ icon: 'x.com', label: 'Monvera on X', href: 'https://x.com/monvera_best' }],
       // no "edit this page" link: the docs repo is private
       lastUpdated: true,
