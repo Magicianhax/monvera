@@ -1,0 +1,149 @@
+/* Chrome for the standalone marketing documents (/roadmap, /agent, /strategies).
+   Same tokens, type, and restraint as the landing. Theme: Ledger — flat, 1px
+   hairlines, no elevation, no glass. */
+
+.root {
+  --edge: clamp(20px, 5vw, 40px);
+  --docw: 780px;
+  min-height: 100vh;
+  background: var(--s-paper);
+  color: var(--s-ink);
+  font-family: var(--s-ui);
+  -webkit-font-smoothing: antialiased;
+}
+
+.bar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background: color-mix(in srgb, var(--s-paper) 88%, transparent);
+  backdrop-filter: saturate(1.2) blur(8px);
+  border-bottom: 1px solid var(--s-line);
+}
+.barInner {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 12px var(--edge);
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  font-family: var(--s-display);
+  font-size: 19px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--s-ink);
+}
+.spacer {
+  flex: 1;
+}
+.barLink {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--s-ink-2);
+  padding: 6px 2px;
+  border-radius: 4px;
+}
+.barLink:hover {
+  color: var(--s-ink);
+}
+.barLink:focus-visible {
+  outline: 2px solid var(--s-primary);
+  outline-offset: 3px;
+}
+.iconBtn {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 6px;
+  border: 1px solid var(--s-line);
+  background: var(--s-surface);
+  color: var(--s-ink-2);
+  cursor: pointer;
+}
+.iconBtn:hover {
+  color: var(--s-ink);
+}
+.cta {
+  display: inline-flex;
+  align-items: center;
+  height: 34px;
+  padding: 0 14px;
+  border-radius: 6px;
+  background: var(--s-primary-d);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.cta:hover {
+  background: var(--s-primary);
+}
+
+.main {
+  max-width: var(--docw);
+  margin: 0 auto;
+  padding: clamp(40px, 7vw, 72px) var(--edge) clamp(64px, 9vw, 104px);
+}
+.wide {
+  max-width: 1040px;
+}
+
+.eyebrow {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--s-primary-d);
+  letter-spacing: 0.01em;
+}
+.h1 {
+  font-family: var(--s-display);
+  font-weight: 500;
+  letter-spacing: -0.03em;
+  line-height: 1.04;
+  font-size: clamp(34px, 5.4vw, 54px);
+  margin: 10px 0 16px;
+  text-wrap: balance;
+  color: var(--s-ink);
+}
+.lead {
+  margin: 0;
+  font-size: clamp(16px, 1.6vw, 18px);
+  line-height: 1.6;
+  color: var(--s-ink-2);
+  max-width: 66ch;
+  text-wrap: pretty;
+}
+
+.foot {
+  border-top: 1px solid var(--s-line);
+  margin-top: clamp(56px, 8vw, 88px);
+  padding-top: 22px;
+  font-size: 13px;
+  line-height: 1.65;
+  color: var(--s-ink-3);
+}
+.foot a {
+  color: var(--s-primary-d);
+  font-weight: 600;
+}
+.foot a:hover {
+  text-decoration: underline;
+}
+.footLinks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  margin-bottom: 12px;
+}
+
+@media (max-width: 620px) {
+  .barLink {
+    display: none;
+  }
+}

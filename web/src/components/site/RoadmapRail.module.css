@@ -1,0 +1,200 @@
+/* The roadmap rail. One continuous line down the page whose certainty decays:
+   solid where things shipped, hairline where they are being built, dashed and
+   fading where they are only being explored. The page's honesty claim ("no
+   dates, nothing here is a promise") is carried by the graphic, not a caption.
+
+   Theme: Ledger. Flat, 1px hairlines, no glass, no elevation. Tokens are the
+   committed .site scope (--s-*), so this matches the marketing surface.
+
+   Nothing is hidden by default: the rail, markers, and copy all render with JS
+   off. GSAP only grows the decorative `.progress` overlay. */
+
+.rail {
+  position: relative;
+}
+.list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* One decorative line, scrubbed by scroll, laid over the per-phase base rail.
+   Masked so it never fully colours the speculative band at the bottom. */
+.progress {
+  position: absolute;
+  left: 7px;
+  top: 10px;
+  bottom: 10px;
+  width: 2px;
+  background: var(--s-primary);
+  transform-origin: top center;
+  border-radius: 2px;
+  pointer-events: none;
+  -webkit-mask-image: linear-gradient(to bottom, #000 0%, #000 58%, transparent 88%);
+  mask-image: linear-gradient(to bottom, #000 0%, #000 58%, transparent 88%);
+}
+
+.phase {
+  position: relative;
+  padding: 0 0 clamp(38px, 5vw, 58px) 34px;
+}
+.phase:last-child {
+  padding-bottom: 0;
+}
+
+/* Per-phase base rail. The segment's own treatment encodes the certainty. */
+.seg {
+  position: absolute;
+  left: 7px;
+  top: 10px;
+  bottom: 0;
+  width: 2px;
+  border-radius: 2px;
+}
+.phase[data-phase="live"] .seg {
+  background: color-mix(in srgb, var(--s-primary) 34%, transparent);
+}
+.phase[data-phase="building"] .seg {
+  width: 1px;
+  left: 7.5px;
+  background: var(--s-line);
+}
+.phase[data-phase="exploring"] .seg {
+  width: 1px;
+  left: 7.5px;
+  background: repeating-linear-gradient(
+    to bottom,
+    var(--s-line) 0 5px,
+    transparent 5px 11px
+  );
+  -webkit-mask-image: linear-gradient(to bottom, #000 0%, #000 46%, transparent 96%);
+  mask-image: linear-gradient(to bottom, #000 0%, #000 46%, transparent 96%);
+}
+
+/* Phase heading sits on the rail as a labelled node. */
+.head {
+  position: relative;
+  margin-bottom: 20px;
+}
+.node {
+  position: absolute;
+  left: -34px;
+  top: 6px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--s-paper);
+  border: 2px solid var(--s-primary);
+  display: grid;
+  place-items: center;
+}
+.phase[data-phase="live"] .node {
+  background: var(--s-primary);
+  border-color: var(--s-primary);
+}
+.phase[data-phase="exploring"] .node {
+  border-color: var(--s-ink-3);
+  border-style: dashed;
+}
+.node svg {
+  color: var(--s-primary-soft);
+}
+
+.title {
+  font-family: var(--s-display);
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  font-size: clamp(21px, 2.4vw, 27px);
+  line-height: 1.15;
+  margin: 0;
+  color: var(--s-ink);
+  text-wrap: balance;
+}
+.count {
+  margin-left: 10px;
+  font-family: var(--s-mono);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--s-primary-d);
+  vertical-align: 3px;
+}
+.lede {
+  margin: 6px 0 0;
+  font-size: 14.5px;
+  line-height: 1.55;
+  color: var(--s-ink-2);
+  max-width: 62ch;
+  text-wrap: pretty;
+}
+
+.items {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 2px;
+}
+
+.item {
+  position: relative;
+  padding: 9px 0 9px 0;
+  border-top: 1px solid transparent;
+}
+.item + .item {
+  border-top-color: var(--s-line);
+}
+
+/* Marker states. Filled = done. Ring = under way. Hollow dashed = speculative. */
+.dot {
+  position: absolute;
+  left: -32px;
+  top: 15px;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  box-sizing: border-box;
+}
+.phase[data-phase="live"] .dot {
+  background: var(--s-primary);
+}
+.phase[data-phase="building"] .dot {
+  background: var(--s-paper);
+  border: 2px solid var(--s-primary);
+}
+.phase[data-phase="exploring"] .dot {
+  background: transparent;
+  border: 1px dashed var(--s-ink-3);
+}
+
+.name {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  line-height: 1.35;
+  color: var(--s-ink);
+}
+.note {
+  margin: 3px 0 0;
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: var(--s-ink-2);
+  max-width: 68ch;
+  text-wrap: pretty;
+}
+.phase[data-phase="exploring"] .name {
+  color: var(--s-ink-2);
+}
+
+@media (max-width: 560px) {
+  .phase {
+    padding-left: 28px;
+  }
+  .node {
+    left: -28px;
+  }
+  .dot {
+    left: -26px;
+  }
+}

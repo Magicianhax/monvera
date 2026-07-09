@@ -1,5 +1,6 @@
 import { SiteLanding } from "@/components/site/SiteLanding";
 import { getVeraRecordServer } from "@/lib/server/executorLogs";
+import { getPublicStrategies } from "@/lib/server/strategies";
 import { riskLabel, txUrl } from "@/lib/format";
 
 // Marketing site — the public landing at the root URL. The product itself lives
@@ -15,7 +16,12 @@ const REGISTRY_LIVE =
   IDENTITY_REGISTRY.toLowerCase() !== "0x0000000000000000000000000000000000000000";
 
 export default async function Home() {
-  const record = await getVeraRecordServer().catch(() => null);
+  // The strategy preview shows the real book (same engine as /strategies). If it
+  // cannot be read, the section simply does not render rather than showing stubs.
+  const [record, book] = await Promise.all([
+    getVeraRecordServer().catch(() => null),
+    getPublicStrategies().catch(() => null),
+  ]);
   const latest = record?.recentRecommendations?.[0] ?? null;
   const vera = {
     agentId: AGENT_ID,
@@ -32,5 +38,5 @@ export default async function Home() {
         }
       : null,
   };
-  return <SiteLanding veraStats={vera} />;
+  return <SiteLanding veraStats={vera} strategies={book?.strategies ?? []} />;
 }

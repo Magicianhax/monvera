@@ -21,6 +21,9 @@ import { SUPPORT_EMAIL } from "@/lib/seo";
 import { MonveraIcon } from "@/components/design";
 import { DemoMount } from "@/components/demo/DemoMount";
 import type { DemoPlay } from "@/components/demo/DemoProvider";
+import { ROADMAP } from "@/lib/roadmap";
+import { StrategyCurve, pctLabel } from "./StrategyCurve";
+import type { PublicStrategy } from "@/lib/server/strategies";
 import { PhoneChrome } from "@/components/site/PhoneChrome";
 import s from "./SiteLanding.module.css";
 import { asset } from "@/lib/assets";
@@ -118,10 +121,55 @@ function compactUsd(n: number): string {
   return `$${Math.round(n)}`;
 }
 
-export function SiteLanding({ veraStats = null }: { veraStats?: VeraStats | null }) {
+export function SiteLanding({
+  veraStats = null,
+  strategies = [],
+}: {
+  veraStats?: VeraStats | null;
+  /** The real strategy book, read server-side. Empty renders no preview. */
+  strategies?: PublicStrategy[];
+}) {
   const root = useRef<HTMLDivElement>(null);
   const [mode, setMode] = useState<Mode>("light");
   const [menuOpen, setMenuOpen] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
+  const moreRef = useRef<HTMLDivElement>(null);
+  const moreCloseTimer = useRef<number | null>(null);
+
+  // Hover opens "More" on pointers that have one; a short close delay forgives
+  // the trip from the button to the panel. Click and Escape still work, which is
+  // what touch and keyboard use.
+  const openMore = () => {
+    if (moreCloseTimer.current !== null) {
+      window.clearTimeout(moreCloseTimer.current);
+      moreCloseTimer.current = null;
+    }
+    setMoreOpen(true);
+  };
+  const closeMoreSoon = () => {
+    if (moreCloseTimer.current !== null) window.clearTimeout(moreCloseTimer.current);
+    moreCloseTimer.current = window.setTimeout(() => setMoreOpen(false), 120);
+  };
+  useEffect(() => () => {
+    if (moreCloseTimer.current !== null) window.clearTimeout(moreCloseTimer.current);
+  }, []);
+
+  // Dismiss the "More" menu on outside click or Escape, and return focus sanely.
+  useEffect(() => {
+    if (!moreOpen) return;
+    const onDown = (e: MouseEvent) => {
+      if (moreRef.current && !moreRef.current.contains(e.target as Node)) setMoreOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setMoreOpen(false);
+    };
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [moreOpen]);
   // Defer the 7 non-first hero slides + mascots to idle time: 16 large webps
   // otherwise compete with LCP on phone connections. The slideshow's first
   // transition starts at 3.6s, long after these land.
@@ -264,12 +312,30 @@ export function SiteLanding({ veraStats = null }: { veraStats?: VeraStats | null
     { scope: root },
   );
 
+  // The four destinations people actually come for stand on their own. The rest
+  // live behind "More", so the bar stays short as the site grows.
+  const PRIMARY = [
+    ["#vera", "Vera"],
+    ["#how", "How it works"],
+    ["#strategies", "Strategies"],
+    ["#roadmap", "Roadmap"],
+  ] as const;
+  const SECONDARY = [
+    ["#own", "What you own"],
+    ["#built", "Built on"],
+    ["#faq", "FAQ"],
+  ] as const;
+
+  const primaryLinks = PRIMARY.map(([href, label]) => (
+    <a key={href} href={href} onClick={() => setMenuOpen(false)}>{label}</a>
+  ));
+  const secondaryLinks = SECONDARY.map(([href, label]) => (
+    <a key={href} href={href} onClick={() => { setMenuOpen(false); setMoreOpen(false); }}>{label}</a>
+  ));
   const navLinks = (
     <>
-      <a href="#how" onClick={() => setMenuOpen(false)}>How it works</a>
-      <a href="#own" onClick={() => setMenuOpen(false)}>What you own</a>
-      <a href="#built" onClick={() => setMenuOpen(false)}>Built on</a>
-      <a href="#faq" onClick={() => setMenuOpen(false)}>FAQ</a>
+      {primaryLinks}
+      {secondaryLinks}
     </>
   );
 
@@ -281,7 +347,29 @@ export function SiteLanding({ veraStats = null }: { veraStats?: VeraStats | null
       <nav className={`${s.nav} js-nav`}>
         <div className={s.navInner}>
           <a className={s.brand} href="#top"><MonveraIcon size={24} /> Monvera</a>
-          <div className={s.navLinks}>{navLinks}</div>
+          <div className={s.navLinks}>
+            {primaryLinks}
+            <div className={s.more} ref={moreRef} onMouseEnter={openMore} onMouseLeave={closeMoreSoon}>
+              <button
+                type="button"
+                className={s.moreBtn}
+                onClick={() => setMoreOpen((o) => !o)}
+                onFocus={openMore}
+                aria-expanded={moreOpen}
+                aria-haspopup="menu"
+              >
+                More
+                <ChevronDown size={15} strokeWidth={2.1} aria-hidden data-open={moreOpen || undefined} />
+              </button>
+              {moreOpen && (
+                <div className={s.morePanel}>
+                  <div className={s.morePanelCard} role="menu">
+                    {secondaryLinks}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
           <div className={s.navActions}>
             <button className={s.iconBtn} onClick={toggleMode} aria-label="Toggle theme">
               {mode === "dark" ? <Sun size={19} strokeWidth={1.9} /> : <Moon size={19} strokeWidth={1.9} />}
@@ -358,7 +446,7 @@ export function SiteLanding({ veraStats = null }: { veraStats?: VeraStats | null
       </section>
 
       {/* TRUST — honest numbers + three pillars */}
-      <section className={`${s.section} ${s.sectionTightBottom}`}>
+      <section className={`${s.section} ${s.sectionTightBottom}`} id="vera">
         <div className={s.wrap}>
           <div className={s.ownHead}>
             <h2 className={`${s.display} ${s.h2}`}>You stay in control.</h2>
@@ -452,7 +540,7 @@ export function SiteLanding({ veraStats = null }: { veraStats?: VeraStats | null
       <section className={`${s.section} ${s.sectionTightTop}`} id="own">
         <div className={s.wrap}>
           <div className={s.ownHead}>
-            <h2 className={`${s.display} ${s.h2}`}>Own real shares of <span style={{ color: "var(--s-primary-d)" }}>~100</span> companies and funds.</h2>
+            <h2 className={`${s.display} ${s.h2}`}>Own real shares of <span style={{ color: "var(--s-primary-d)" }}>95</span> companies and funds.</h2>
             <p className={s.lead}>Apple, Nvidia, the S&amp;P 500, US Treasuries and more, each a real share tokenized one-to-one, held by you. From a single dollar.</p>
           </div>
           <div className={s.field}>
@@ -476,6 +564,84 @@ export function SiteLanding({ veraStats = null }: { veraStats?: VeraStats | null
             </div>
             <div className={s.phoneSlot}><Phone play="invest" mode={mode} /></div>
           </div>
+        </div>
+      </section>
+
+      {/* STRATEGIES — the real book, read server-side. No data, no section. */}
+      {strategies.length > 0 && (
+        <section className={s.section} id="strategies">
+          <div className={s.wrap}>
+            <div className={s.stratHead}>
+              <h2 className={`${s.display} ${s.h2}`}>Rules you can read, backtested in the open.</h2>
+              <p className={s.lead}>
+                Three rule-based portfolios, recomputed from real market data every six hours and tested walk-forward,
+                so no rule gets credit for seeing the answer sheet. Solid line is the strategy, dashed is the S&amp;P 500.
+              </p>
+            </div>
+
+            <ul className={`${s.stratList} js-stagger`}>
+              {strategies.slice(0, 3).map((st) => (
+                <li key={st.id} className={s.stratRow}>
+                  <div className={s.stratName}>
+                    <h3>{st.name}</h3>
+                    <p>{st.tagline}</p>
+                  </div>
+                  <div className={s.stratCurve}>{st.backtest && <StrategyCurve bt={st.backtest} height={62} />}</div>
+                  {st.backtest && (
+                    <div className={s.stratNums}>
+                      <div>
+                        <span className={s.stratNum}>{pctLabel(st.backtest.portfolio.returnPct)}</span>
+                        <span className={s.stratNumLabel}>6m walk-forward</span>
+                      </div>
+                      <div>
+                        <span className={`${s.stratNum} ${s.stratNumMuted}`}>{pctLabel(st.backtest.benchmark.returnPct)}</span>
+                        <span className={s.stratNumLabel}>S&amp;P 500</span>
+                      </div>
+                    </div>
+                  )}
+                </li>
+              ))}
+            </ul>
+
+            <a className={s.viewAll} href="/strategies">
+              See every strategy, its method, and its backtest <ArrowUpRight size={16} strokeWidth={2.2} aria-hidden />
+            </a>
+          </div>
+        </section>
+      )}
+
+      {/* ROADMAP — one rail, laid on its side. Certainty decays left to right. */}
+      <section className={s.section} id="roadmap">
+        <div className={s.wrap}>
+          <div className={s.stratHead}>
+            <h2 className={`${s.display} ${s.h2}`}>What is built, and what is still a guess.</h2>
+            <p className={s.lead}>
+              The line is solid where something already works, and it thins and breaks where we are still figuring it
+              out. No dates, and nothing here is a promise.
+            </p>
+          </div>
+
+          <ol className={`${s.track} js-stagger`}>
+            {ROADMAP.map((phase) => (
+              <li key={phase.phase} className={s.station} data-phase={phase.phase}>
+                <span className={s.trackLine} aria-hidden />
+                <span className={s.stationDot} aria-hidden />
+                <h3 className={s.stationTitle}>
+                  {phase.title} <span className={s.stationCount}>{phase.items.length}</span>
+                </h3>
+                <ul className={s.stationItems}>
+                  {phase.items.slice(0, 3).map((it) => (
+                    <li key={it.name}>{it.name}</li>
+                  ))}
+                  {phase.items.length > 3 && <li className={s.stationMore}>and {phase.items.length - 3} more</li>}
+                </ul>
+              </li>
+            ))}
+          </ol>
+
+          <a className={s.viewAll} href="/roadmap">
+            View the full roadmap <ArrowUpRight size={16} strokeWidth={2.2} aria-hidden />
+          </a>
         </div>
       </section>
 
@@ -554,8 +720,10 @@ export function SiteLanding({ veraStats = null }: { veraStats?: VeraStats | null
               <a href="#how">How it works</a>
               <a href="#own">What you own</a>
               <Link href="/agent">Meet Vera</Link>
+              <Link href="/strategies">Open strategies</Link>
               <Link href="/demo">Try the demo</Link>
               <Link href="/app">Open the app</Link>
+              <Link href="/roadmap">Roadmap</Link>
               <a href="https://docs.monvera.best">Docs</a>
             </div>
             <div className={s.footerCol}>

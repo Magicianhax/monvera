@@ -1,0 +1,140 @@
+/* The strategy book. Ledger register: hairline rules, flat surfaces, the data
+   does the talking. Tokens are the committed `.site` scope. */
+
+.inlineLink {
+  color: var(--s-primary-d);
+  font-weight: 600;
+}
+.inlineLink:hover {
+  text-decoration: underline;
+}
+
+.book {
+  margin-top: clamp(38px, 5vw, 58px);
+  display: grid;
+  gap: clamp(30px, 4vw, 44px);
+}
+
+.strategy {
+  border-top: 1px solid var(--s-line);
+  padding-top: 24px;
+}
+
+.head {
+  margin-bottom: 18px;
+}
+.name {
+  font-family: var(--s-display);
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  font-size: clamp(23px, 2.6vw, 30px);
+  line-height: 1.12;
+  margin: 0;
+  color: var(--s-ink);
+}
+.tagline {
+  margin: 6px 0 0;
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--s-ink-2);
+  max-width: 62ch;
+}
+
+.stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px 34px;
+  margin-top: 16px;
+}
+.stat {
+  min-width: 108px;
+}
+.statLabel {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--s-ink-3);
+}
+.statValue {
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
+  color: var(--s-ink);
+  margin-top: 1px;
+}
+.statAccent {
+  color: var(--s-primary-d);
+}
+
+.weights {
+  margin-top: 22px;
+}
+.bar {
+  display: flex;
+  height: 10px;
+  border-radius: 4px;
+  overflow: hidden;
+  gap: 2px;
+}
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  margin-top: 11px;
+  font-size: 13px;
+  color: var(--s-ink-2);
+}
+.legendItem b {
+  color: var(--s-ink);
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+}
+.swatch {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  margin-right: 5px;
+}
+
+.rule {
+  margin-top: 18px;
+}
+.rule summary {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--s-primary-d);
+  cursor: pointer;
+  list-style: none;
+}
+.rule summary::-webkit-details-marker {
+  display: none;
+}
+.rule summary::before {
+  content: "+ ";
+  font-weight: 700;
+}
+.rule[open] summary::before {
+  content: "− ";
+}
+.rule summary:focus-visible {
+  outline: 2px solid var(--s-primary);
+  outline-offset: 3px;
+  border-radius: 3px;
+}
+.rule p {
+  font-size: 13.5px;
+  line-height: 1.65;
+  color: var(--s-ink-2);
+  margin: 9px 0 0;
+  max-width: 74ch;
+  text-wrap: pretty;
+}
+
+.asOf {
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--s-ink-3);
+  margin-top: 28px;
+  max-width: 74ch;
+}

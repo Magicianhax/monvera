@@ -500,6 +500,8 @@ details[open] .faqIco { transform: rotate(180deg); }
 .footerCol h4 { font-size: 13px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--s-ink-3); margin: 0 0 14px; }
 .footerCol a, .footerCol span { display: block; color: var(--s-ink-2); font-size: 14.5px; text-decoration: none; margin-bottom: 10px; }
 .footerCol a:hover { color: var(--s-primary-d); }
+/* A note, not a destination: quieter than the links it sits beneath. */
+.footerCol span { color: var(--s-ink-3); font-size: 13px; margin-top: 2px; }
 .footerBottom { display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-top: 48px; padding-top: 22px; border-top: 1px solid var(--s-line); color: var(--s-ink-3); font-size: 13px; }
 
 /* ── Responsive ───────────────────────────────────────────────────────────── */
@@ -515,6 +517,7 @@ details[open] .faqIco { transform: rotate(180deg); }
   .navActions { margin-left: auto; }
   .burger { display: grid; }
   .footerGrid { grid-template-columns: 1fr 1fr; }
+  .footerBrand { grid-column: 1 / -1; }
 }
 @media (max-width: 760px) {
   /* Stack the proof: mascot centered above the card at a fixed size (the
@@ -539,11 +542,28 @@ details[open] .faqIco { transform: rotate(180deg); }
   .pillar { text-align: center; }
   .pillarText { margin-inline: auto; }
   /* Footer: one centered column instead of a left-hugging stack. */
-  .footerGrid { grid-template-columns: 1fr; text-align: center; }
-  .footerBrand p { margin-inline: auto; }
-  .footerBottom { flex-direction: column; text-align: center; align-items: center; }
-  .footerCol a { padding-block: 8px; margin-bottom: 2px; }
-  .footerCol h4 { margin-top: 10px; }
+  /* Footer on phones: the brand sits on its own full-width row, then the three
+     link groups stand side by side. One centred column ran on forever and read
+     as an unstructured list. */
+  .footerGrid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 30px 14px;
+    text-align: left;
+  }
+  .footerBrand {
+    grid-column: 1 / -1;
+  }
+  .footerBrand p { margin: 12px 0 0; max-width: 42ch; }
+  .footerCol h4 { margin: 0 0 12px; font-size: 12px; }
+  .footerCol a,
+  .footerCol span {
+    font-size: 13.5px;
+    line-height: 1.4;
+    margin-bottom: 9px;
+    padding-block: 3px;
+    overflow-wrap: break-word;
+  }
+  .footerBottom { flex-direction: column; text-align: left; align-items: flex-start; }
   .pillars { grid-template-columns: 1fr; gap: 26px; }
   .pillars > .pillar:last-child { grid-column: auto; }
   .planRow { gap: 9px; }
@@ -551,8 +571,9 @@ details[open] .faqIco { transform: rotate(180deg); }
   .planPct { width: 30px; }
   .veraStatStrip { gap: 4px; }
   /* The burger menu: a compact 2-across grid, not a tall single-file list. */
-  .navDropPanel { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
-  .navDropPanel a { text-align: center; padding: 13px 8px; background: color-mix(in srgb, var(--s-primary-soft) 55%, transparent); }
+  /* One straight column. It may run long; the menu closes on tap. */
+  .navDropPanel { display: grid; grid-template-columns: 1fr; gap: 4px; }
+  .navDropPanel a { text-align: left; padding: 13px 14px; background: color-mix(in srgb, var(--s-primary-soft) 55%, transparent); }
 }
 @media (max-width: 520px) {
   /* The pill's min-content exceeds a 320-390px viewport with the CTA inline;
@@ -572,4 +593,317 @@ details[open] .faqIco { transform: rotate(180deg); }
 /* ── Reduced motion: kill the CSS drifts (GSAP handles its own guard) ─────── */
 @media (prefers-reduced-motion: reduce) {
   .fieldRow, .aura { animation: none !important; }
+}
+
+/* ─── Nav "More" menu ────────────────────────────────────────────────────────
+   The four destinations people come for stand alone; the rest sit behind this,
+   so the bar stays short. Rendered inside the fixed nav, so no clipping. */
+.more {
+  position: relative;
+}
+.moreBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+}
+.moreBtn svg {
+  transition: transform 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.moreBtn svg[data-open] {
+  transform: rotate(180deg);
+}
+/* The panel sits flush against the button and pads itself, so the pointer never
+   crosses dead space on the way down and the hover never flickers. */
+.morePanel {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  padding-top: 12px;
+  z-index: 40;
+}
+/* Same material as the nav pill: glass, white hairline, inset highlight. */
+.morePanelCard {
+  min-width: 178px;
+  display: grid;
+  gap: 3px;
+  padding: 8px;
+  border-radius: 16px;
+  background: var(--s-glass-strong);
+  backdrop-filter: blur(24px) saturate(1.7);
+  -webkit-backdrop-filter: blur(24px) saturate(1.7);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.5),
+    0 18px 44px rgba(30, 44, 30, 0.16);
+}
+.morePanelCard a {
+  display: block;
+  padding: 10px 12px;
+  border-radius: 11px;
+  font-size: 14.5px;
+  font-weight: 500;
+  color: var(--s-ink);
+  white-space: nowrap;
+}
+.morePanelCard a:hover {
+  background: var(--s-primary-soft);
+}
+.morePanelCard a:focus-visible {
+  outline: 2px solid var(--s-primary);
+  outline-offset: -2px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .moreBtn svg {
+    transition: none;
+  }
+}
+
+/* ─── Section head shared by the strategy + roadmap previews ─────────────── */
+.stratHead {
+  max-width: 62ch;
+  margin-bottom: clamp(28px, 3.6vw, 44px);
+}
+/* The landing centres .h2/.lead under 560px. These two sections are list-led:
+   a centred head above a left-aligned rail reads as broken alignment, so they
+   stay flush left with the rail and the rows beneath them. */
+@media (max-width: 560px) {
+  .stratHead h2,
+  .stratHead p {
+    text-align: left;
+    margin-inline: 0;
+  }
+}
+
+/* ─── Strategy preview: a ledger, not cards ──────────────────────────────── */
+.stratList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.stratRow {
+  display: grid;
+  grid-template-columns: minmax(200px, 1.05fr) minmax(160px, 1.15fr) auto;
+  align-items: center;
+  gap: clamp(16px, 3vw, 40px);
+  padding: 20px 0;
+  border-top: 1px solid var(--s-line);
+}
+.stratRow:last-child {
+  border-bottom: 1px solid var(--s-line);
+}
+.stratName h3 {
+  font-family: var(--s-display);
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  font-size: clamp(19px, 2.1vw, 23px);
+  line-height: 1.16;
+  margin: 0;
+  color: var(--s-ink);
+}
+.stratName p {
+  margin: 5px 0 0;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--s-ink-2);
+  max-width: 42ch;
+}
+.stratCurve {
+  min-width: 0;
+}
+.stratNums {
+  display: flex;
+  gap: clamp(16px, 2.4vw, 30px);
+  text-align: right;
+}
+.stratNum {
+  display: block;
+  font-size: 19px;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+  font-variant-numeric: tabular-nums;
+  color: var(--s-primary-d);
+}
+.stratNumMuted {
+  color: var(--s-ink-2);
+}
+.stratNumLabel {
+  display: block;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--s-ink-3);
+  margin-top: 2px;
+  white-space: nowrap;
+}
+
+@media (max-width: 860px) {
+  .stratRow {
+    grid-template-columns: 1fr;
+    gap: 14px;
+  }
+  .stratNums {
+    text-align: left;
+  }
+}
+
+/* ─── Roadmap preview: the rail, laid on its side ────────────────────────── */
+.track {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0;
+}
+.station {
+  position: relative;
+  padding: 32px clamp(16px, 2.4vw, 34px) 0 0;
+}
+.trackLine {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 7px;
+  height: 2px;
+  border-radius: 2px;
+}
+.station[data-phase="live"] .trackLine {
+  background: color-mix(in srgb, var(--s-primary) 38%, transparent);
+}
+.station[data-phase="building"] .trackLine {
+  height: 1px;
+  top: 7.5px;
+  background: var(--s-line);
+}
+.station[data-phase="exploring"] .trackLine {
+  height: 1px;
+  top: 7.5px;
+  background: repeating-linear-gradient(to right, var(--s-line) 0 5px, transparent 5px 11px);
+  -webkit-mask-image: linear-gradient(to right, #000 0%, #000 48%, transparent 96%);
+  mask-image: linear-gradient(to right, #000 0%, #000 48%, transparent 96%);
+}
+.stationDot {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  box-sizing: border-box;
+  z-index: 1;
+}
+.station[data-phase="live"] .stationDot {
+  background: var(--s-primary);
+}
+.station[data-phase="building"] .stationDot {
+  background: var(--s-paper);
+  border: 2px solid var(--s-primary);
+}
+.station[data-phase="exploring"] .stationDot {
+  background: var(--s-paper);
+  border: 1px dashed var(--s-ink-3);
+}
+.stationTitle {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  margin: 0 0 10px;
+  color: var(--s-ink);
+}
+.stationCount {
+  font-family: var(--s-mono);
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--s-primary-d);
+  margin-left: 5px;
+  vertical-align: 1px;
+}
+.stationItems {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 5px;
+  font-size: 13.5px;
+  line-height: 1.45;
+  color: var(--s-ink-2);
+}
+.station[data-phase="exploring"] .stationItems {
+  color: var(--s-ink-3);
+}
+.stationMore {
+  color: var(--s-ink-3);
+  font-style: italic;
+}
+
+@media (max-width: 760px) {
+  .track {
+    grid-template-columns: 1fr;
+    gap: 26px;
+  }
+  .station {
+    padding: 0 0 0 30px;
+  }
+  .trackLine {
+    left: 7px;
+    right: auto;
+    top: 8px;
+    bottom: -26px;
+    width: 2px;
+    height: auto;
+  }
+  .station[data-phase="building"] .trackLine,
+  .station[data-phase="exploring"] .trackLine {
+    width: 1px;
+    left: 7.5px;
+    height: auto;
+  }
+  .station[data-phase="exploring"] .trackLine {
+    background: repeating-linear-gradient(to bottom, var(--s-line) 0 5px, transparent 5px 11px);
+    -webkit-mask-image: linear-gradient(to bottom, #000 0%, #000 48%, transparent 96%);
+    mask-image: linear-gradient(to bottom, #000 0%, #000 48%, transparent 96%);
+  }
+  .station:last-child .trackLine {
+    bottom: 0;
+  }
+  .stationDot {
+    left: 0;
+    top: 1px;
+  }
+}
+
+/* ─── "View all" link, shared by both previews ───────────────────────────── */
+.viewAll {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: clamp(26px, 3vw, 38px);
+  font-size: 14.5px;
+  font-weight: 600;
+  color: var(--s-primary-d);
+}
+.viewAll svg {
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.viewAll:hover {
+  text-decoration: underline;
+}
+.viewAll:hover svg {
+  transform: translate(2px, -2px);
+}
+.viewAll:focus-visible {
+  outline: 2px solid var(--s-primary);
+  outline-offset: 4px;
+  border-radius: 4px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .viewAll svg {
+    transition: none;
+  }
 }
