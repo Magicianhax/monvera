@@ -12,7 +12,8 @@ import "server-only";
 //
 // It never exceeds the authorized amount, risk ceiling, or per-period cap.
 import { createPublicClient, encodeFunctionData, http, parseAbi } from "viem";
-import { chain, RPC_URL } from "@/lib/chain";
+import { chain } from "@/lib/chain";
+import { SERVER_RPC_URL } from "@/lib/server/rpc";
 import { checkBounds, type AutopilotConfig } from "@/lib/autopilot";
 import { recordRun, logRun } from "@/lib/server/autopilotStore";
 import { addNotification } from "@/lib/server/notifyStore";
@@ -34,7 +35,7 @@ const RISK_CEILING_BPS = 10000;
 const MIN_LEG_MICRO = BigInt(500_000);
 const MAX_UINT256 = (BigInt(1) << BigInt(256)) - BigInt(1);
 
-const publicClient = createPublicClient({ chain, transport: http(RPC_URL) });
+const publicClient = createPublicClient({ chain, transport: http(SERVER_RPC_URL) });
 
 const PERMIT_ABI = parseAbi([
   "function permit(address owner, address spender, uint256 value, uint256 deadline, uint8 v, bytes32 r, bytes32 s)",

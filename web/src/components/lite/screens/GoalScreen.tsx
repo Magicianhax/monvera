@@ -5,7 +5,7 @@
 // { goal, amt } up to the router, which calls useInvest.allocate (POST /api/allocate).
 // Restructured for the rounded/glass theme: %-of-balance amount presets and
 // iconed suggestion chips so a first-timer can move without typing.
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useUsdcBalance } from "@/hooks/useBalances";
 import { useSmartAccount } from "@/hooks/useSmartAccount";
 import { Icon, VeraOrb, type IconName } from "@/components/design";
@@ -36,14 +36,23 @@ export function GoalScreen({
   const balance = bal?.value ?? 0;
 
   const [goal, setGoal] = useState("");
-  const [amt, setAmt] = useState("300");
+  // Seeded from the REAL balance once it loads (was a hardcoded $300, which sat
+  // there even when the user held $3). Never overwrite something they typed.
+  const [amt, setAmt] = useState("");
+  const touched = useRef(false);
+  useEffect(() => {
+    if (touched.current || amt !== "" || balance <= 0) return;
+    setAmt(String(Math.max(1, Math.floor(balance))));
+  }, [balance, amt]);
 
-  const amount = parseFloat(amt);
-  const ready = goal.trim().length > 3 && amount > 0;
+  const amount = parseFloat(amt) || 0;
+  const over = balance > 0 && amount > balance + 1e-6;
+  const ready = goal.trim().length > 3 && amount > 0 && !over;
 
   const setPreset = (frac: number) => {
     // Whole dollars, never more than the balance; Max uses the full balance.
     const v = Math.max(1, Math.floor(balance * frac));
+    touched.current = true;
     setAmt(String(v));
     haptic.select();
   };
@@ -94,7 +103,10 @@ export function GoalScreen({
             </span>
             <input
               value={amt}
-              onChange={(e) => setAmt(e.target.value.replace(/[^0-9.]/g, ""))}
+              onChange={(e) => {
+                touched.current = true;
+                setAmt(e.target.value.replace(/[^0-9.]/g, ""));
+              }}
               inputMode="decimal"
               aria-label="Amount to invest"
               className="tnum"
@@ -158,6 +170,11 @@ export function GoalScreen({
       </div>
 
       <div style={{ padding: "12px 22px calc(18px + env(safe-area-inset-bottom))" }}>
+        {over && (
+          <p style={{ textAlign: "center", margin: "0 0 10px", fontSize: 12.5, color: "var(--ink-3)" }}>
+            That&apos;s more than your {usd(balance)}. Lower the amount or add money first.
+          </p>
+        )}
         <button
           className="btn btn-primary btn-block btn-lg tap"
           disabled={!ready}

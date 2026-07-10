@@ -40,6 +40,7 @@ export const ROADMAP: RoadmapPhase[] = [
       { name: "Explain my risk", note: "What a rough week could cost your plan, in dollars, before you commit." },
       { name: "Self-custody proof", note: "A live on-chain panel showing the account is yours and Monvera cannot move it." },
       { name: "Vera's public agent page", note: "Her verifiable on-chain identity and recorded track record, open to anyone." },
+      { name: "Portfolio review", note: "One tap and Vera reads what you own: concentration, overlap, and how the mix has actually behaved." },
       { name: "Agent card", note: "A machine-readable ERC-8004 endpoint so other agents can find and verify Vera." },
       { name: "Documentation", note: "Plain-language guides and a full developer reference at docs.monvera.best." },
     ],

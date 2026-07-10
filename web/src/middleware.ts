@@ -17,6 +17,7 @@ export const config = {
     "/app",
     "/api/quote/:path*",
     "/api/allocate/:path*",
+    "/api/portfolio-review/:path*",
     "/api/autopilot/:path*",
     "/api/pimlico/:path*",
   ],

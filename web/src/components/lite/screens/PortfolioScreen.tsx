@@ -339,6 +339,35 @@ export function PortfolioScreen({
         );
       })()}
 
+      {/* Vera reads the whole thing: concentration, overlap, real history. */}
+      <section style={{ padding: "18px 22px 0" }}>
+        <button
+          className="card tap"
+          style={{
+            width: "100%",
+            padding: "14px 16px",
+            display: "flex",
+            alignItems: "center",
+            gap: 12,
+            textAlign: "left",
+            border: "none",
+            font: "inherit",
+            color: "inherit",
+            cursor: "pointer",
+          }}
+          onClick={() => go("review")}
+        >
+          <VeraOrb size={30} />
+          <span style={{ flex: 1 }}>
+            <span style={{ display: "block", fontSize: 14.5, fontWeight: 650 }}>Review my portfolio</span>
+            <span style={{ display: "block", fontSize: 12.5, color: "var(--ink-3)" }}>
+              Vera reads what you own: concentration, overlap, and how this mix has behaved.
+            </span>
+          </span>
+          <Icon name="chevR" size={16} />
+        </button>
+      </section>
+
       {/* ── Holdings — one outer box, each row a mini box inside ── */}
       <section style={{ padding: "18px 22px 0" }}>
         <div className="card" style={{ padding: 12 }}>

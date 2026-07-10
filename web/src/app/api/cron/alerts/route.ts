@@ -7,7 +7,8 @@ import { activeAlerts, claimTriggered, addNotification } from "@/lib/server/noti
 import { priceAllWithFallback } from "@/lib/server/pricing";
 import { getDaySummary } from "@/lib/server/marketData";
 import { ALL_ASSETS } from "@/lib/tokens";
-import { chain, RPC_URL } from "@/lib/chain";
+import { chain } from "@/lib/chain";
+import { SERVER_RPC_URL } from "@/lib/server/rpc";
 import { displayFor } from "@/lib/displayAssets";
 import { usd } from "@/lib/format";
 
@@ -30,7 +31,7 @@ export async function GET(req: NextRequest) {
     // mirroring how the app itself prices feedless assets.
     const wanted = new Set(alerts.map((a) => a.symbol));
     const assets = ALL_ASSETS.filter((a) => wanted.has(a.symbol));
-    const client = createPublicClient({ chain, transport: http(RPC_URL) });
+    const client = createPublicClient({ chain, transport: http(SERVER_RPC_URL) });
     const [feeds, summary] = await Promise.all([priceAllWithFallback(client, assets), getDaySummary()]);
     const prices: Record<string, number | undefined> = {};
     for (const sym of wanted) {

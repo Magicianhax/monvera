@@ -52,7 +52,7 @@ function systemPrompt(statsBlock: string | null): string {
 // Some OpenAI-compatible proxies (e.g. Virtuals compute) drop response_format,
 // so the model can wrap or replace the JSON with prose. Salvage the object from
 // the raw text instead of failing the request.
-function extractJson(text: string): unknown {
+export function extractJson(text: string): unknown {
   const candidates: string[] = [];
   const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/);
   if (fenced) candidates.push(fenced[1]);
@@ -69,7 +69,7 @@ function extractJson(text: string): unknown {
   throw new Error("Model output contained no JSON object.");
 }
 
-function rawTextFrom(err: unknown): string | undefined {
+export function rawTextFrom(err: unknown): string | undefined {
   const e = err as { text?: unknown; cause?: { text?: unknown } };
   if (typeof e?.text === "string") return e.text;
   if (typeof e?.cause?.text === "string") return e.cause.text;

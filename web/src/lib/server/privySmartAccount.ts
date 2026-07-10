@@ -8,7 +8,8 @@ import "server-only";
 // Requires: PRIVY_APP_SECRET (+ app id), PRIVY_AUTHORIZATION_KEY (the wallet-API
 // authorization private key, base64 PKCS8), and PIMLICO_API_KEY.
 import { createPublicClient, http, type Address } from "viem";
-import { chain, RPC_URL } from "@/lib/chain";
+import { chain } from "@/lib/chain";
+import { SERVER_RPC_URL } from "@/lib/server/rpc";
 import { entryPoint07Address } from "viem/account-abstraction";
 import { createSmartAccountClient } from "permissionless";
 import { toSimpleSmartAccount } from "permissionless/accounts";
@@ -17,7 +18,7 @@ import { PrivyClient } from "@privy-io/node";
 import { createViemAccount } from "@privy-io/node/viem";
 
 const ENTRY_POINT = { address: entryPoint07Address, version: "0.7" } as const;
-const publicClient = createPublicClient({ chain, transport: http(RPC_URL) });
+const publicClient = createPublicClient({ chain, transport: http(SERVER_RPC_URL) });
 
 let privyClient: PrivyClient | null = null;
 function privy(): PrivyClient {

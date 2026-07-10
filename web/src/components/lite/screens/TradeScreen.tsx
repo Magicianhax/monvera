@@ -50,7 +50,12 @@ export function TradeScreen({
   // First-load gate: while either market query is in flight we show skeletons
   // instead of the offline fallback numbers (never a fallback dressed as real).
   const marketReady = !priceLoading && !marketLoading;
-  const shownPrice = livePrice ?? d.price;
+  // Price, most authoritative first: on-chain/Arcus spot, else the latest real
+  // market close (same Yahoo source as the chart), else the reference. Without
+  // the middle step, feedless stocks (NFLX etc.) showed "—" here whenever the
+  // Arcus price cache hadn't warmed — while the asset page happily priced them.
+  const marketLast = dayMarket?.series?.length ? dayMarket.series[dayMarket.series.length - 1] : undefined;
+  const shownPrice = livePrice ?? marketLast ?? d.price;
   const day = dayMarket?.changePct ?? d.day;
   const spark = dayMarket?.series ?? d.spark;
   const up = day >= 0;
@@ -109,11 +114,13 @@ export function TradeScreen({
 
   // A sub-minimum order is likely to be turned down by the maker. We don't forbid
   // it — the rule is theirs, and a rejection costs a signature, not money — but the
-  // user has to say they understand before the CTA unlocks.
-  const [acceptRisk, setAcceptRisk] = useState(false);
-  useEffect(() => {
-    if (!underMin) setAcceptRisk(false);
-  }, [underMin, side, asset.symbol]);
+  // user has to say they understand before the CTA unlocks. The acknowledgement is
+  // keyed to side+asset (derived, no effect), so it never carries across to a
+  // different stock or direction, and clears itself once the amount is above min.
+  const riskKey = underMin ? `${side}:${asset.symbol}` : null;
+  const [acceptedFor, setAcceptedFor] = useState<string | null>(null);
+  const acceptRisk = riskKey !== null && acceptedFor === riskKey;
+  const setAcceptRisk = (v: boolean) => setAcceptedFor(v ? riskKey : null);
   const riskBlocked = underMin && !acceptRisk;
 
   const over = side === "buy" && n > balance + 1e-6;

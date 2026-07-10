@@ -18,7 +18,9 @@ import { badRequest, tooManyRequests, serverError } from "@/lib/server/respond";
 
 export const dynamic = "force-dynamic";
 
-const RPC_URL = chain.rpcUrls.default.http[0];
+import { SERVER_RPC_URL } from "@/lib/server/rpc";
+
+const RPC_URL = SERVER_RPC_URL;
 
 const publicClient = createPublicClient({
   chain: {

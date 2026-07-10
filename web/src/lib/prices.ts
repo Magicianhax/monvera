@@ -39,7 +39,7 @@ export interface AssetPrice {
   /** USD per whole token, or undefined if the asset has no live feed / stale price. */
   priceUsd?: number;
   /** Where the price came from (for honesty in the UI / debugging). */
-  source: "chainlink" | "arcus" | "none";
+  source: "chainlink" | "arcus" | "market" | "none";
 }
 
 /** Price a single asset from its Chainlink feed. Best-effort; undefined when no live source. */

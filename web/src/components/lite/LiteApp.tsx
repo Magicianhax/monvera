@@ -34,6 +34,7 @@ import { PlanScreen } from "./screens/PlanScreen";
 import { PlacingScreen } from "./screens/PlacingScreen";
 import { SuccessScreen } from "./screens/SuccessScreen";
 import { PortfolioScreen } from "./screens/PortfolioScreen";
+import { ReviewScreen } from "./screens/ReviewScreen";
 import { MarketScreen } from "./screens/MarketScreen";
 import { MoversScreen } from "./screens/MoversScreen";
 import { NotificationsScreen } from "./screens/NotificationsScreen";
@@ -63,6 +64,7 @@ type Screen =
   | "placing"
   | "success"
   | "portfolio"
+  | "review"
   | "market"
   | "movers"
   | "notifications"
@@ -99,7 +101,7 @@ const TONE_HINT: Record<Tone, string> = {
 
 // Which tab is highlighted for a given screen.
 function tabFor(screen: Screen): TabId {
-  if (screen === "portfolio" || screen === "asset") return "portfolio";
+  if (screen === "portfolio" || screen === "review" || screen === "asset") return "portfolio";
   if (screen === "market") return "market";
   if (screen === "vera") return "vera";
   return "home";
@@ -319,6 +321,7 @@ export function LiteApp({ demoPlay = null }: { demoPlay?: "invest" | "vera" | nu
       placing: "Securing your investment",
       success: "Invested",
       portfolio: "What you own",
+      review: "Portfolio review",
       market: "Market",
       movers: "Movers",
       notifications: "Notifications",
@@ -479,6 +482,9 @@ export function LiteApp({ demoPlay = null }: { demoPlay?: "invest" | "vera" | nu
       break;
     case "portfolio":
       view = <PortfolioScreen go={go} />;
+      break;
+    case "review":
+      view = <ReviewScreen go={go} />;
       break;
     case "market":
       view = <MarketScreen go={go} initialFilter={params.filter as string | undefined} />;

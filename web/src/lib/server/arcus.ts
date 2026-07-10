@@ -16,7 +16,8 @@ import "server-only";
 // Settlement is one atomic on-chain tx; verified working via server curl (no key).
 
 import { createPublicClient, http, parseAbi, type Address, type Hex } from "viem";
-import { CHAIN_ID, chain, RPC_URL } from "@/lib/chain";
+import { CHAIN_ID, chain } from "@/lib/chain";
+import { SERVER_RPC_URL } from "@/lib/server/rpc";
 import { assetBySymbol, USDG } from "@/lib/tokens";
 import type { VenueKind } from "@/lib/arcusShared";
 
@@ -428,7 +429,7 @@ export async function venueKind(sellToken: Address, buyToken: Address): Promise<
   return task;
 }
 
-const rpc = createPublicClient({ chain, transport: http(RPC_URL) });
+const rpc = createPublicClient({ chain, transport: http(SERVER_RPC_URL) });
 const ALLOWANCE_ABI = parseAbi(["function allowance(address,address) view returns (uint256)"]);
 
 /**

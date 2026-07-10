@@ -12,7 +12,9 @@ import { tooManyRequests, serverError } from "@/lib/server/respond";
 
 export const revalidate = 0; // we manage caching via Cache-Control below
 
-const RPC_URL = chain.rpcUrls.default.http[0];
+import { SERVER_RPC_URL } from "@/lib/server/rpc";
+
+const RPC_URL = SERVER_RPC_URL;
 
 // batch.multicall folds the ~30 parallel pool reads (15 assets × slot0/token0)
 // into one eth_call. Without it the public RPC rate-limits the tail of the burst

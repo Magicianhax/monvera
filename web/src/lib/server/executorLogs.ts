@@ -14,7 +14,8 @@ import "server-only";
 // empty result (no pointless whole-chain scans).
 import { createPublicClient, http, decodeEventLog, encodeEventTopics, padHex, zeroAddress } from "viem";
 import type { AbiEvent } from "viem";
-import { chain, RPC_URL, EXPLORER_URL } from "@/lib/chain";
+import { chain, EXPLORER_URL, RPC_URL } from "@/lib/chain";
+import { SERVER_RPC_URL } from "@/lib/server/rpc";
 import {
   STAX_EXECUTOR,
   RECOMMENDATION_COMMITTED,
@@ -40,16 +41,27 @@ const REGISTRY_LIVE = IDENTITY_REGISTRY.toLowerCase() !== zeroAddress;
 const CHUNK = BigInt(9_999);
 const CHUNK_CONCURRENCY = 5;
 
-const client = createPublicClient({ chain, transport: http(RPC_URL) });
+// Point reads (readContract, block number) go through the keyed endpoint;
+// LOG SCANS stay on the public RPC — Alchemy's free tier caps eth_getLogs at a
+// 10-block range, which no scan strategy survives.
+const client = createPublicClient({ chain, transport: http(SERVER_RPC_URL) });
+const logsClient = createPublicClient({ chain, transport: http(RPC_URL) });
 
 // ── tiny in-memory TTL cache ──────────────────────────────────────────────────
 const cache = new Map<string, { at: number; data: unknown }>();
 async function cached<T>(key: string, ttlMs: number, load: () => Promise<T>): Promise<T> {
   const hit = cache.get(key);
   if (hit && Date.now() - hit.at < ttlMs) return hit.data as T;
-  const data = await load();
-  cache.set(key, { at: Date.now(), data });
-  return data;
+  try {
+    const data = await load();
+    cache.set(key, { at: Date.now(), data });
+    return data;
+  } catch (err) {
+    // A refresh blip (Blockscout hiccup, RPC throttle) must never blank a track
+    // record we already know — serve the last good value and retry next time.
+    if (hit) return hit.data as T;
+    throw err;
+  }
 }
 
 // ── 1) Blockscout logs (indexed; keyless; Etherscan-compatible response) ──────
@@ -87,18 +99,18 @@ async function blockscoutLogs(event: AbiEvent, user?: `0x${string}`): Promise<Es
 
 // ── 2) chunked RPC fallback (sequential-ish batches) ──────────────────────────
 async function chunkedLogs(event: AbiEvent, user?: `0x${string}`) {
-  const latest = await client.getBlockNumber();
+  const latest = await logsClient.getBlockNumber();
   const ranges: { from: bigint; to: bigint }[] = [];
   for (let from = DEPLOY_BLOCK; from <= latest; from += CHUNK + BigInt(1)) {
     const to = from + CHUNK > latest ? latest : from + CHUNK;
     ranges.push({ from, to });
   }
-  const out: Awaited<ReturnType<typeof client.getLogs>> = [];
+  const out: Awaited<ReturnType<typeof logsClient.getLogs>> = [];
   for (let i = 0; i < ranges.length; i += CHUNK_CONCURRENCY) {
     const batch = ranges.slice(i, i + CHUNK_CONCURRENCY);
     const results = await Promise.all(
       batch.map((r) =>
-        client.getLogs({
+        logsClient.getLogs({
           address: STAX_EXECUTOR,
           event,
           args: user ? { user } : undefined,
