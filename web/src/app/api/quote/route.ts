@@ -1,11 +1,11 @@
 import type { NextRequest } from "next/server";
 import type { Address } from "viem";
 import { z } from "zod";
-import { getQuote, getPrice, PERMIT2 } from "@/lib/server/arcus";
+import { getQuote, getPrice, getRfqQuote, needsPermit2Allowance, venueKind, PERMIT2 } from "@/lib/server/arcus";
 import { assetBySymbol, USDG } from "@/lib/tokens";
 import { verifyRequest } from "@/lib/server/privyAuth";
 import { rateLimit } from "@/lib/server/rateLimit";
-import { unauthorized, badRequest, tooManyRequests, serverError } from "@/lib/server/respond";
+import { unauthorized, badRequest, tooManyRequests, serverError, jsonError } from "@/lib/server/respond";
 
 // Arcus spot RFQ quote for a manual buy/sell of a Robinhood stock token.
 //   mode "price" -> indicative "you'll get X" (no signable payload)
@@ -19,7 +19,10 @@ const QuoteSchema = z.object({
   mode: z.enum(["price", "quote"]),
   side: z.enum(["buy", "sell"]),
   symbol: z.string().min(1).max(12),
-  sellAmount: z.string().regex(/^\d+$/), // raw base units of the sell token
+  // Raw base units of the sell token. Length-capped: BigInt() parses a decimal
+  // string superlinearly, so an unbounded digit string is a cheap CPU burn.
+  // 30 digits covers any real amount at 18 decimals.
+  sellAmount: z.string().regex(/^\d{1,30}$/),
   taker: z.string().regex(ADDR),
 });
 
@@ -49,26 +52,65 @@ export async function POST(req: NextRequest) {
 
   try {
     if (body.mode === "price") {
-      const p = await getPrice(sellToken, buyToken, sellAmount);
-      return Response.json({ liquidityAvailable: p.liquidityAvailable, buyAmount: p.buyAmount.toString() });
+      // `kind` needs a firm quote (a venue can price a token it cannot settle), but
+      // it is cached per pair for minutes, so this is one extra call now and then —
+      // not per keystroke. It lets the screen warn about RFQ minimums and settlement
+      // time before the user commits.
+      const [p, kind] = await Promise.all([
+        getPrice(sellToken, buyToken, sellAmount),
+        venueKind(sellToken, buyToken),
+      ]);
+      return Response.json({
+        liquidityAvailable: p.liquidityAvailable,
+        buyAmount: p.buyAmount.toString(),
+        kind,
+      });
     }
 
-    const q = await getQuote(sellToken, buyToken, sellAmount, body.taker as Address);
-    if (!q.liquidityAvailable || !q.tx) {
+    const taker = body.taker as Address;
+    const q = await getQuote(sellToken, buyToken, sellAmount, taker);
+    if (q.liquidityAvailable && q.tx) {
+      return Response.json({
+        kind: "tx",
+        liquidityAvailable: true,
+        buyAmount: q.buyAmount.toString(),
+        minBuyAmount: q.minBuyAmount.toString(),
+        needsAllowance: q.needsAllowance,
+        permit2: PERMIT2,
+        sellToken,
+        sellAmount: sellAmount.toString(),
+        toSign: q.toSign,
+        tx: { to: q.tx.to, data: q.tx.data, value: q.tx.value, signatureOffset: q.tx.signatureOffset },
+      });
+    }
+
+    // Most assets quote only on the RFQ venue, which returns no client tx: the
+    // taker signs the intent and the router settles it. Same EOA signature, but
+    // we POST it rather than batching it into our userOp.
+    const rfq = await getRfqQuote(sellToken, buyToken, sellAmount, taker);
+    if (!rfq.liquidityAvailable || !rfq.toSign) {
       return Response.json({ liquidityAvailable: false });
     }
+    const needsAllowance = await needsPermit2Allowance(sellToken, taker, sellAmount);
     return Response.json({
+      kind: "rfq",
       liquidityAvailable: true,
-      buyAmount: q.buyAmount.toString(),
-      minBuyAmount: q.minBuyAmount.toString(),
-      needsAllowance: q.needsAllowance,
+      buyAmount: rfq.buyAmount.toString(),
+      minBuyAmount: rfq.minBuyAmount.toString(),
+      expiry: rfq.expiry,
+      needsAllowance,
       permit2: PERMIT2,
       sellToken,
       sellAmount: sellAmount.toString(),
-      toSign: q.toSign,
-      tx: { to: q.tx.to, data: q.tx.data, value: q.tx.value, signatureOffset: q.tx.signatureOffset },
+      toSign: rfq.toSign,
     });
   } catch (err) {
+    // The router throttles per IP, shared by all our users, so a 429 here says
+    // nothing about this user's trade. Surface it as a retryable "busy" rather than
+    // a 500, so the screen keeps its last price instead of flashing an error.
+    if (err instanceof Error && /Arcus router 429/.test(err.message)) {
+      return jsonError(503, "Prices are busy right now. One moment.");
+    }
     return serverError("quote", err);
   }
 }

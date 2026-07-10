@@ -9,6 +9,7 @@
 // defaults + the same Arcus logo, so nothing ever crashes and every stock shows a
 // real logo (monogram only if the image 404s).
 import { asset } from "./assets";
+import { UNSUPPORTED_SYMBOLS } from "./tokens";
 import type { TileAsset } from "@/components/design";
 
 export interface AssetDisplay extends TileAsset {
@@ -137,7 +138,10 @@ function fallback(symbol: string, name?: string): AssetDisplay {
 export function displayFor(symbol: string, name?: string): AssetDisplay {
   const base = DISPLAY[symbol] ?? fallback(symbol, name);
   const logo = symbol === "USDG" ? base.logo : arcusLogo(symbol);
-  return { ...base, logo };
+  // Assets the router won't quote can't be bought at any size, so the buy CTA
+  // must be off from the start rather than failing at the review sheet.
+  const coming = base.coming || UNSUPPORTED_SYMBOLS.has(symbol);
+  return { ...base, logo, coming };
 }
 
 /** Just the bits a design <AssetTile>/<HoldingRow> needs. */

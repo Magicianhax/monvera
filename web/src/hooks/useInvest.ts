@@ -183,6 +183,10 @@ export function useInvest(): UseInvest {
               sellAmount: legAmounts[i],
               taker: eoa,
             });
+            // RFQ-settled stocks can't join the batched userOp (the router submits
+            // them, minutes later, one intent at a time). Drop the leg exactly as
+            // an illiquid one is dropped; the remaining weights renormalize.
+            if (quote.kind !== "tx") continue;
             quotes.push({ leg: legs[i], amountMicro: legAmounts[i], quote });
           } catch (e) {
             if (e instanceof Error && /no liquidity/i.test(e.message)) continue;

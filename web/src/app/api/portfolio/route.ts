@@ -10,7 +10,7 @@ import { createPublicClient, http, isAddress } from "viem";
 import { MULTICALL3, USDG, ALL_ASSETS } from "@/lib/tokens";
 import { chain } from "@/lib/chain";
 import { ERC20_ABI } from "@/lib/abis";
-import { priceAll } from "@/lib/prices";
+import { priceAllWithFallback } from "@/lib/server/pricing";
 import { fromUnits } from "@/lib/format";
 import { getDaySummary } from "@/lib/server/marketData";
 import { rateLimit, clientIp } from "@/lib/server/rateLimit";
@@ -33,10 +33,12 @@ const publicClient = createPublicClient({
 });
 
 // Prices move slowly relative to page views — share one read across all users.
-let pricesCache: { at: number; value: ReturnType<typeof priceAll> } | null = null;
+// Goes through priceAllWithFallback so a holding in an Arcus-only stock (most of
+// them) shows a real value instead of a dash on the portfolio and sell screens.
+let pricesCache: { at: number; value: ReturnType<typeof priceAllWithFallback> } | null = null;
 function cachedPrices() {
   if (pricesCache && Date.now() - pricesCache.at < 15_000) return pricesCache.value;
-  const value = priceAll(publicClient).catch((err) => {
+  const value = priceAllWithFallback(publicClient).catch((err) => {
     pricesCache = null;
     throw err;
   });

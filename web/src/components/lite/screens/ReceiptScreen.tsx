@@ -30,6 +30,7 @@ export function ReceiptScreen({
   usdgAmount,
   counterparty,
   ts,
+  pending,
 }: {
   go: (target: string | number, params?: Record<string, unknown>) => void;
   title?: string;
@@ -43,6 +44,11 @@ export function ReceiptScreen({
   usdgAmount?: number;
   counterparty?: string;
   ts?: number;
+  /**
+   * The trade is signed and on-chain but the fill hasn't confirmed yet (Arcus
+   * RFQ stocks settle in minutes). Never claim it completed.
+   */
+  pending?: boolean;
 }) {
   const explorerHref = txHash ? txUrl(txHash) : undefined;
   const meta = kind ? KIND_META[kind] : null;
@@ -50,7 +56,8 @@ export function ReceiptScreen({
 
   // Hero: for an event, use its verb + kind icon; else the plan receipt.
   const heroTitle = meta && symbol ? `${meta.verb} ${symbol}` : title;
-  const heroIcon: IconName = meta ? meta.icon : "check";
+  // A checkmark over an unconfirmed fill would assert something we don't know.
+  const heroIcon: IconName = pending ? "clock" : meta ? meta.icon : "check";
   const heroPositive = meta ? meta.positive : true;
   const heroValue = meta
     ? isTrade
@@ -96,7 +103,7 @@ export function ReceiptScreen({
               ["Network", "Robinhood Chain"],
             ]
     : [
-        ["Status", <Positive key="s">Completed</Positive>],
+        ["Status", pending ? <Settling key="s" /> : <Positive key="s">Completed</Positive>],
         ["Network cost", <Positive key="n">Free</Positive>],
         ["Paid from", "Your Monvera balance"],
         ["Ownership", "Real shares, held by you"],
@@ -138,6 +145,12 @@ export function ReceiptScreen({
           </div>
         )}
         <div style={{ fontSize: 13, color: "var(--ink-2)", marginTop: 4 }}>{heroDate}</div>
+        {pending && (
+          <p style={{ fontSize: 13, color: "var(--ink-2)", margin: "10px auto 0", lineHeight: 1.5, maxWidth: 300 }}>
+            Your order is on-chain. Some stocks take a few minutes to settle, and your
+            balance updates on its own once it does.
+          </p>
+        )}
       </div>
 
       {/* details */}
@@ -196,4 +209,9 @@ export function ReceiptScreen({
 
 function Positive({ children }: { children: React.ReactNode }) {
   return <span style={{ color: "var(--pos)", fontWeight: 500 }}>{children}</span>;
+}
+
+/** In flight, not done. Deliberately not the positive/"completed" green. */
+function Settling() {
+  return <span style={{ color: "var(--ink-2)", fontWeight: 500 }}>Settling</span>;
 }

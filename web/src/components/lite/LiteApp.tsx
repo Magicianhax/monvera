@@ -522,6 +522,7 @@ export function LiteApp({ demoPlay = null }: { demoPlay?: "invest" | "vera" | nu
           usdgAmount={params.usdgAmount as number | undefined}
           counterparty={params.counterparty as string | undefined}
           ts={params.ts as number | undefined}
+          pending={params.pending as boolean | undefined}
         />
       );
       break;

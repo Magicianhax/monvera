@@ -156,7 +156,14 @@ export function assetBySymbol(symbol: string): Asset | undefined {
   return BY_SYMBOL.get(symbol);
 }
 
+/**
+ * Tokens the Arcus router refuses outright (422 on both /v1/price and /v1/quote),
+ * so they can be neither priced nor traded. Listed rather than silently failing
+ * at the review sheet. Re-check if Arcus adds them.
+ */
+export const UNSUPPORTED_SYMBOLS = new Set(["CRWD", "SATS"]);
+
 /** True if `symbol` is a tradable Robinhood stock/ETF token. */
 export function isTradable(symbol: string): boolean {
-  return BY_SYMBOL.has(symbol);
+  return BY_SYMBOL.has(symbol) && !UNSUPPORTED_SYMBOLS.has(symbol);
 }

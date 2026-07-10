@@ -6,7 +6,7 @@ import type { NextRequest } from "next/server";
 import { createPublicClient, http } from "viem";
 import { MULTICALL3 } from "@/lib/tokens";
 import { chain } from "@/lib/chain";
-import { priceAll } from "@/lib/prices";
+import { priceAllWithFallback } from "@/lib/server/pricing";
 import { rateLimit, clientIp } from "@/lib/server/rateLimit";
 import { tooManyRequests, serverError } from "@/lib/server/respond";
 
@@ -36,7 +36,7 @@ export async function GET(req: NextRequest) {
   if (!limit.ok) return tooManyRequests(limit.retryAfter);
 
   try {
-    const prices = await priceAll(publicClient);
+    const prices = await priceAllWithFallback(publicClient);
     // Serialize to JSON-safe (numbers/null already are).
     const body = {
       prices,

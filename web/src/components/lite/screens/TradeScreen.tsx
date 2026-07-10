@@ -11,6 +11,7 @@ import { useEffect, useState } from "react";
 import { parseUnits } from "viem";
 import { ALL_ASSETS, isTradable, type Asset } from "@/lib/tokens";
 import { useQuote, useSellQuote } from "@/hooks/useQuote";
+import { RFQ_MIN_BUY_USD, RFQ_MIN_SELL_USD } from "@/lib/arcusShared";
 import { useSwap } from "@/hooks/useSwap";
 import { useUsdcBalance, usePortfolio } from "@/hooks/useBalances";
 import { usePrice } from "@/hooks/usePrices";
@@ -94,13 +95,42 @@ export function TradeScreen({
     address ?? undefined,
   );
 
+  // Most stocks settle through the RFQ venue: a few minutes, and a size the
+  // makers prefer. The minimum is theirs, enforced only at fill time, so we warn
+  // and still let the user try — a rejected order costs a signature, not money.
+  const buyIsRfq = side === "buy" && quote?.kind === "rfq";
+  const sellIsRfq = side === "sell" && sellQuote?.kind === "rfq";
+  const isRfq = buyIsRfq || sellIsRfq;
+  const buyUnderMin = buyIsRfq && n > 0 && n < RFQ_MIN_BUY_USD;
+  const sellUnderMin =
+    sellIsRfq && !!sellQuote && sellQuote.expectedUsd > 0 && sellQuote.expectedUsd < RFQ_MIN_SELL_USD;
+  const underMin = buyUnderMin || sellUnderMin;
+  const minUsd = side === "buy" ? RFQ_MIN_BUY_USD : RFQ_MIN_SELL_USD;
+
+  // A sub-minimum order is likely to be turned down by the maker. We don't forbid
+  // it — the rule is theirs, and a rejection costs a signature, not money — but the
+  // user has to say they understand before the CTA unlocks.
+  const [acceptRisk, setAcceptRisk] = useState(false);
+  useEffect(() => {
+    if (!underMin) setAcceptRisk(false);
+  }, [underMin, side, asset.symbol]);
+  const riskBlocked = underMin && !acceptRisk;
+
   const over = side === "buy" && n > balance + 1e-6;
   const canBuy =
-    side === "buy" && !d.coming && n > 0 && !over && !!quote && quote.expectedOutRaw > BigInt(0) && !!address;
+    side === "buy" &&
+    !d.coming &&
+    n > 0 &&
+    !over &&
+    !riskBlocked &&
+    !!quote &&
+    quote.expectedOutRaw > BigInt(0) &&
+    !!address;
   const canSell =
     side === "sell" &&
     sellable &&
     sellRaw > BigInt(0) &&
+    !riskBlocked &&
     !!sellQuote &&
     sellQuote.expectedUsdcRaw > BigInt(0) &&
     !!address;
@@ -114,17 +144,24 @@ export function TradeScreen({
       : BigInt(0);
   const sellMinUsd = sellQuote ? sellQuote.expectedUsd * (1 - tolBps / 10000) : 0;
   // Why a disabled buy CTA can't fire — shown inline under the button.
-  const buyReason =
-    n <= 0 ? "Enter an amount" : over ? `Amount exceeds your ${usd(balance)} cash` : null;
+  const buyReason = n <= 0 ? "Enter an amount" : over ? `Amount exceeds your ${usd(balance)} cash` : null;
+  // Not a blocker: the maker may still fill it, and the user is allowed to try.
+  const minWarning = underMin
+    ? `Orders under $${minUsd} in ${d.ticker ?? asset.symbol} are often rejected by the market maker. You can still try, but a larger amount is more likely to fill.`
+    : null;
 
-  // On a filled buy/sell, jump to the plain-words receipt.
+  // On a filled buy/sell, jump to the plain-words receipt. A trade that is still
+  // settling gets an honest title and a pending status, not "Bought".
   useEffect(() => {
     if (swap.phase === "done" && swap.result) {
       const isSell = swap.result.side === "sell";
+      const pending = Boolean(swap.result.pending);
+      const verb = pending ? (isSell ? "Selling" : "Buying") : isSell ? "Sold" : "Bought";
       go("receipt", {
-        title: `${isSell ? "Sold" : "Bought"} ${swap.result.asset.name}`,
+        title: `${verb} ${swap.result.asset.name}`,
         amount: isSell ? swap.result.amountUsd : -swap.result.amountUsd,
         txHash: swap.result.txHash,
+        pending,
       });
     }
   }, [swap.phase, swap.result, go]);
@@ -381,6 +418,11 @@ export function TradeScreen({
 
           <div style={{ flex: 1 }} />
           <div style={{ padding: "12px 22px calc(18px + env(safe-area-inset-bottom))" }}>
+            {minWarning && (
+              <Caution accepted={acceptRisk} onAccept={setAcceptRisk}>
+                {minWarning}
+              </Caution>
+            )}
             <div style={{ textAlign: "center", marginBottom: 12, fontSize: 12.5, color: "var(--ink-3)" }}>
               Gas-free · price includes the quoted spread · paid into your cash
             </div>
@@ -556,6 +598,11 @@ export function TradeScreen({
 
           <div style={{ flex: 1 }} />
           <div style={{ padding: "12px 22px calc(18px + env(safe-area-inset-bottom))" }}>
+            {minWarning && (
+              <Caution accepted={acceptRisk} onAccept={setAcceptRisk}>
+                {minWarning}
+              </Caution>
+            )}
             <div style={{ textAlign: "center", marginBottom: 12, fontSize: 12.5, color: "var(--ink-3)" }}>
               Gas-free · price includes the quoted spread
             </div>
@@ -612,6 +659,7 @@ export function TradeScreen({
                 value={`${tokenQty(buyMinOutRaw, dec)} shares`}
                 strong
               />
+              {isRfq && <ReviewRow label="Settles in" value="A few minutes" />}
             </>
           ) : (
             <>
@@ -621,6 +669,7 @@ export function TradeScreen({
               />
               <ReviewRow label="Estimated proceeds" value={usd(sellQuote?.expectedUsd ?? 0)} />
               <ReviewRow label="You'll receive at least" value={usd(sellMinUsd)} strong />
+              {isRfq && <ReviewRow label="Settles in" value="A few minutes" />}
             </>
           )}
         </div>
@@ -651,16 +700,83 @@ export function TradeScreen({
             style={{ alignItems: "center" }}
             first={
               <span style={{ display: "inline-flex", alignItems: "center", gap: 9 }}>
-                <Spinner small /> {side === "buy" ? "Placing order…" : "Selling…"}
+                <Spinner small />{" "}
+                {swap.settling ? "Settling…" : side === "buy" ? "Placing order…" : "Selling…"}
               </span>
             }
             second={<span>{side === "buy" ? "Confirm buy" : "Confirm sale"}</span>}
           />
         </button>
         <div style={{ textAlign: "center", marginTop: 12, fontSize: 12.5, color: "var(--ink-3)" }}>
-          Gas-free · price includes the quoted spread
+          {swap.settling
+            ? "Your order is placed and on-chain. Some stocks take a few minutes to settle — you can leave this screen."
+            : isRfq
+              ? "Gas-free · price includes the quoted spread · takes a few minutes to settle"
+              : "Gas-free · price includes the quoted spread"}
         </div>
       </BottomSheet>
+    </div>
+  );
+}
+
+/**
+ * A risk the user may take on knowingly. The market maker's minimum is enforced
+ * only at fill time, so we don't forbid the order — but the CTA stays locked until
+ * the box is ticked, so nobody signs a likely-doomed trade by reflex.
+ */
+function Caution({
+  children,
+  accepted,
+  onAccept,
+  ackLabel,
+}: {
+  children: React.ReactNode;
+  accepted?: boolean;
+  onAccept?: (v: boolean) => void;
+  ackLabel?: string;
+}) {
+  const WARN = "var(--warn, #d68a1e)";
+  return (
+    <div
+      style={{
+        background: `color-mix(in srgb, ${WARN} 12%, var(--surface))`,
+        color: "var(--ink)",
+        padding: "12px 13px",
+        borderRadius: "var(--rr)",
+        fontSize: 12.5,
+        lineHeight: 1.45,
+        marginBottom: 12,
+      }}
+    >
+      <div style={{ display: "flex", gap: 9, alignItems: "flex-start" }}>
+        <span aria-hidden style={{ flexShrink: 0, marginTop: 1, color: WARN }}>
+          <Icon name="info" size={15} />
+        </span>
+        <span>{children}</span>
+      </div>
+      {onAccept && (
+        <label
+          className="tap"
+          style={{
+            display: "flex",
+            gap: 9,
+            alignItems: "center",
+            marginTop: 11,
+            paddingTop: 10,
+            borderTop: "1px solid color-mix(in srgb, var(--ink) 10%, transparent)",
+            cursor: "pointer",
+            fontWeight: 500,
+          }}
+        >
+          <input
+            type="checkbox"
+            checked={Boolean(accepted)}
+            onChange={(e) => onAccept(e.target.checked)}
+            style={{ width: 16, height: 16, accentColor: WARN, flexShrink: 0, cursor: "pointer" }}
+          />
+          <span>{ackLabel ?? "I understand, place the order anyway"}</span>
+        </label>
+      )}
     </div>
   );
 }

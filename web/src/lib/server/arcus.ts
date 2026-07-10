@@ -15,9 +15,10 @@ import "server-only";
 //   - needsAllowance: whether the taker must first approve sellToken -> Permit2
 // Settlement is one atomic on-chain tx; verified working via server curl (no key).
 
-import type { Address, Hex } from "viem";
-import { CHAIN_ID } from "@/lib/chain";
+import { createPublicClient, http, parseAbi, type Address, type Hex } from "viem";
+import { CHAIN_ID, chain, RPC_URL } from "@/lib/chain";
 import { assetBySymbol, USDG } from "@/lib/tokens";
+import type { VenueKind } from "@/lib/arcusShared";
 
 const ROUTER = process.env.ARCUS_ROUTER_URL || "https://router.spot.arcus.xyz";
 // Our affiliate/referral code (revenue on routed volume) — public, not a secret.
@@ -74,13 +75,72 @@ function pickExecutable(r: RouterResponse): VenueQuote | null {
   return best(submittable, r.recommended);
 }
 
-async function routerGet(path: string, params: URLSearchParams): Promise<RouterResponse> {
-  const res = await fetch(`${ROUTER}${path}?${params.toString()}`, {
-    headers: { accept: "application/json" },
+// ── Router call pacing ────────────────────────────────────────────────────────
+// The router rate-limits per IP, and every one of our users shares the server's
+// IP. Prices, portfolio, quotes and the liquidity probe all call it, so an
+// unpaced burst trips a 429 that has nothing to do with the user's own trade —
+// which surfaced as `POST /api/quote 500` and an app that looked crashed.
+//
+// Every router call funnels through here: at most a few in flight, spaced out.
+// Queueing a request for a few hundred milliseconds is invisible; being throttled
+// is not.
+const MAX_CONCURRENT = 3;
+const MIN_GAP_MS = 90;
+
+let active = 0;
+let lastStartAt = 0;
+const queue: (() => void)[] = [];
+
+function pump(): void {
+  if (active >= MAX_CONCURRENT || queue.length === 0) return;
+  const gap = Math.max(0, lastStartAt + MIN_GAP_MS - Date.now());
+  setTimeout(() => {
+    const next = queue.shift();
+    if (!next) return;
+    active += 1;
+    lastStartAt = Date.now();
+    next();
+  }, gap);
+}
+
+function schedule<T>(task: () => Promise<T>): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    queue.push(() => {
+      task()
+        .then(resolve, reject)
+        .finally(() => {
+          active -= 1;
+          pump();
+        });
+    });
+    pump();
   });
-  const json = (await res.json()) as RouterResponse;
-  if (!res.ok) throw new Error(`Arcus router ${res.status}`);
-  return json;
+}
+
+/**
+ * GET the router: paced, and retrying a rate-limit with backoff.
+ *
+ * `retryOn429` is for calls a person is waiting on (a firm quote before a trade).
+ * Background pricing passes false: waiting out a throttle there would spend the
+ * whole request budget on one token, and it will be retried on the next refresh.
+ */
+async function routerGet(
+  path: string,
+  params: URLSearchParams,
+  opts: { retryOn429?: boolean } = {},
+): Promise<RouterResponse> {
+  const url = `${ROUTER}${path}?${params.toString()}`;
+  const backoffMs = opts.retryOn429 ? [0, 350, 900, 2000] : [0];
+  let lastStatus = 0;
+  for (const wait of backoffMs) {
+    if (wait) await new Promise((r) => setTimeout(r, wait + Math.random() * 200));
+    const res = await schedule(() => fetch(url, { headers: { accept: "application/json" } }));
+    if (res.ok) return (await res.json()) as RouterResponse;
+    lastStatus = res.status;
+    // Only a throttle is worth retrying; a 4xx on the token itself never changes.
+    if (res.status !== 429) break;
+  }
+  throw new Error(`Arcus router ${lastStatus}`);
 }
 
 /** Indicative executable price for a pre-trade "you'll get X" line (no taker needed). */
@@ -88,6 +148,7 @@ export async function getPrice(
   sellToken: Address,
   buyToken: Address,
   sellAmount: bigint,
+  opts: { retryOn429?: boolean } = { retryOn429: true },
 ): Promise<{ liquidityAvailable: boolean; buyAmount: bigint }> {
   const params = new URLSearchParams({
     chainId: String(CHAIN_ID),
@@ -95,7 +156,7 @@ export async function getPrice(
     buyToken,
     sellAmount: sellAmount.toString(),
   });
-  const q = pickPriced(await routerGet("/v1/price", params));
+  const q = pickPriced(await routerGet("/v1/price", params, opts));
   return q ? { liquidityAvailable: true, buyAmount: BigInt(q.buyAmount) } : { liquidityAvailable: false, buyAmount: BigInt(0) };
 }
 
@@ -162,6 +223,255 @@ export interface ArcusQuote {
   quoteId: string | null;
 }
 
+// ── RFQ venue (the `arcus` venue) ─────────────────────────────────────────────
+// Only 24 of our 95 assets have a venue that hands back a client-submittable tx.
+// The rest quote solely on the `arcus` RFQ venue, where the taker signs the
+// Permit2 intent and the ROUTER submits settlement. Flow (undocumented; captured
+// from Arcus's own UI):
+//   1. GET  /v1/quote                  -> venue "arcus" with `toSign`, no `tx`
+//   2. POST /v1/submit {venue, chainId, taker, typedData, signature}
+//                                      -> { txHash, status:"submitted", ... }
+//   3. GET  /v1/status?venue=arcus&id=<txHash>  (the id IS the txHash)
+// The fill arrives as a WRAPPED token (wLITE, wUSDG) that auto-unwraps into the
+// real one within ~1-15 min, so we never hold or unwrap it ourselves — we just
+// need a "settling" state. `minBuyAmount` is enforced on-chain, so the router
+// submitting on our behalf stays non-custodial.
+
+/** Pick the RFQ venue: signable intent, no client tx. */
+function pickRfq(r: RouterResponse): VenueQuote | null {
+  const rfq = (r.all ?? []).filter((q) => q.buyAmount && q.toSign && !q.tx?.data);
+  return best(rfq, r.recommended);
+}
+
+export interface ArcusRfqQuote {
+  liquidityAvailable: boolean;
+  buyAmount: bigint;
+  minBuyAmount: bigint;
+  expiry: number;
+  toSign: unknown | null;
+}
+
+/** Firm RFQ quote: the intent to sign, settled by the router after we submit it. */
+export async function getRfqQuote(
+  sellToken: Address,
+  buyToken: Address,
+  sellAmount: bigint,
+  taker: Address,
+  slippageBps: number = DEFAULT_SLIPPAGE_BPS,
+): Promise<ArcusRfqQuote> {
+  const params = new URLSearchParams({
+    chainId: String(CHAIN_ID),
+    sellToken,
+    buyToken,
+    sellAmount: sellAmount.toString(),
+    taker,
+    slippageBps: String(slippageBps),
+    allowWrapped: "true",
+  });
+  if (REFERRAL) params.set("referralCode", REFERRAL);
+
+  const q = pickRfq(await routerGet("/v1/quote", params, { retryOn429: true }));
+  if (!q || !q.toSign) {
+    return { liquidityAvailable: false, buyAmount: BigInt(0), minBuyAmount: BigInt(0), expiry: 0, toSign: null };
+  }
+  const minOut = (q as { arcus?: { minAmountOut?: string } }).arcus?.minAmountOut;
+  return {
+    liquidityAvailable: true,
+    buyAmount: BigInt(q.buyAmount),
+    minBuyAmount: BigInt(minOut ?? q.minBuyAmount ?? q.buyAmount),
+    expiry: (q as { expiry?: number }).expiry ?? 0,
+    toSign: q.toSign,
+  };
+}
+
+export interface RfqSubmitResult {
+  txHash: Hex;
+  status: string;
+  /** The wrapped token actually delivered; it auto-unwraps into the real asset. */
+  settledToken: Address | null;
+  orderId: string | null;
+}
+
+/** Hand the signed intent to the router, which submits settlement on-chain. */
+export async function submitRfq(
+  taker: Address,
+  typedData: unknown,
+  signature: Hex,
+): Promise<RfqSubmitResult> {
+  const res = await fetch(`${ROUTER}/v1/submit`, {
+    method: "POST",
+    headers: { "content-type": "application/json", accept: "application/json" },
+    body: JSON.stringify({ venue: "arcus", chainId: CHAIN_ID, taker, typedData, signature }),
+  });
+  const json = (await res.json()) as {
+    txHash?: string; status?: string; settledToken?: string; orderId?: string; code?: string; message?: string;
+  };
+  if (!res.ok || !json.txHash) {
+    // The maker rejects sub-minimum orders here (a $10 buy quotes but won't fill).
+    throw new Error(json.message || json.code || `Arcus submit failed (${res.status})`);
+  }
+  return {
+    txHash: json.txHash as Hex,
+    status: json.status ?? "submitted",
+    settledToken: (json.settledToken as Address) ?? null,
+    orderId: json.orderId ?? null,
+  };
+}
+
+export interface RfqStatus {
+  status: string;
+  filled: boolean;
+  failed: boolean;
+  amountOut: bigint | null;
+  reason: string | null;
+}
+
+// ── Price fallback ────────────────────────────────────────────────────────────
+// Only ~a third of the universe has a Chainlink feed on this young chain. The
+// rest showed a bare "—" everywhere, including on positions the user now holds.
+// Arcus quotes all of them, so derive USD/token from an indicative quote. Cached
+// hard: this is display pricing, and the trade screen always re-quotes live.
+const ARCUS_PRICE_TTL_MS = 300_000; // 5 min
+// A token the router can't price (CRWD/SATS 422, or a venue outage) was being
+// retried on every 30s refresh, forever. Remember the "no" briefly too — long
+// enough to stop the churn, short enough to notice when it starts working.
+const ARCUS_PRICE_MISS_TTL_MS = 90_000;
+const ARCUS_PRICE_NOTIONAL = BigInt(10_000_000); // $10 of USDG
+const arcusPriceCache = new Map<string, { at: number; usd: number | undefined }>();
+// /api/prices and /api/portfolio sweep the same tokens at the same moment, and a
+// cold cache would fire every quote twice. Share the in-flight request instead.
+const arcusPriceInflight = new Map<string, Promise<number | undefined>>();
+
+export async function arcusPriceUsd(token: Address, decimals: number): Promise<number | undefined> {
+  const key = token.toLowerCase();
+  const hit = arcusPriceCache.get(key);
+  if (hit) {
+    // A price is good for 5 min; a miss is remembered for 90s so we stop hammering
+    // the router with tokens it just told us it cannot price.
+    const ttl = hit.usd === undefined ? ARCUS_PRICE_MISS_TTL_MS : ARCUS_PRICE_TTL_MS;
+    if (Date.now() - hit.at < ttl) return hit.usd;
+  }
+
+  const pending = arcusPriceInflight.get(key);
+  if (pending) return pending;
+
+  const task = (async () => {
+    try {
+      // Background pricing: no one is blocked on this token, so don't sit out a
+      // throttle. It will be picked up on the next refresh.
+      const p = await getPrice(USDG.address as Address, token, ARCUS_PRICE_NOTIONAL, { retryOn429: false });
+      const qty = Number(p.buyAmount) / 10 ** decimals;
+      const usd = p.liquidityAvailable && qty > 0 ? 10 / qty : undefined;
+      arcusPriceCache.set(key, { at: Date.now(), usd });
+      return usd;
+    } catch {
+      // A throttle is not a verdict on the token — don't cache it as "unpriceable".
+      return undefined;
+    } finally {
+      arcusPriceInflight.delete(key);
+    }
+  })();
+  arcusPriceInflight.set(key, task);
+  return task;
+}
+
+// ── Venue kind (pre-trade) ────────────────────────────────────────────────────
+// The trade screen must know, before the user commits, whether a stock settles
+// instantly or through the RFQ venue (minutes, and a maker minimum).
+//
+// This CANNOT be read off /v1/price: that response lists venues that merely quote
+// a price. LITE, for instance, shows `lifi` at $1, yet only `arcus` returns a
+// signable, settleable quote — so a price-derived guess says "instant" and the
+// warning never appears. Only a firm quote distinguishes them.
+//
+// Which venues can settle a token is a property of the token, not the amount, so
+// one firm quote per pair every few minutes is enough. Cached and single-flighted:
+// a keystroke burst collapses into one request, and a throttle isn't waited out.
+const KIND_TTL_MS = 300_000; // 5 min
+const kindCache = new Map<string, { at: number; kind: VenueKind }>();
+const kindInflight = new Map<string, Promise<VenueKind>>();
+
+export async function venueKind(sellToken: Address, buyToken: Address): Promise<VenueKind> {
+  const key = `${sellToken}:${buyToken}`.toLowerCase();
+  const hit = kindCache.get(key);
+  if (hit && Date.now() - hit.at < KIND_TTL_MS) return hit.kind;
+  const pending = kindInflight.get(key);
+  if (pending) return pending;
+
+  const task = (async (): Promise<VenueKind> => {
+    // A representative size: too small and a venue may decline to quote at all.
+    const sellingUsdg = sellToken.toLowerCase() === (USDG.address as string).toLowerCase();
+    const probeAmount = sellingUsdg ? BigInt(15_000_000) : BigInt("10000000000000000");
+    const params = new URLSearchParams({
+      chainId: String(CHAIN_ID),
+      sellToken,
+      buyToken,
+      sellAmount: probeAmount.toString(),
+      taker: PROBE_TAKER,
+      slippageBps: String(DEFAULT_SLIPPAGE_BPS),
+      allowWrapped: "true",
+    });
+    try {
+      const r = await routerGet("/v1/quote", params, { retryOn429: false });
+      const kind: VenueKind = pickExecutable(r) ? "tx" : pickRfq(r) ? "rfq" : "none";
+      kindCache.set(key, { at: Date.now(), kind });
+      return kind;
+    } catch {
+      // Don't cache a blip, and don't invent an RFQ warning for an instant stock:
+      // fall back to whatever we last knew, else stay silent.
+      return hit?.kind ?? "tx";
+    } finally {
+      kindInflight.delete(key);
+    }
+  })();
+  kindInflight.set(key, task);
+  return task;
+}
+
+const rpc = createPublicClient({ chain, transport: http(RPC_URL) });
+const ALLOWANCE_ABI = parseAbi(["function allowance(address,address) view returns (uint256)"]);
+
+/**
+ * Whether `taker` still owes a sellToken -> Permit2 approval. The RFQ quote (unlike
+ * the tx venues) never reports this, so we read it. Fail-closed: an RPC blip asks
+ * for the gasless permit again, which is harmless, rather than skipping it and
+ * having settlement revert.
+ */
+export async function needsPermit2Allowance(sellToken: Address, taker: Address, sellAmount: bigint): Promise<boolean> {
+  try {
+    const allowed = (await rpc.readContract({
+      address: sellToken,
+      abi: ALLOWANCE_ABI,
+      functionName: "allowance",
+      args: [taker, PERMIT2],
+    })) as bigint;
+    return allowed < sellAmount;
+  } catch {
+    return true;
+  }
+}
+
+/** Poll a submitted RFQ fill. `id` is the txHash returned by submitRfq. */
+export async function getRfqStatus(txHash: Hex): Promise<RfqStatus> {
+  const params = new URLSearchParams({ venue: "arcus", id: txHash });
+  const res = await fetch(`${ROUTER}/v1/status?${params.toString()}`, {
+    headers: { accept: "application/json" },
+  });
+  const json = (await res.json()) as {
+    status?: string; reason?: string | null;
+    swap?: { amountOut?: string; success?: boolean; reason?: string } | null;
+  };
+  const status = json.status ?? "unknown";
+  const swap = json.swap ?? null;
+  return {
+    status,
+    filled: status === "confirmed" && swap?.success !== false,
+    failed: status === "failed" || status === "reverted" || swap?.success === false,
+    amountOut: swap?.amountOut ? BigInt(swap.amountOut) : null,
+    reason: json.reason ?? swap?.reason ?? null,
+  };
+}
+
 /** Firm quote for `taker` -> the signable intent + settlement tx. */
 export async function getQuote(
   sellToken: Address,
@@ -180,7 +490,7 @@ export async function getQuote(
   });
   if (REFERRAL) params.set("referralCode", REFERRAL);
 
-  const q = pickExecutable(await routerGet("/v1/quote", params));
+  const q = pickExecutable(await routerGet("/v1/quote", params, { retryOn429: true }));
   if (!q || !q.tx || !q.toSign) {
     return { liquidityAvailable: false, buyAmount: BigInt(0), minBuyAmount: BigInt(0), needsAllowance: false, toSign: null, tx: null, quoteId: null };
   }

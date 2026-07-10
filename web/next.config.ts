@@ -7,6 +7,11 @@ import type { NextConfig } from "next";
 // origins and the UI uses many inline styles. Everything else below is safe to
 // apply globally today.
 const securityHeaders = [
+  // `same-origin-allow-popups` (not `same-origin`): Privy's Google/X login opens
+  // OAuth popups that must keep a handle to the opener. This also satisfies the
+  // COOP self-check inside Privy's bundled Coinbase wallet SDK, which otherwise
+  // logs "Error checking Cross-Origin-Opener-Policy" in the console.
+  { key: "Cross-Origin-Opener-Policy", value: "same-origin-allow-popups" },
   { key: "X-Frame-Options", value: "DENY" },
   { key: "X-Content-Type-Options", value: "nosniff" },
   { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },

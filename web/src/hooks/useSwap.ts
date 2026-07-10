@@ -16,32 +16,65 @@
 import { useCallback, useState } from "react";
 import { useActiveWallet } from "@/hooks/useActiveWallet";
 import { sendSponsoredCalls, type Call } from "@/lib/aa";
+
 import { buildPermitCall } from "@/lib/permit";
 import { asViemProvider } from "@/lib/provider";
-import { fetchArcusQuote, settleCallFor, typedDataSigner, type Eip1193 } from "@/lib/arcusTrade";
+import {
+  fetchArcusQuote,
+  settleCallFor,
+  submitRfqIntent,
+  typedDataSigner,
+  waitForRfqFill,
+  type Eip1193,
+} from "@/lib/arcusTrade";
 import { useDemo } from "@/components/demo/DemoProvider";
 import { useRefreshBalances } from "@/hooks/useBalances";
 import { type Asset } from "@/lib/tokens";
 
-type Phase = "idle" | "swapping" | "done" | "error";
+// "settling": the trade is signed, submitted and on-chain; we're waiting for the
+// router's wrapped fill to unwrap into the real token. Never an error state.
+type Phase = "idle" | "swapping" | "settling" | "done" | "error";
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 // Canned receipt hash for demo-mode buys/sells (never broadcast on-chain).
 const DEMO_SWAP_TX = ("0x" + "5a7c2b41".repeat(32).slice(0, 64)) as `0x${string}`;
 
+/** A swap in flight. RFQ fills settle on the router's schedule, not ours. */
+interface SwapSubmission {
+  txHash: `0x${string}`;
+  /** True when the router settles it: the tokens land after a short delay. */
+  settling: boolean;
+}
+
 /**
- * Fetch a fresh quote, have the EOA sign the intent (+ USDG permit if needed),
- * and relay the settlement gaslessly. Returns the on-chain tx hash.
+ * Fetch a fresh quote, have the EOA sign the intent (+ a permit if needed), and
+ * get it settled. Two settlement paths, decided by the venue that quoted:
+ *   "tx"  — splice the signature into the venue's tx and relay [permit?, settle]
+ *           as one sponsored UserOp. Confirmed the moment the receipt lands.
+ *   "rfq" — POST the signed intent; the ROUTER submits settlement. Any permit
+ *           must be relayed first, on its own, since there's no call to batch it
+ *           with. The fill arrives wrapped and auto-unwraps within ~1-15 min.
  */
 async function executeSwap(
   wallet: NonNullable<ReturnType<typeof useActiveWallet>>,
   params: { side: "buy" | "sell"; symbol: string; sellAmount: bigint },
-): Promise<`0x${string}`> {
+): Promise<SwapSubmission> {
   const eoa = wallet.address as `0x${string}`;
   const quote = await fetchArcusQuote({ ...params, taker: eoa });
 
   const provider = (await wallet.getEthereumProvider()) as Eip1193;
   const signTyped = typedDataSigner(provider, eoa);
+
+  if (quote.kind === "rfq") {
+    // No size check here: the maker's minimum is theirs to enforce, and the trade
+    // screen already warned. A rejected order costs the user a signature, not money.
+    if (quote.needsAllowance && quote.permit2 && quote.sellToken) {
+      const permit = await buildPermitCall(signTyped, eoa, quote.permit2, quote.sellToken);
+      await sendSponsoredCalls(asViemProvider(provider), [permit]);
+    }
+    const submitted = await submitRfqIntent(quote, eoa, signTyped);
+    return { txHash: submitted.txHash, settling: true };
+  }
 
   const calls: Call[] = [];
   if (quote.needsAllowance && quote.permit2 && quote.sellToken) {
@@ -54,7 +87,26 @@ async function executeSwap(
 
   // Relay through the Pimlico smart account — sponsored, so the EOA never pays gas.
   const receipt = await sendSponsoredCalls(asViemProvider(provider), calls);
-  return receipt.receipt.transactionHash as `0x${string}`;
+  return { txHash: receipt.receipt.transactionHash as `0x${string}`, settling: false };
+}
+
+/**
+ * Wait for a router-settled fill, refreshing balances when it lands.
+ *
+ * Returns true only when the router CONFIRMED the fill. A trade that outlives
+ * our patience is neither a success nor a failure: it is signed, submitted and
+ * on-chain, and we simply don't know yet. We report that honestly rather than
+ * printing "Bought AAPL" over a trade that might still revert.
+ */
+async function settleRfq(
+  txHash: `0x${string}`,
+  setPhase: (p: Phase) => void,
+  refreshBalances: () => void,
+): Promise<boolean> {
+  setPhase("settling");
+  const s = await waitForRfqFill(txHash);
+  refreshBalances();
+  return !s.timedOut && s.filled;
 }
 
 export interface SwapResult {
@@ -63,6 +115,11 @@ export interface SwapResult {
   amountUsd: number;
   /** "buy" (USDG -> asset) or "sell" (asset -> USDG). */
   side: "buy" | "sell";
+  /**
+   * The trade is on-chain but hasn't confirmed yet (RFQ fills can take minutes).
+   * The receipt must say "settling", never "bought"/"sold".
+   */
+  pending?: boolean;
 }
 
 export function useSwap() {
@@ -100,8 +157,9 @@ export function useSwap() {
         if (sellAmount <= BigInt(0)) throw new Error("Enter an amount first.");
 
         setPhase("swapping");
-        const txHash = await executeSwap(wallet, { side: "buy", symbol: asset.symbol, sellAmount });
-        setResult({ txHash, asset, amountUsd, side: "buy" });
+        const { txHash, settling } = await executeSwap(wallet, { side: "buy", symbol: asset.symbol, sellAmount });
+        const confirmed = settling ? await settleRfq(txHash, setPhase, refreshBalances) : true;
+        setResult({ txHash, asset, amountUsd, side: "buy", pending: !confirmed });
         setPhase("done");
         refreshBalances();
       } catch (e) {
@@ -131,8 +189,9 @@ export function useSwap() {
         if (amountIn <= BigInt(0)) throw new Error("Nothing to sell.");
 
         setPhase("swapping");
-        const txHash = await executeSwap(wallet, { side: "sell", symbol: asset.symbol, sellAmount: amountIn });
-        setResult({ txHash, asset, amountUsd: estUsdcValue, side: "sell" });
+        const { txHash, settling } = await executeSwap(wallet, { side: "sell", symbol: asset.symbol, sellAmount: amountIn });
+        const confirmed = settling ? await settleRfq(txHash, setPhase, refreshBalances) : true;
+        setResult({ txHash, asset, amountUsd: estUsdcValue, side: "sell", pending: !confirmed });
         setPhase("done");
         refreshBalances();
       } catch (e) {
@@ -143,5 +202,15 @@ export function useSwap() {
     [activeWallet, demo, refreshBalances],
   );
 
-  return { phase, error, result, busy: phase === "swapping", buy, sell, reset };
+  return {
+    phase,
+    error,
+    result,
+    busy: phase === "swapping" || phase === "settling",
+    /** The trade is on-chain; we're waiting for the router's fill to unwrap. */
+    settling: phase === "settling",
+    buy,
+    sell,
+    reset,
+  };
 }

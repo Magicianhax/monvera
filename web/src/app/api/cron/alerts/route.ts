@@ -4,7 +4,7 @@
 import type { NextRequest } from "next/server";
 import { createPublicClient, http } from "viem";
 import { activeAlerts, claimTriggered, addNotification } from "@/lib/server/notifyStore";
-import { priceAll } from "@/lib/prices";
+import { priceAllWithFallback } from "@/lib/server/pricing";
 import { getDaySummary } from "@/lib/server/marketData";
 import { ALL_ASSETS } from "@/lib/tokens";
 import { chain, RPC_URL } from "@/lib/chain";
@@ -25,12 +25,13 @@ export async function GET(req: NextRequest) {
   try {
     const alerts = await activeAlerts();
     if (alerts.length === 0) return Response.json({ ok: true, checked: 0, fired: 0 });
-    // Live spots: Chainlink feeds first, Yahoo close (day summary spark) fallback,
+    // Live spots: Chainlink feeds, then a live Arcus quote for the feedless
+    // majority, then Yahoo close (day summary spark) as the last resort —
     // mirroring how the app itself prices feedless assets.
     const wanted = new Set(alerts.map((a) => a.symbol));
     const assets = ALL_ASSETS.filter((a) => wanted.has(a.symbol));
     const client = createPublicClient({ chain, transport: http(RPC_URL) });
-    const [feeds, summary] = await Promise.all([priceAll(client, assets), getDaySummary()]);
+    const [feeds, summary] = await Promise.all([priceAllWithFallback(client, assets), getDaySummary()]);
     const prices: Record<string, number | undefined> = {};
     for (const sym of wanted) {
       const feed = feeds[sym]?.priceUsd;

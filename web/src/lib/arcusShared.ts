@@ -35,6 +35,24 @@ export function splitByWeights(total: bigint, weightsPct: number[]): bigint[] {
   return out;
 }
 
+/**
+ * How a quote settles. "tx" venues hand back a settlement transaction we submit
+ * ourselves (instant). "rfq" is the `arcus` venue: we POST the signed intent and
+ * the router settles it minutes later. Most assets are RFQ-only.
+ */
+export type VenueKind = "tx" | "rfq" | "none";
+
+/**
+ * The order sizes RFQ makers are known to fill, in whole dollars.
+ *
+ * These are the makers' rules, not ours, and they are only enforced at fill time
+ * — a smaller order quotes cleanly and is rejected on submit. So we advise rather
+ * than forbid: the user can always try, and a rejection costs them nothing but a
+ * signature. Measured against the live router: a $10 buy was rejected, $11 filled.
+ */
+export const RFQ_MIN_BUY_USD = 11;
+export const RFQ_MIN_SELL_USD = 5;
+
 /** The typed-data payload Arcus asks the taker to sign (Permit2 witness transfer). */
 export interface ArcusToSign {
   domain: Record<string, unknown>;
@@ -43,8 +61,18 @@ export interface ArcusToSign {
   message: Record<string, unknown>;
 }
 
-/** One executable Arcus quote as our /api/quote (and the router) returns it. */
+/**
+ * One executable Arcus quote as our /api/quote returns it.
+ *
+ * `kind` says how it settles:
+ *   "tx"  — the venue handed back a settlement tx we splice a signature into and
+ *           submit ourselves inside a batched, gas-sponsored userOp (instant).
+ *   "rfq" — the `arcus` venue: we POST the signed intent and the ROUTER submits
+ *           settlement, delivering a wrapped token that auto-unwraps in ~1-15 min.
+ *           Most assets are RFQ-only. Minimum order is roughly $10.
+ */
 export interface ArcusQuoteResponse {
+  kind?: "tx" | "rfq";
   liquidityAvailable: boolean;
   buyAmount?: string;
   minBuyAmount?: string;
@@ -52,6 +80,24 @@ export interface ArcusQuoteResponse {
   permit2?: `0x${string}`;
   sellToken?: `0x${string}`;
   sellAmount?: string;
+  expiry?: number;
   toSign?: ArcusToSign;
   tx?: { to: `0x${string}`; data: `0x${string}`; value: string; signatureOffset: number };
+}
+
+/** Result of handing a signed RFQ intent to the router. */
+export interface RfqSubmitResponse {
+  txHash: `0x${string}`;
+  status: string;
+  settledToken: `0x${string}` | null;
+  orderId: string | null;
+}
+
+/** A polled RFQ fill. */
+export interface RfqStatusResponse {
+  status: string;
+  filled: boolean;
+  failed: boolean;
+  amountOut: string | null;
+  reason: string | null;
 }

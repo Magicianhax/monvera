@@ -3,6 +3,7 @@
 // Monvera surface + layout primitives — ported from the design handoff (components.jsx).
 // BottomSheet, HoldingRow, Eyebrow, VerifiedBadge, Stat, SectionTitle, Confetti.
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { Icon, type IconName } from "./Icon";
 import { AssetTile, type TileAsset } from "./Brand";
 import { Sparkline } from "./Charts";
@@ -24,6 +25,17 @@ export function BottomSheet({ open, onClose, title, children }: BottomSheetProps
   const [shown, setShown] = useState(false);
   const scrimRef = useRef<HTMLDivElement | null>(null);
 
+  // The sheet's scrim is `position: absolute; inset: 0`, so it anchors to the
+  // nearest positioned ancestor. Rendered in place that is `.screen` — a SCROLL
+  // container — so a tall sheet drifted with the scroll instead of sitting on the
+  // bottom edge, uncovering the CTA beneath it. Portal into the phone frame, which
+  // is the fixed-size positioned element the sheet is meant to cover.
+  const anchorRef = useRef<HTMLSpanElement | null>(null);
+  const [host, setHost] = useState<HTMLElement | null>(null);
+  useEffect(() => {
+    setHost((anchorRef.current?.closest(".stax") as HTMLElement | null) ?? null);
+  }, []);
+
   // Drag-to-dismiss wired to the same close path; the drag animates the panel
   // off-screen itself, then calls onClose via onDismiss.
   const { ref, handlers } = useDragDismiss<HTMLDivElement>({ onDismiss: onClose });
@@ -40,9 +52,11 @@ export function BottomSheet({ open, onClose, title, children }: BottomSheetProps
     return () => clearTimeout(t);
   }, [open]);
 
-  if (!mounted) return null;
+  // Always render the anchor so we can find the frame on first mount, even while
+  // the sheet is closed.
+  if (!mounted) return <span ref={anchorRef} aria-hidden style={{ display: "none" }} />;
 
-  return (
+  const sheet = (
     <div
       ref={scrimRef}
       onClick={onClose}
@@ -137,6 +151,13 @@ export function BottomSheet({ open, onClose, title, children }: BottomSheetProps
         {children}
       </div>
     </div>
+  );
+
+  return (
+    <>
+      <span ref={anchorRef} aria-hidden style={{ display: "none" }} />
+      {host ? createPortal(sheet, host) : sheet}
+    </>
   );
 }
 
