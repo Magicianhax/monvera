@@ -3,6 +3,7 @@ import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
 import sitemap from '@astrojs/sitemap';
 import starlightLlmsTxt from 'starlight-llms-txt';
+import starlightUtils from '@lorenzo_lewis/starlight-utils';
 
 const SITE = 'https://docs.monvera.best';
 const TAGLINE =
@@ -24,6 +25,9 @@ export default defineConfig({
       // no "edit this page" link: the docs repo is private
       lastUpdated: true,
       plugins: [
+        // Topic tabs in the header: each top-level sidebar group becomes a
+        // horizontal tab, and the sidebar shows only that topic's pages.
+        starlightUtils({ multiSidebar: { switcherStyle: 'horizontalList' } }),
         starlightLlmsTxt({
           projectName: 'Monvera',
           description: TAGLINE,
@@ -33,7 +37,7 @@ export default defineConfig({
       ],
       sidebar: [
         {
-          label: 'Start here',
+          label: 'Start',
           items: [
             'start/what-monvera-is',
             'start/where-its-available',
@@ -42,7 +46,7 @@ export default defineConfig({
           ],
         },
         {
-          label: 'Using Monvera',
+          label: 'Guide',
           collapsed: true,
           items: [
             'use/make-your-first-plan',
@@ -62,7 +66,7 @@ export default defineConfig({
           ],
         },
         {
-          label: 'Money and safety',
+          label: 'Safety',
           collapsed: true,
           items: [
             'safety/can-i-lose-money',
@@ -77,7 +81,7 @@ export default defineConfig({
           ],
         },
         {
-          label: 'How Monvera works',
+          label: 'How it works',
           collapsed: true,
           items: [
             'how/accountable-ai',
@@ -101,7 +105,7 @@ export default defineConfig({
           ],
         },
         {
-          label: 'API reference',
+          label: 'API',
           collapsed: true,
           items: [{ autogenerate: { directory: 'dev/api' } }],
         },

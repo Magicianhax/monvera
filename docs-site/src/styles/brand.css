@@ -62,3 +62,22 @@ figure.shot figcaption {
   flex: 1 1 220px;
   max-width: 270px;
 }
+
+/* Topic tabs (starlight-utils multiSidebar switcher at the top of the
+   sidebar): compact, one line per tab, wrap BETWEEN tabs never within one. */
+#starlight__sidebar ul[role='tablist'] {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.1rem 0.9rem;
+  border-bottom: 1px solid var(--sl-color-hairline);
+  padding-bottom: 0.35rem;
+}
+#starlight__sidebar ul[role='tablist'] .tab {
+  margin: 0;
+}
+#starlight__sidebar ul[role='tablist'] a[role='tab'] {
+  white-space: nowrap;
+  padding: 0.15rem 0;
+  font-size: var(--sl-text-sm);
+  font-weight: 600;
+}
