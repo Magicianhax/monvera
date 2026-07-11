@@ -1,0 +1,48 @@
+---
+title: "Review your portfolio"
+description: "One tap and Vera reads what you already own: how concentrated you are, which of your holdings move together, and how your exact mix has behaved over the last year next to the S&P 500."
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components';
+
+Portfolio Review is Vera reading the holdings you already have, the same honest way she reads a new plan. In one tap she shows how concentrated you are, which of your stocks tend to move together, and how your exact mix has behaved over the last twelve months next to the S&P 500. Then she tells you, in plain words, what stood out. Nothing is bought or sold. It is a read, not an action.
+
+<figure class="shot">
+  <img src="/screens/portfolio-review.webp" alt="Vera's portfolio review: a verdict, a concentration card, theme overlap, and a 12-month backtest against the S&P 500" class="phone-shot" />
+  <figcaption>A real review: the verdict, how concentrated you are, ideas that move together, and the mix's own year against the S&P 500.</figcaption>
+</figure>
+
+## Run a review
+
+<Steps>
+
+1. Open the **Owned** tab. Under your total value you will see a card that says **Review my portfolio**.
+
+2. Tap it. Vera reads your live holdings and works out the numbers first. This takes a few seconds.
+
+3. Read the result top to bottom. Every number is computed from your real positions and live market data, so nothing is made up.
+
+</Steps>
+
+## What the review shows
+
+- **A one-line verdict.** The shape of your portfolio in a single honest sentence, like "a solid core with an index fund and cash, but a lot of the weight leans on one theme."
+- **How concentrated you are.** Your largest position, how much your top three add up to together, and how many holdings you have. A high top-three number means a few names carry most of the outcome.
+- **Ideas that move together.** When several of your holdings belong to the same theme, like semiconductors or AI, they tend to rise and fall together. The review names each cluster and how much of your money sits in it, so you can see where you are less diversified than the count of holdings suggests.
+- **This mix's last twelve months.** A walk-forward backtest of your exact weights against the S&P 500, with the mix's return, the benchmark's return, and the worst dip along the way.
+- **What Vera noticed.** A few plain-words observations, each tied to one of the numbers above.
+- **Optional suggestions.** At most three, and only when they help. Each is a proposal you can act on through the normal ask-Vera flow, never an automatic trade.
+
+<Aside type="caution" title="The backtest is the mix's history, not your return">
+  The twelve-month line is how a portfolio with your current weights would have behaved over the last year. It is not your personal profit, and past behaviour is never a promise about the future. See [Backtests are history, not promises](/safety/backtests-are-history-not-promises/).
+</Aside>
+
+## What a review will never do
+
+- It never moves your money. Every suggestion waits for you to choose it.
+- It never invents a number, a headline, or a price. If a holding has no honest history to test, the review says so and leaves it out rather than guessing.
+- It is not investment advice. It is a read on the shape and history of what you own, to help you decide for yourself.
+
+<Aside type="note">
+  A review reflects your holdings at the moment you run it. Buy or sell something and run it again to see how the picture changes.
+</Aside>
