@@ -1,0 +1,68 @@
+---
+title: "Get the theme baskets"
+description: "GET /api/themes returns one deterministic basket per investing theme (AI, semiconductors, space and more) with weights and a walk-forward backtest, as JSON."
+---
+
+import { Tabs, TabItem, LinkCard } from '@astrojs/starlight/components';
+
+`GET /api/themes` returns Monvera's open theme book: one rule-based basket per investing theme (Artificial Intelligence, Semiconductors, Quantum, Space, Crypto-linked, Cloud and Software, Energy, Fintech), computed from real 12-month price data by the same engine as the [open strategies](/dev/api/strategies/). No AI is in this loop, so the same data always produces the same weights and anyone can reproduce them. This is the raw JSON behind [monvera.best/themes](https://monvera.best/themes).
+
+- **Method and path**: `GET https://monvera.best/api/themes`
+- **Auth**: none (public)
+- **Rate limit**: 120 requests per 60 seconds per IP
+
+## Parameters
+
+This route takes no parameters.
+
+## Returns
+
+`{ asOf, refreshedEvery, note, themes }`.
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `asOf` | string | ISO timestamp of the build. |
+| `refreshedEvery` | string | `"6h"`. Baskets are rebuilt from fresh market data every six hours. |
+| `note` | string | The methodology statement, including that backtests are walk-forward and history, not a promise. |
+| `themes` | object[] | The theme list (below). |
+
+Each theme:
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `slug` | string | Stable id, for example `ai` or `semiconductors`. The human page lives at `/themes/{slug}`. |
+| `name` | string | Display name, for example `Artificial Intelligence`. |
+| `tagline` | string | One-line summary. |
+| `method` | string | The full rule in plain words, enough to reproduce the weights. |
+| `excluded` | object[] | `{ symbol, reason }` for curated names the book had to leave out (for example, no 12-month public history yet). Exclusions are named, never synthesized. |
+| `allocations` | object[] | `{ symbol, weightPct }` per holding; integer weights summing to 100, inverse-volatility with a 25% per-name cap. |
+| `backtest` | object \| null | The walk-forward backtest, or `null` if a data gap prevented one. |
+
+Each `backtest` has the same shape as the strategies route: `period` (`"6M"`), `methodology` (`"walk-forward"`), `rebalance` (`"monthly"`), `portfolio`, and `benchmark` (`symbol: "SPY"`), each series carrying `returnPct`, `volPct`, `maxDrawdownPct`, `sharpe`, and a downsampled `curve` normalized to start at 100.
+
+## Example
+
+<Tabs>
+<TabItem label="curl">
+
+```bash
+curl https://monvera.best/api/themes
+```
+
+</TabItem>
+<TabItem label="fetch">
+
+```js
+const { themes } = await (await fetch("https://monvera.best/api/themes")).json();
+const ai = themes.find((t) => t.slug === "ai");
+// ai.allocations -> [{ symbol: "MSFT", weightPct: 9 }, ...]
+// ai.backtest.portfolio.returnPct vs ai.backtest.benchmark.returnPct
+```
+
+</TabItem>
+</Tabs>
+
+A caller over the rate limit gets `429` with `{"error":"Too many requests. Please slow down a moment."}` and a `Retry-After` header.
+
+<LinkCard title="Get the open strategies" href="/dev/api/strategies/" description="The cross-theme strategy book built by the same engine." />
+<LinkCard title="Open strategies and backtests" href="/how/open-strategies-and-backtests/" description="Why the whole book is public and how the walk-forward test works." />

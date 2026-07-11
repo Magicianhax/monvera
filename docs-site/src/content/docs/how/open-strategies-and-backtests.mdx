@@ -60,5 +60,15 @@ const backtest = await (
 
 `/api/strategies` is rate limited to 30 requests per 60 seconds per IP, and `/api/backtest` to 20 requests per 60 seconds per IP. A caller over the limit gets `429` with `{"error":"Too many requests. Please slow down a moment."}` and a `Retry-After` header.
 
+## Theme baskets
+
+The same engine also builds one basket per investing theme: Artificial Intelligence, Semiconductors, Quantum, Space, Crypto-linked stocks, Cloud and Software, Energy, and Fintech. Each theme takes its curated universe, weights every name inversely to its volatility with a 25% cap, and gets the same walk-forward backtest against the S&P 500. Names without a year of public history are excluded and listed by name on the page, because we name exclusions instead of inventing data for them.
+
+<img src="/screens/themes-index.webp" alt="The theme baskets index: eight cards, each with its six-month walk-forward result against the S&P 500 and its allocation bar" />
+
+Browse them at [monvera.best/themes](https://monvera.best/themes), or pull the raw JSON from [`/api/themes`](/dev/api/themes/) (public, no auth, 120 requests per 60 seconds per IP). Every theme page shows the full rule so you can reproduce the weights yourself.
+
+<img src="/screens/themes-ai.webp" alt="The Artificial Intelligence basket page: walk-forward curve against SPY, stats, full weight legend, and the reproducible rule" />
+
 <LinkCard title="How Vera decides" href="/how/how-vera-decides/" description="Vera reasons over the same real price history these strategies backtest against." />
 <LinkCard title="Where prices come from" href="/how/where-prices-come-from/" description="The Chainlink feeds and Arcus quotes behind the price history." />
