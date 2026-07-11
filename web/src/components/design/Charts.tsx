@@ -366,7 +366,10 @@ export function Donut({ segments, size = 116, thickness = 16, center }: DonutPro
     const raf = requestAnimationFrame(() => setDrawn(true));
     return () => cancelAnimationFrame(raf);
   }, []);
-  let off = 0;
+  // Each arc's length and its cumulative start offset, computed up front so the
+  // render stays pure (no accumulator mutated while mapping to JSX).
+  const lens = segments.map((s) => (s.value / tot) * c);
+  const offsets = lens.map((_, i) => lens.slice(0, i).reduce((a, b) => a + b, 0));
   return (
     <div style={{ position: "relative", width: size, height: size, flex: "none" }}>
       <svg
@@ -384,7 +387,8 @@ export function Donut({ segments, size = 116, thickness = 16, center }: DonutPro
           strokeWidth={thickness}
         />
         {segments.map((s, i) => {
-          const len = (s.value / tot) * c;
+          const len = lens[i];
+          const off = offsets[i];
           const shown = Math.max(len - 3, 0.5);
           // gap that grows from full (hidden) to the true gap (drawn).
           const dash = drawn ? shown : 0.5;
@@ -407,7 +411,6 @@ export function Donut({ segments, size = 116, thickness = 16, center }: DonutPro
               }}
             />
           );
-          off += len;
           return el;
         })}
       </svg>
