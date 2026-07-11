@@ -45,7 +45,8 @@ export default async function StrategiesPage() {
           weights are recomputed from real market data every six hours, and every rule is backtested walk-forward: at
           each monthly rebalance it sees only the data it would have had at that moment, then holds out of sample. No
           picking last year&apos;s winners and calling it a backtest. The raw JSON is free for anyone to build on at{" "}
-          <a className={s.inlineLink} href="/api/strategies">/api/strategies</a>.
+          <a className={s.inlineLink} href="/api/strategies">/api/strategies</a>. Want a sector cut instead? The
+          same engine builds our per-theme baskets at <a className={s.inlineLink} href="/themes">/themes</a>.
         </>
       }
     >

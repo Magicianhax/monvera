@@ -16,7 +16,10 @@ const QUARTER_BARS = 63; // ~3 trading months
 const REBALANCE_EVERY_BARS = 21;
 const CURVE_POINTS = 60;
 
-interface AssetStat {
+// Exported pieces below (AssetStat, inverseVolWeights, walkForward,
+// buildUniverseData) are the shared strategy engine — the /themes book
+// (lib/server/themes.ts) runs the same math over theme universes.
+export interface AssetStat {
   symbol: string;
   ret1y: number;
   ret3m: number;
@@ -63,7 +66,7 @@ export interface StrategiesPayload {
 // ── weight math ───────────────────────────────────────────────────────────────
 
 /** Inverse-volatility weights with a per-asset cap; excess redistributes. */
-function inverseVolWeights(assets: AssetStat[], capPct: number): StrategyAllocation[] {
+export function inverseVolWeights(assets: AssetStat[], capPct: number): StrategyAllocation[] {
   let free = assets.map((a) => ({ symbol: a.symbol, raw: 1 / Math.max(a.vol, 1) }));
   const fixed: StrategyAllocation[] = [];
   let budget = 100;
@@ -140,7 +143,7 @@ function balancedGrowth(etfs: AssetStat[], stocks: AssetStat[]): StrategyAllocat
 
 // ── walk-forward engine ───────────────────────────────────────────────────────
 
-type Rule = (etfs: AssetStat[], stocks: AssetStat[]) => StrategyAllocation[];
+export type Rule = (etfs: AssetStat[], stocks: AssetStat[]) => StrategyAllocation[];
 
 function round2(n: number): number {
   return Math.round(n * 100) / 100;
@@ -172,7 +175,7 @@ function statsAt(tails: Map<string, number[]>, t: number): AssetStat[] {
   return out;
 }
 
-function walkForward(
+export function walkForward(
   rule: Rule,
   tails: Map<string, number[]>,
   etfSyms: Set<string>,
@@ -224,12 +227,22 @@ function walkForward(
 const PAYLOAD_TTL_MS = 6 * 60 * 60_000;
 let payloadCache: { at: number; value: Promise<StrategiesPayload> } | null = null;
 
-async function build(): Promise<StrategiesPayload> {
-  const symbols = [...STOCKS, ...ETFS].map((a) => a.symbol).filter((s) => !NO_PUBLIC_HISTORY.has(s));
-  const histories = await getManyHistories(symbols, "1Y");
+/**
+ * Fetch 1Y histories for `symbols` and derive the stats + aligned series the
+ * engine needs. Symbols with no public history or a short tape are dropped
+ * (and reported in `skipped`) — the honesty rule: name exclusions, never
+ * synthesize them.
+ */
+export async function buildUniverseData(symbols: string[]): Promise<{
+  stats: AssetStat[];
+  tails: Map<string, number[]>;
+  skipped: string[];
+}> {
+  const eligible = symbols.filter((s) => !NO_PUBLIC_HISTORY.has(s));
+  const histories = await getManyHistories(eligible, "1Y");
 
   const stats: AssetStat[] = [];
-  for (const symbol of symbols) {
+  for (const symbol of eligible) {
     const h = histories.get(symbol);
     if (!h || h.series.length < MIN_BARS + QUARTER_BARS) continue; // need a full-ish year
     const s = h.series;
@@ -242,13 +255,22 @@ async function build(): Promise<StrategiesPayload> {
       maxDd: m.maxDrawdownPct,
     });
   }
-  const etfSyms = new Set(ETFS.map((a) => a.symbol));
-  const etfs = stats.filter((a) => etfSyms.has(a.symbol));
-  const stocks = stats.filter((a) => !etfSyms.has(a.symbol));
 
   // Full aligned series for the walk-forward engine (only symbols with stats).
   const tails = new Map<string, number[]>();
   for (const a of stats) tails.set(a.symbol, (histories.get(a.symbol) as { series: number[] }).series);
+
+  const kept = new Set(stats.map((a) => a.symbol));
+  return { stats, tails, skipped: symbols.filter((s) => !kept.has(s)) };
+}
+
+async function build(): Promise<StrategiesPayload> {
+  const symbols = [...STOCKS, ...ETFS].map((a) => a.symbol);
+  const { stats, tails } = await buildUniverseData(symbols);
+
+  const etfSyms = new Set(ETFS.map((a) => a.symbol));
+  const etfs = stats.filter((a) => etfSyms.has(a.symbol));
+  const stocks = stats.filter((a) => !etfSyms.has(a.symbol));
 
   const defs: (Omit<PublicStrategy, "backtest"> & { rule: Rule })[] = [
     {

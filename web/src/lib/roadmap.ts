@@ -42,6 +42,7 @@ export const ROADMAP: RoadmapPhase[] = [
       { name: "Vera's public agent page", note: "Her verifiable on-chain identity and recorded track record, open to anyone." },
       { name: "Portfolio review", note: "One tap and Vera reads what you own: concentration, overlap, and how the mix has actually behaved." },
       { name: "Agent card", note: "A machine-readable ERC-8004 endpoint so other agents can find and verify Vera." },
+      { name: "Theme baskets", note: "One honest basket per theme, from AI to space: open weights, an open rule, and a walk-forward backtest anyone can pull as JSON." },
       { name: "Documentation", note: "Plain-language guides and a full developer reference at docs.monvera.best." },
     ],
   },
