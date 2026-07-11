@@ -1,0 +1,41 @@
+---
+title: "API overview"
+description: "Every Monvera API route in one place: public market data, the open strategy and theme books, and the authenticated user routes."
+sidebar:
+  order: 0
+  label: "Overview"
+---
+
+import { LinkCard, CardGrid } from '@astrojs/starlight/components';
+
+Base URL: `https://monvera.best/api`. Conventions, errors, and auth are described in the [developer quickstart](/dev/quickstart/).
+
+## Public, no auth
+
+Open data anyone (or any agent) can pull. Rate-limited per IP.
+
+<CardGrid>
+  <LinkCard title="GET /prices" href="/dev/api/prices/" description="Live Chainlink-first prices for the whole universe." />
+  <LinkCard title="GET /market" href="/dev/api/market/" description="Day summaries: change, sparkline, highs and lows." />
+  <LinkCard title="GET /strategies" href="/dev/api/strategies/" description="The open strategy book with walk-forward backtests." />
+  <LinkCard title="GET /themes" href="/dev/api/themes/" description="One deterministic basket per investing theme." />
+  <LinkCard title="GET /screener" href="/dev/api/screener/" description="The universe ranked by return, momentum, volatility, drawdown." />
+  <LinkCard title="GET /agent-card" href="/dev/api/agent-card/" description="Vera's machine-readable ERC-8004 identity." />
+  <LinkCard title="GET /vera-record" href="/dev/api/vera-record/" description="Her on-chain track record, aggregated." />
+  <LinkCard title="POST /backtest" href="/dev/api/backtest/" description="Run a walk-forward backtest for a strategy rule." />
+</CardGrid>
+
+## Authenticated (Privy bearer token)
+
+Routes that act for a signed-in user. See [authentication](/dev/authentication/).
+
+<CardGrid>
+  <LinkCard title="POST /allocate" href="/dev/api/allocate/" description="A goal in plain words in, Vera's plan out." />
+  <LinkCard title="POST /invest-plan" href="/dev/api/invest-plan/" description="Turn a plan into per-leg quotes ready to sign." />
+  <LinkCard title="POST /quote" href="/dev/api/quote/" description="A live buy or sell quote for one asset." />
+  <LinkCard title="GET /portfolio" href="/dev/api/portfolio/" description="Holdings, values, and day moves for the account." />
+  <LinkCard title="GET /activity" href="/dev/api/activity/" description="The on-chain activity feed." />
+  <LinkCard title="Autopilot routes" href="/dev/api/autopilot/" description="Set, read, and audit recurring investing." />
+</CardGrid>
+
+The sidebar lists every route, including alerts, notifications, transactions, and commit-plan.

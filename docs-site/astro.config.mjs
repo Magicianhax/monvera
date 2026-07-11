@@ -43,6 +43,7 @@ export default defineConfig({
         },
         {
           label: 'Using Monvera',
+          collapsed: true,
           items: [
             'use/make-your-first-plan',
             'use/read-your-plan',
@@ -62,6 +63,7 @@ export default defineConfig({
         },
         {
           label: 'Money and safety',
+          collapsed: true,
           items: [
             'safety/can-i-lose-money',
             'safety/what-it-costs',
@@ -76,6 +78,7 @@ export default defineConfig({
         },
         {
           label: 'How Monvera works',
+          collapsed: true,
           items: [
             'how/accountable-ai',
             'how/how-vera-decides',
@@ -86,17 +89,21 @@ export default defineConfig({
         },
         {
           label: 'Developers',
-          collapsed: false,
+          collapsed: true,
           items: [
             'dev/quickstart',
             'dev/authenticated-quickstart',
             'dev/authentication',
             'dev/conventions',
             'dev/errors',
-            { label: 'API reference', items: [{ autogenerate: { directory: 'dev/api' } }] },
             'dev/verify-vera',
             'dev/network-and-addresses',
           ],
+        },
+        {
+          label: 'API reference',
+          collapsed: true,
+          items: [{ autogenerate: { directory: 'dev/api' } }],
         },
         {
           label: 'Reference',
