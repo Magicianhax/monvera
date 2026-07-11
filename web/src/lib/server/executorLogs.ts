@@ -15,6 +15,7 @@ import "server-only";
 import { createPublicClient, http, decodeEventLog, encodeEventTopics, padHex, zeroAddress } from "viem";
 import type { AbiEvent } from "viem";
 import { chain, EXPLORER_URL, RPC_URL } from "@/lib/chain";
+import { kvCached as cached } from "@/lib/server/kvCache";
 import { SERVER_RPC_URL } from "@/lib/server/rpc";
 import {
   STAX_EXECUTOR,
@@ -47,22 +48,10 @@ const CHUNK_CONCURRENCY = 5;
 const client = createPublicClient({ chain, transport: http(SERVER_RPC_URL) });
 const logsClient = createPublicClient({ chain, transport: http(RPC_URL) });
 
-// ── tiny in-memory TTL cache ──────────────────────────────────────────────────
-const cache = new Map<string, { at: number; data: unknown }>();
-async function cached<T>(key: string, ttlMs: number, load: () => Promise<T>): Promise<T> {
-  const hit = cache.get(key);
-  if (hit && Date.now() - hit.at < ttlMs) return hit.data as T;
-  try {
-    const data = await load();
-    cache.set(key, { at: Date.now(), data });
-    return data;
-  } catch (err) {
-    // A refresh blip (Blockscout hiccup, RPC throttle) must never blank a track
-    // record we already know — serve the last good value and retry next time.
-    if (hit) return hit.data as T;
-    throw err;
-  }
-}
+// Cross-isolate cache (memory + Cloudflare KV, lib/server/kvCache). Isolates
+// recycle constantly and a cold one used to repay the FULL record scan (~60s
+// when Blockscout flaked and the chunked public-RPC sweep ran). With KV the
+// fleet shares one scan per TTL, and stale values survive a source outage.
 
 // ── 1) Blockscout logs (indexed; keyless; Etherscan-compatible response) ──────
 interface EsLog {

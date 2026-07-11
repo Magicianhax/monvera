@@ -60,11 +60,23 @@ function CurveChart({ bt }: { bt: NonNullable<Review["backtest"]> }) {
   );
 }
 
-function Stat({ label, value, suffix = "%" }: { label: string; value: number; suffix?: string }) {
+// `signed` shows a leading + on positives — right for a RETURN (a gain), wrong
+// for a share like concentration, where "+71.6%" reads as a profit.
+function Stat({
+  label,
+  value,
+  suffix = "%",
+  signed = false,
+}: {
+  label: string;
+  value: number;
+  suffix?: string;
+  signed?: boolean;
+}) {
   return (
     <div style={{ flex: 1, minWidth: 90 }}>
       <div className="tnum" style={{ fontSize: 19, fontWeight: 650, letterSpacing: "-.02em" }}>
-        {value >= 0 && suffix === "%" ? "+" : ""}
+        {signed && value > 0 ? "+" : ""}
         {value.toFixed(1)}
         {suffix}
       </div>
@@ -208,8 +220,8 @@ export function ReviewScreen({
                 </div>
                 <CurveChart bt={review.backtest} />
                 <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginTop: 12 }}>
-                  <Stat label="this mix" value={review.backtest.portfolio.returnPct} />
-                  <Stat label="S&P 500" value={review.backtest.benchmark.returnPct} />
+                  <Stat label="this mix" value={review.backtest.portfolio.returnPct} signed />
+                  <Stat label="S&P 500" value={review.backtest.benchmark.returnPct} signed />
                   <Stat label="worst dip" value={-Math.abs(review.backtest.portfolio.maxDrawdownPct)} />
                 </div>
                 <p style={{ fontSize: 12, color: "var(--ink-3)", margin: "10px 0 0", lineHeight: 1.5 }}>

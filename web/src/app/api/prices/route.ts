@@ -34,7 +34,7 @@ const publicClient = createPublicClient({
 export async function GET(req: NextRequest) {
   // Public market data (used pre-login on the landing), so no auth — but rate
   // limit per IP so it can't be hammered to drive RPC cost.
-  const limit = rateLimit(`prices:${clientIp(req)}`, 60, 60_000);
+  const limit = rateLimit(`prices:${clientIp(req)}`, 240, 60_000 /* per-IP: generous — VPN exits and CGNAT put many users behind one IP */);
   if (!limit.ok) return tooManyRequests(limit.retryAfter);
 
   try {

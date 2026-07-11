@@ -16,7 +16,10 @@ const BodySchema = z.object({
     .array(
       z.object({
         symbol: z.string().min(1).max(12),
-        weightPct: z.number().positive().max(100),
+        // A relative weight — the client sends each holding's USD value and the
+        // server normalizes them to 100. So this is NOT a 0-100 percentage; a
+        // single holding worth over $100 is normal and must not be rejected.
+        weightPct: z.number().positive().max(100_000_000),
       }),
     )
     .min(1)

@@ -60,7 +60,7 @@ interface PortfolioHolding {
 }
 
 export async function GET(req: NextRequest) {
-  const limit = rateLimit(`portfolio:${clientIp(req)}`, 30, 60_000);
+  const limit = rateLimit(`portfolio:${clientIp(req)}`, 240, 60_000 /* per-IP: generous — VPN exits and CGNAT put many users behind one IP */);
   if (!limit.ok) return tooManyRequests(limit.retryAfter);
 
   const address = req.nextUrl.searchParams.get("address");

@@ -21,7 +21,7 @@ export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest) {
   // Public market data (shown pre-login), so no auth — rate-limited per IP.
-  const limit = rateLimit(`market:${clientIp(req)}`, 60, 60_000);
+  const limit = rateLimit(`market:${clientIp(req)}`, 240, 60_000 /* per-IP: generous — VPN exits and CGNAT put many users behind one IP */);
   if (!limit.ok) return tooManyRequests(limit.retryAfter);
 
   const symbol = req.nextUrl.searchParams.get("symbol");

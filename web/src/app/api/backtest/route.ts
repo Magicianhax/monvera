@@ -23,7 +23,7 @@ const BodySchema = z.object({
 });
 
 export async function POST(req: NextRequest) {
-  const limit = rateLimit(`backtest:${clientIp(req)}`, 20, 60_000);
+  const limit = rateLimit(`backtest:${clientIp(req)}`, 60, 60_000 /* per-IP: generous — VPN exits and CGNAT put many users behind one IP */);
   if (!limit.ok) return tooManyRequests(limit.retryAfter);
 
   let body: z.infer<typeof BodySchema>;

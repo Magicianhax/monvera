@@ -31,6 +31,14 @@
       "service": "monvera"
     }
   ],
+  // Cross-isolate cache (Vera's on-chain record scan, etc). Isolates recycle
+  // constantly; without this each cold one re-scanned the chain (~60s).
+  "kv_namespaces": [
+    {
+      "binding": "KV",
+      "id": "261d14429e574a209be09659d23a628e"
+    }
+  ],
   "images": {
     "binding": "IMAGES"
   },

@@ -20,7 +20,7 @@ export const dynamic = "force-dynamic";
 const BUYABLE = ALL_ASSETS.filter((a) => !displayFor(a.symbol).coming);
 
 export async function GET(req: NextRequest) {
-  const limit = rateLimit(`screener:${clientIp(req)}`, 60, 60_000);
+  const limit = rateLimit(`screener:${clientIp(req)}`, 120, 60_000 /* per-IP: generous — VPN exits and CGNAT put many users behind one IP */);
   if (!limit.ok) return tooManyRequests(limit.retryAfter);
 
   try {

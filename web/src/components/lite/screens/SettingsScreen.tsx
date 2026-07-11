@@ -10,6 +10,7 @@ import { Icon, type IconName } from "@/components/design";
 import { useTheme } from "@/hooks/useTheme";
 import { useColorStyle } from "@/hooks/useColorStyle";
 import { useSmartAccount } from "@/hooks/useSmartAccount";
+import { ExportKey } from "./ExportKey";
 import { SelfCustodyProof } from "@/components/shared/SelfCustodyProof";
 import { useHaptics, haptic } from "@/lib/haptics";
 import { shortAddress } from "@/lib/format";
@@ -241,6 +242,14 @@ export function SettingsScreen({
                 );
               })}
             </div>
+          </div>
+        </div>
+
+        {/* security — self-custody escape hatch */}
+        <div style={{ marginTop: 26 }}>
+          <div style={sectionLabel}>Security</div>
+          <div className="card" style={{ padding: 0, overflow: "hidden" }}>
+            <ExportKey />
           </div>
         </div>
 

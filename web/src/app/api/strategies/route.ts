@@ -10,7 +10,7 @@ import { tooManyRequests, serverError } from "@/lib/server/respond";
 export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest) {
-  const limit = rateLimit(`strategies:${clientIp(req)}`, 30, 60_000);
+  const limit = rateLimit(`strategies:${clientIp(req)}`, 120, 60_000 /* per-IP: generous — VPN exits and CGNAT put many users behind one IP */);
   if (!limit.ok) return tooManyRequests(limit.retryAfter);
   try {
     const payload = await getPublicStrategies();
