@@ -1,7 +1,13 @@
 // Monvera service worker — hand-authored (no serwist/workbox).
 // public/ is served verbatim at /sw.js by Turbopack (no bundler processing).
-// Bump CACHE_VERSION on every deploy that changes the app shell.
-const CACHE_VERSION = "monvera-v1";
+//
+// CACHE_VERSION must change on every deploy that touches the app shell, or a
+// returning user keeps a stale precache whose hashed chunks were deleted from
+// the origin — and any network blip then falls through to a hard "page couldn't
+// load". It was manually pinned at v1 across many deploys (the bug). The deploy
+// script now stamps the build id over the __BUILD_ID__ token below, so this is
+// automatic; the literal fallback only ships in local dev, which is fine.
+const CACHE_VERSION = "monvera-__BUILD_ID__";
 const PRECACHE = `${CACHE_VERSION}-precache`;
 const RUNTIME = `${CACHE_VERSION}-runtime`;
 const OFFLINE_URL = "/offline";
