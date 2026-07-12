@@ -34,20 +34,6 @@ const publicClient = createPublicClient({
   transport: http(RPC_URL),
 });
 
-// Prices move slowly relative to page views — share one read across all users.
-// Goes through priceAllWithFallback so a holding in an Arcus-only stock (most of
-// them) shows a real value instead of a dash on the portfolio and sell screens.
-let pricesCache: { at: number; value: ReturnType<typeof priceAllWithFallback> } | null = null;
-function cachedPrices() {
-  if (pricesCache && Date.now() - pricesCache.at < 15_000) return pricesCache.value;
-  const value = priceAllWithFallback(publicClient).catch((err) => {
-    pricesCache = null;
-    throw err;
-  });
-  pricesCache = { at: Date.now(), value };
-  return value;
-}
-
 interface PortfolioHolding {
   symbol: string;
   /** Raw balance as a decimal string (bigint-safe for JSON). */
@@ -68,37 +54,58 @@ export async function GET(req: NextRequest) {
 
   try {
     const assets = ALL_ASSETS.filter((a) => a.address && a.decimals);
-    const [results, prices, day] = await Promise.all([
-      // USDG first, then the asset universe — one multicall, one RPC request.
-      publicClient.multicall({
-        contracts: [
-          { address: USDG.address as `0x${string}`, abi: ERC20_ABI, functionName: "balanceOf" as const, args: [address as `0x${string}`] },
-          ...assets.map((asset) => ({
-            address: asset.address!,
-            abi: ERC20_ABI,
-            functionName: "balanceOf" as const,
-            args: [address as `0x${string}`] as const,
-          })),
-        ],
-      }),
-      // Prices are best-effort: a Chainlink/Arcus/Yahoo blip must NOT 500 the
-      // whole portfolio (that forced users to refresh repeatedly). Balances are
-      // the real answer; missing prices degrade to 0 and the client keeps its
-      // last values via keepPreviousData.
-      cachedPrices().catch(() => ({}) as Awaited<ReturnType<typeof priceAllWithFallback>>),
-      getDaySummary().catch(() => ({}) as Awaited<ReturnType<typeof getDaySummary>>),
+
+    // The day summary is universe-wide + cached 5 min, so kick it off in
+    // parallel. Day change is decorative, so a cold Yahoo sweep must not hold
+    // the whole portfolio hostage: cap the wait at 3.5s and let it fill in on
+    // the next poll (by then the 5-min cache is warm).
+    const empty = {} as Awaited<ReturnType<typeof getDaySummary>>;
+    const dayP = Promise.race([
+      getDaySummary().catch(() => empty),
+      new Promise<Awaited<ReturnType<typeof getDaySummary>>>((resolve) => setTimeout(() => resolve(empty), 3_500)),
     ]);
+
+    // 1. Balances first — one multicall, one RPC request. We need these to know
+    //    which tokens to price (pricing the whole 95-token universe, with its
+    //    2s Arcus sweep, was the portfolio's cold-load cost — a user only holds
+    //    a handful, mostly Chainlink-fed).
+    const results = await publicClient.multicall({
+      contracts: [
+        { address: USDG.address as `0x${string}`, abi: ERC20_ABI, functionName: "balanceOf" as const, args: [address as `0x${string}`] },
+        ...assets.map((asset) => ({
+          address: asset.address!,
+          abi: ERC20_ABI,
+          functionName: "balanceOf" as const,
+          args: [address as `0x${string}`] as const,
+        })),
+      ],
+    });
 
     const usdcRead = results[0];
     const cashUsd =
       usdcRead.status === "success" ? fromUnits(usdcRead.result as bigint, USDG.decimals) : 0;
 
-    const holdings: PortfolioHolding[] = [];
+    // 2. Held tokens only.
+    const heldIdx: number[] = [];
     for (let i = 0; i < assets.length; i++) {
       const r = results[i + 1];
-      if (r.status !== "success") continue; // one bad token never hides the rest
-      const raw = r.result as bigint;
-      if (raw === BigInt(0)) continue;
+      if (r.status === "success" && (r.result as bigint) !== BigInt(0)) heldIdx.push(i);
+    }
+    const heldAssets = heldIdx.map((i) => assets[i]);
+
+    // 3. Price ONLY the held tokens (best-effort — a price blip must not 500
+    //    the whole portfolio; balances are the real answer). Await the day
+    //    summary alongside.
+    const [prices, day] = await Promise.all([
+      heldAssets.length > 0
+        ? priceAllWithFallback(publicClient, heldAssets).catch(() => ({}) as Awaited<ReturnType<typeof priceAllWithFallback>>)
+        : Promise.resolve({} as Awaited<ReturnType<typeof priceAllWithFallback>>),
+      dayP,
+    ]);
+
+    const holdings: PortfolioHolding[] = [];
+    for (const i of heldIdx) {
+      const raw = results[i + 1].result as bigint;
       const asset = assets[i];
       const qty = fromUnits(raw, asset.decimals!);
       const priceUsd = prices[asset.symbol]?.priceUsd ?? null;
