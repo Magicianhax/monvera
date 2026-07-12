@@ -31,6 +31,7 @@ import { HomeScreen } from "./screens/HomeScreen";
 import { GoalScreen } from "./screens/GoalScreen";
 import { ThinkingScreen } from "./screens/ThinkingScreen";
 import { PlanScreen } from "./screens/PlanScreen";
+import { ConfirmScreen } from "./screens/ConfirmScreen";
 import { PlacingScreen } from "./screens/PlacingScreen";
 import { SuccessScreen } from "./screens/SuccessScreen";
 import { PortfolioScreen } from "./screens/PortfolioScreen";
@@ -61,6 +62,7 @@ type Screen =
   | "goal"
   | "thinking"
   | "plan"
+  | "confirm"
   | "placing"
   | "success"
   | "portfolio"
@@ -222,7 +224,7 @@ export function LiteApp({ demoPlay = null }: { demoPlay?: "invest" | "vera" | nu
     [tone, rethinking, invest],
   );
 
-  // Place the investment (server-signed plan + batched sponsored UserOp).
+  // Invest → choose how to place it (Vera signs vs approve each).
   const onInvest = useCallback(() => {
     if (!invest.allocation || !address) {
       notify("Loading your account, try again in a moment", "info");
@@ -230,9 +232,19 @@ export function LiteApp({ demoPlay = null }: { demoPlay?: "invest" | "vera" | nu
     }
     haptic.medium();
     setDir("push");
-    setStack((s) => [...s, { screen: "placing", params: {} }]);
-    void invest.invest(invest.allocation, amount, address);
-  }, [invest, address, amount, notify]);
+    setStack((s) => [...s, { screen: "confirm", params: {} }]);
+  }, [invest.allocation, address, notify]);
+
+  // Placement mode chosen → run it.
+  const onPlace = useCallback(
+    (mode: "auto" | "manual") => {
+      if (!invest.allocation || !address) return;
+      setDir("push");
+      setStack((s) => [...s.filter((r) => r.screen !== "confirm"), { screen: "placing", params: {} }]);
+      void invest.invest(invest.allocation, amount, address, mode);
+    },
+    [invest, address, amount],
+  );
 
   // Latest handlers for the demo autoplay driver (avoids stale closures).
   const goRef = useRef(go);
@@ -318,6 +330,7 @@ export function LiteApp({ demoPlay = null }: { demoPlay?: "invest" | "vera" | nu
       goal: "New plan",
       thinking: "Building your plan",
       plan: "Vera's plan",
+      confirm: "Place your plan",
       placing: "Securing your investment",
       success: "Invested",
       portfolio: "What you own",
@@ -470,8 +483,20 @@ export function LiteApp({ demoPlay = null }: { demoPlay?: "invest" | "vera" | nu
         <GoalScreen go={go} />
       );
       break;
+    case "confirm":
+      view = invest.allocation ? (
+        <ConfirmScreen
+          amount={amount}
+          holdings={invest.allocation.allocations.filter((a) => a.weightPct > 0).length}
+          onChoose={onPlace}
+          onBack={() => go(-1)}
+        />
+      ) : (
+        <GoalScreen go={go} />
+      );
+      break;
     case "placing":
-      view = <PlacingScreen phase={invest.phase} />;
+      view = <PlacingScreen phase={invest.phase} progress={invest.progress} />;
       break;
     case "success":
       view = invest.success ? (

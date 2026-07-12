@@ -15,6 +15,7 @@
 // attached server-side. No executor contract: settlement is per-leg RFQ.
 import { useCallback, useState } from "react";
 import { encodeFunctionData, zeroAddress } from "viem";
+import { useSignTypedData } from "@privy-io/react-auth";
 import { useActiveWallet } from "@/hooks/useActiveWallet";
 import { sendSponsoredCalls, type Call } from "@/lib/aa";
 import { buildUsdgPermitCall } from "@/lib/permit";
@@ -47,14 +48,30 @@ const MIN_LEG_MICRO = BigInt(11_000_000); // $11 — the RFQ floor (was $0.50, w
 
 type Phase = "idle" | "thinking" | "planning" | "approving" | "investing" | "done" | "error";
 
+/** "auto" = Vera signs silently; "manual" = the user approves each signature. */
+export type InvestMode = "auto" | "manual";
+
+/** Live per-leg progress, surfaced on the placing screen. */
+export interface InvestProgress {
+  total: number;
+  done: number;
+  currentSymbol: string | null;
+  spentUsd: number;
+  totalUsd: number;
+  /** Estimated seconds remaining, refined after each leg. Null before the first completes. */
+  etaSeconds: number | null;
+  mode: InvestMode;
+}
+
 export interface UseInvest {
   phase: Phase;
   error: string | null;
   allocation: AllocateResult | null;
   success: InvestSuccess | null;
+  progress: InvestProgress | null;
   busy: boolean;
   allocate: (goal: string, amountUsd: number, riskTolerance?: string) => Promise<AllocateResult | null>;
-  invest: (allocation: Allocation, amountUsd: number, address: string) => Promise<void>;
+  invest: (allocation: Allocation, amountUsd: number, address: string, mode?: InvestMode) => Promise<void>;
   reset: () => void;
   clearError: () => void;
 }
@@ -95,16 +112,19 @@ export function useInvest(): UseInvest {
   const demo = useDemo();
   const activeWallet = useActiveWallet();
   const refreshBalances = useRefreshBalances();
+  const { signTypedData } = useSignTypedData();
   const [phase, setPhase] = useState<Phase>("idle");
   const [error, setError] = useState<string | null>(null);
   const [allocation, setAllocation] = useState<AllocateResult | null>(null);
   const [success, setSuccess] = useState<InvestSuccess | null>(null);
+  const [progress, setProgress] = useState<InvestProgress | null>(null);
 
   const reset = useCallback(() => {
     setPhase("idle");
     setError(null);
     setAllocation(null);
     setSuccess(null);
+    setProgress(null);
   }, []);
 
   const clearError = useCallback(() => setError(null), []);
@@ -141,16 +161,30 @@ export function useInvest(): UseInvest {
   );
 
   const invest = useCallback(
-    async (alloc: Allocation, amountUsd: number, _address: string) => {
+    async (alloc: Allocation, amountUsd: number, _address: string, mode: InvestMode = "auto") => {
       setError(null);
-      // Demo: walk the placing phases on a timer, then a canned success.
+      setProgress(null);
+      // Demo: walk the placing phases on a timer with fake per-leg progress.
       if (demo) {
         setPhase("planning");
         await sleep(900);
         setPhase("investing");
-        await sleep(1500);
+        const dLegs = alloc.allocations.filter((a) => a.weightPct > 0);
+        for (let i = 0; i < dLegs.length; i++) {
+          setProgress({
+            total: dLegs.length,
+            done: i,
+            currentSymbol: dLegs[i].symbol,
+            spentUsd: (amountUsd * i) / dLegs.length,
+            totalUsd: amountUsd,
+            etaSeconds: (dLegs.length - i) * 2,
+            mode,
+          });
+          await sleep(700);
+        }
         setSuccess(demo.success(alloc, amountUsd));
         setPhase("done");
+        setProgress(null);
         return;
       }
       try {
@@ -202,7 +236,15 @@ export function useInvest(): UseInvest {
         //    still invest, rather than failing the whole plan.
         setPhase("approving");
         const provider = (await wallet.getEthereumProvider()) as Eip1193;
-        const signTyped = typedDataSigner(provider, eoa);
+        // AUTO: sign silently (embedded-wallet default). MANUAL: route each
+        // signature through Privy's UI so the user approves it explicitly.
+        const signTyped =
+          mode === "manual"
+            ? (json: string) =>
+                signTypedData(JSON.parse(json), { uiOptions: { showWalletUIs: true }, address: eoa }).then(
+                  (r) => r.signature as `0x${string}`,
+                )
+            : typedDataSigner(provider, eoa);
         const viemProvider = asViemProvider(provider);
 
         const relay = async (call: Call): Promise<`0x${string}`> => {
@@ -220,15 +262,44 @@ export function useInvest(): UseInvest {
         setPhase("investing");
         const filled: { leg: (typeof quotes)[number]["leg"]; amountMicro: bigint }[] = [];
         let lastTx: `0x${string}` | null = null;
-        for (const q of quotes) {
+        const total = quotes.length;
+        const startedAt = Date.now();
+        let spentMicroRunning = BigInt(0);
+        for (let idx = 0; idx < quotes.length; idx++) {
+          const q = quotes[idx];
+          // Mark this leg as in-flight so the placing screen names it.
+          setProgress({
+            total,
+            done: idx,
+            currentSymbol: q.leg.symbol,
+            spentUsd: Number(spentMicroRunning) / 1_000_000,
+            totalUsd: amountUsd,
+            etaSeconds: idx === 0 ? total * 6 : Math.ceil(((Date.now() - startedAt) / 1000 / idx) * (total - idx)),
+            mode,
+          });
           try {
             lastTx = await relay(await settleCallFor(q.quote, signTyped));
             filled.push({ leg: q.leg, amountMicro: q.amountMicro });
+            spentMicroRunning += q.amountMicro;
           } catch (legErr) {
             console.error(`[invest] leg ${q.leg.symbol} failed:`, legErr instanceof Error ? legErr.message : legErr);
           }
+          const doneCount = idx + 1;
+          const perLeg = (Date.now() - startedAt) / 1000 / doneCount;
+          setProgress({
+            total,
+            done: doneCount,
+            currentSymbol: doneCount < total ? quotes[doneCount].leg.symbol : null,
+            spentUsd: Number(spentMicroRunning) / 1_000_000,
+            totalUsd: amountUsd,
+            etaSeconds: doneCount < total ? Math.ceil(perLeg * (total - doneCount)) : 0,
+            mode,
+          });
         }
-        if (filled.length === 0) throw new Error("The investment didn't go through. No funds were moved.");
+        if (filled.length === 0) {
+          setProgress(null);
+          throw new Error("The investment didn't go through. No funds were moved.");
+        }
 
         // 3b. The trust layer: Vera signs the risk inference server-side and the
         // VeraRecord contract records it as a final, separate UserOp over what
@@ -289,13 +360,15 @@ export function useInvest(): UseInvest {
             : undefined,
         });
         setPhase("done");
+        setProgress(null);
         refreshBalances(); // cash + holdings + activity refetch now, no manual refresh
       } catch (e) {
         setError(e instanceof Error ? e.message : "The investment didn't go through.");
         setPhase("error");
+        setProgress(null);
       }
     },
-    [demo, activeWallet, refreshBalances],
+    [demo, activeWallet, refreshBalances, signTypedData],
   );
 
   return {
@@ -303,6 +376,7 @@ export function useInvest(): UseInvest {
     error,
     allocation,
     success,
+    progress,
     busy: phase === "thinking" || phase === "planning" || phase === "approving" || phase === "investing",
     allocate,
     invest,

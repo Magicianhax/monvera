@@ -15,6 +15,9 @@ import gsap from "gsap";
 import { useGSAP } from "@gsap/react";
 import { Icon, VeraOrb, Seal } from "@/components/design";
 import { Spinner } from "./primitives";
+import { usd } from "@/lib/format";
+import { displayFor } from "@/lib/displayAssets";
+import type { InvestProgress } from "@/hooks/useInvest";
 
 gsap.registerPlugin(useGSAP);
 
@@ -27,7 +30,7 @@ function stepFor(phase: string): number {
   return 2; // investing
 }
 
-export function PlacingScreen({ phase }: { phase: string }) {
+export function PlacingScreen({ phase, progress }: { phase: string; progress?: InvestProgress | null }) {
   const i = stepFor(phase);
   const rootRef = useRef<HTMLDivElement>(null);
 
@@ -159,9 +162,49 @@ export function PlacingScreen({ phase }: { phase: string }) {
         ))}
       </div>
 
-      <div style={{ marginTop: 28, display: "inline-flex", alignItems: "center", gap: 8, fontSize: 12.5, fontWeight: 500, color: "var(--ink-2)" }}>
-        <Seal size={18} /> Gas-free · signed &amp; verified on-chain
-      </div>
+      {/* Live per-leg progress — replaces the generic footer once buying starts. */}
+      {progress && progress.total > 0 ? (
+        <div style={{ width: "100%", maxWidth: 300, marginTop: 22 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 8 }}>
+            <span style={{ fontSize: 14, fontWeight: 600 }}>
+              {progress.currentSymbol
+                ? `Buying ${displayFor(progress.currentSymbol).name || progress.currentSymbol}`
+                : "Finishing up"}
+            </span>
+            <span className="tnum" style={{ fontSize: 12.5, color: "var(--ink-3)" }}>
+              {Math.min(progress.done + (progress.currentSymbol ? 1 : 0), progress.total)} of {progress.total}
+            </span>
+          </div>
+          <div style={{ height: 8, borderRadius: 99, background: "var(--surface-2)", overflow: "hidden" }}>
+            <div
+              style={{
+                height: "100%",
+                width: `${Math.round((progress.done / progress.total) * 100)}%`,
+                background: "var(--primary)",
+                borderRadius: 99,
+                transition: "width .4s var(--ease-out)",
+              }}
+            />
+          </div>
+          <div style={{ display: "flex", justifyContent: "space-between", marginTop: 9, fontSize: 12.5, color: "var(--ink-2)" }}>
+            <span className="tnum">
+              {usd(progress.spentUsd)} of {usd(progress.totalUsd)} placed
+            </span>
+            {progress.etaSeconds !== null && progress.etaSeconds > 0 && (
+              <span className="tnum" style={{ color: "var(--ink-3)" }}>~{progress.etaSeconds}s left</span>
+            )}
+          </div>
+          {progress.mode === "manual" && (
+            <div style={{ marginTop: 12, fontSize: 12, color: "var(--ink-3)", textAlign: "center" }}>
+              Approve each prompt to continue.
+            </div>
+          )}
+        </div>
+      ) : (
+        <div style={{ marginTop: 28, display: "inline-flex", alignItems: "center", gap: 8, fontSize: 12.5, fontWeight: 500, color: "var(--ink-2)" }}>
+          <Seal size={18} /> Gas-free · signed &amp; verified on-chain
+        </div>
+      )}
     </div>
   );
 }
