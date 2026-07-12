@@ -25,7 +25,11 @@ const LIVE_BALANCE_OPTS = {
   staleTime: 15_000,
   refetchOnWindowFocus: true,
   refetchOnReconnect: true,
-  refetchOnMount: "always",
+  // `true` (not "always"): refetch on mount only when data is stale (>15s).
+  // The LiteApp is a single-screen router and nine screens mount usePortfolio,
+  // so "always" fired a fresh /api/portfolio on EVERY navigation, hammering the
+  // endpoint. Writes still invalidate instantly via useRefreshBalances.
+  refetchOnMount: true,
   // Keep the last value on screen across refetches / address changes, so the
   // balance never blanks out mid-update.
   placeholderData: keepPreviousData,

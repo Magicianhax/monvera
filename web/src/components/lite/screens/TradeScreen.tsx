@@ -75,8 +75,9 @@ export function TradeScreen({
   const swap = useSwap();
 
   // Sell side: a typed dollar amount wins; empty falls back to a percentage of
-  // the held position (default 100%, so the sheet still opens pre-filled).
-  const [sellPct, setSellPct] = useState(100);
+  // the held position. Default 0 (nothing selected) so opening the Sell tab does
+  // NOT auto-fire a full-position quote — the user picks a chip or types first.
+  const [sellPct, setSellPct] = useState(0);
   const [sellAmt, setSellAmt] = useState("");
   const heldRaw = holding?.raw ?? BigInt(0);
   const sellDecimals = asset.decimals ?? 18;
@@ -451,11 +452,15 @@ export function TradeScreen({
             </button>
             {!swap.busy && !canSell && (
               <div style={{ textAlign: "center", marginTop: 10, fontSize: 12.5, color: "var(--ink-3)" }}>
-                {typedUsd !== null && sellRaw <= BigInt(0)
-                  ? "Enter an amount"
-                  : !sellQuote || sellFetching
+                {sellRaw <= BigInt(0)
+                  ? "Choose how much to sell"
+                  : sellFetching && !sellQuote
                     ? "Getting a price…"
-                    : null}
+                    : sellQuote?.noLiquidity
+                      ? "No price for this size right now. Try a smaller amount."
+                      : sellFetching
+                        ? "Updating price…"
+                        : null}
               </div>
             )}
           </div>

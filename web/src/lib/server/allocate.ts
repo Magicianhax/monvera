@@ -101,6 +101,11 @@ export async function buildAllocation(
         `Risk preference: ${riskTolerance ?? "infer from the goal"}`,
         "Build the allocation now.",
       ].join("\n"),
+      // Fail fast instead of stacking the SDK's default 2 retries on top of a
+      // slow provider (that turned a 13s call into 40s). One retry, and a hard
+      // 28s ceiling on the whole attempt.
+      maxRetries: 1,
+      abortSignal: AbortSignal.timeout(28_000),
     }));
   } catch (err) {
     // The model answered but not with parseable JSON — salvage it from the text.

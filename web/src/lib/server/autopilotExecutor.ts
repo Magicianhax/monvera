@@ -112,19 +112,28 @@ export async function runAutopilot(
     return { ok: false, reason };
   }
 
-  // 5. Sign + submit. The Privy server wallet signs for the delegated EOA:
-  //    each leg's Permit2 intent, plus a gasless USDG permit when needed.
+  // 5. Sign + submit. The Privy server wallet signs for the delegated EOA.
+  //    ONE Arcus settle per UserOp (mirrors the proven manual path in
+  //    useSwap.ts): batching multiple RFQ settles into a single UserOp reverts
+  //    with the router's InvalidAction() guard. Each leg is best-effort — a bad
+  //    leg is skipped and the rest still invest, rather than losing the whole run.
   let txHash: string;
+  const filled: { symbol: string; amountMicro: bigint }[] = [];
   try {
     const { account, smartAccountClient, ownerAccount } = await getServerSmartAccountClient(
       working.walletId,
       taker,
     );
 
-    const calls: { to: `0x${string}`; data: `0x${string}`; value?: bigint }[] = [];
+    const relay = async (call: { to: `0x${string}`; data: `0x${string}`; value?: bigint }): Promise<`0x${string}`> => {
+      const userOpHash = await smartAccountClient.sendUserOperation({ account, calls: [call] });
+      const receipt = await smartAccountClient.waitForUserOperationReceipt({ hash: userOpHash });
+      if (!receipt.success) throw new Error(`reverted (tx ${receipt.receipt.transactionHash})`);
+      return receipt.receipt.transactionHash as `0x${string}`;
+    };
 
-    // One-time USDG -> Permit2 allowance via EIP-2612 permit (domain verified
-    // on-chain: "Global Dollar", version "1" — mirrors lib/permit.ts).
+    // One-time USDG -> Permit2 allowance via EIP-2612 permit, its own UserOp
+    // (domain verified on-chain: "Global Dollar", version "1").
     const allowance = (await publicClient.readContract({
       address: USDG.address as `0x${string}`,
       abi: ERC20_ABI,
@@ -156,13 +165,15 @@ export async function runAutopilot(
       const r = `0x${sig.slice(2, 66)}` as `0x${string}`;
       const s = `0x${sig.slice(66, 130)}` as `0x${string}`;
       const v = parseInt(sig.slice(130, 132), 16);
-      calls.push({
+      await relay({
         to: USDG.address as `0x${string}`,
         data: encodeFunctionData({ abi: PERMIT_ABI, functionName: "permit", args: [taker, PERMIT2, MAX_UINT256, deadline, v, r, s] }),
       });
     }
 
-    for (const { q } of quotes) {
+    // Each leg settles in its own UserOp.
+    let lastTx: `0x${string}` | null = null;
+    for (const { symbol, amountMicro, q } of quotes) {
       const toSign = q.toSign as {
         domain: Record<string, unknown>;
         types: Record<string, { name: string; type: string }[]>;
@@ -170,44 +181,55 @@ export async function runAutopilot(
         message: Record<string, unknown>;
       };
       const { EIP712Domain: _d, ...types } = toSign.types;
-      const sig = await ownerAccount.signTypedData({
-        domain: toSign.domain,
-        types,
-        primaryType: toSign.primaryType,
-        message: toSign.message,
-      } as Parameters<typeof ownerAccount.signTypedData>[0]);
-      calls.push({
-        to: q.tx!.to,
-        data: spliceSignature(q.tx!.data, sig, q.tx!.signatureOffset),
-        value: BigInt(q.tx!.value || "0"),
-      });
+      try {
+        const sig = await ownerAccount.signTypedData({
+          domain: toSign.domain,
+          types,
+          primaryType: toSign.primaryType,
+          message: toSign.message,
+        } as Parameters<typeof ownerAccount.signTypedData>[0]);
+        lastTx = await relay({
+          to: q.tx!.to,
+          data: spliceSignature(q.tx!.data, sig, q.tx!.signatureOffset),
+          value: BigInt(q.tx!.value || "0"),
+        });
+        filled.push({ symbol, amountMicro });
+      } catch (legErr) {
+        // A single leg failing (lost liquidity, quote lapsed) must not sink the
+        // whole run — log and keep going with the rest.
+        console.error(`[autopilot] leg ${symbol} failed:`, legErr instanceof Error ? legErr.message : legErr);
+      }
     }
 
-    // Trust layer: Vera signs the risk inference and VeraRecord verifies +
-    // records it atomically with the buys (skipped if not deployed).
-    if (INFERENCE_VERIFIER.toLowerCase() !== zeroAddress) {
-      const planId = buildPlanId(allocation, now);
-      const maxRisk = Math.min(RISK_CEILING_BPS, assessedRiskBps + RISK_HEADROOM_BPS);
-      const expiry = BigInt(now + EXPIRY_SECONDS);
-      const signature = await signRiskInference({ planId, assessedRisk: assessedRiskBps, maxRisk, expiry });
-      calls.push({
-        to: INFERENCE_VERIFIER,
-        data: encodeFunctionData({
-          abi: VERA_RECORD_ABI,
-          functionName: "record",
-          args: [planId, recHash(allocation), assessedRiskBps, maxRisk, expiry, signature, taker, AGENT_ID, grossMicro, BigInt(quotes.length)],
-        }),
-      });
-    }
-
-    const userOpHash = await smartAccountClient.sendUserOperation({ account, calls });
-    const receipt = await smartAccountClient.waitForUserOperationReceipt({ hash: userOpHash });
-    if (!receipt.success) {
-      const reason = `Run reverted (tx ${receipt.receipt.transactionHash}).`;
-      await logRun({ userId: working.userId, ranAt: now, amountUsd: working.amountUsd, assessedRiskBps, status: "error", reason, txHash: receipt.receipt.transactionHash });
+    if (filled.length === 0) {
+      const reason = "Every holding failed to settle. No funds were moved.";
+      await logRun({ userId: working.userId, ranAt: now, amountUsd: working.amountUsd, assessedRiskBps, status: "error", reason });
       return { ok: false, reason };
     }
-    txHash = receipt.receipt.transactionHash;
+    txHash = lastTx as `0x${string}`;
+
+    // Trust layer: Vera signs the risk inference and VeraRecord records it as a
+    // final, separate UserOp over what ACTUALLY filled. Best-effort: a failed
+    // record does not undo real, settled buys.
+    if (INFERENCE_VERIFIER.toLowerCase() !== zeroAddress) {
+      try {
+        const spentMicro = filled.reduce((s, l) => s + l.amountMicro, BigInt(0));
+        const planId = buildPlanId(allocation, now);
+        const maxRisk = Math.min(RISK_CEILING_BPS, assessedRiskBps + RISK_HEADROOM_BPS);
+        const expiry = BigInt(now + EXPIRY_SECONDS);
+        const signature = await signRiskInference({ planId, assessedRisk: assessedRiskBps, maxRisk, expiry });
+        await relay({
+          to: INFERENCE_VERIFIER,
+          data: encodeFunctionData({
+            abi: VERA_RECORD_ABI,
+            functionName: "record",
+            args: [planId, recHash(allocation), assessedRiskBps, maxRisk, expiry, signature, taker, AGENT_ID, spentMicro, BigInt(filled.length)],
+          }),
+        });
+      } catch (recErr) {
+        console.error("[autopilot] record failed (buys succeeded):", recErr instanceof Error ? recErr.message : recErr);
+      }
+    }
   } catch (e) {
     // Never surface raw provider errors: viem embeds the full bundler URL
     // (which carries the Pimlico API key) in e.message. Strip URLs + truncate.
@@ -217,22 +239,22 @@ export async function runAutopilot(
     return { ok: false, reason };
   }
 
-  // 6. Persist run accounting + audit log. The atomic claim already advanced
-  //    next_run_at, so we only record the spend/count here.
+  // 6. Persist run accounting + audit log, over what ACTUALLY filled.
+  const spentUsd = Math.round((Number(filled.reduce((s, l) => s + l.amountMicro, BigInt(0))) / 1_000_000) * 100) / 100;
   await recordRun(working.userId, {
     lastRunAt: now,
     runs: working.runs + 1,
-    spentThisPeriod: working.spentThisPeriod + working.amountUsd,
+    spentThisPeriod: working.spentThisPeriod + spentUsd,
   });
   // Inbox note (never breaks the run; addNotification swallows failures).
   await addNotification(working.userId, {
     kind: "autopilot",
-    title: `Autopilot invested $${working.amountUsd.toFixed(2)}`,
+    title: `Autopilot invested $${spentUsd.toFixed(2)}`,
     body: "Vera placed your scheduled plan. Tap to see the run.",
     txHash,
     at: now,
   });
-  const holdings = quotes.map(({ symbol, amountMicro }) => {
+  const holdings = filled.map(({ symbol, amountMicro }) => {
     const leg = legs.find((l) => l.symbol === symbol);
     return {
       symbol,
@@ -240,7 +262,7 @@ export async function runAutopilot(
       amountUsd: Math.round((Number(amountMicro) / 1_000_000) * 100) / 100,
     };
   });
-  await logRun({ userId: working.userId, ranAt: now, amountUsd: working.amountUsd, assessedRiskBps, status: "success", txHash, holdings });
+  await logRun({ userId: working.userId, ranAt: now, amountUsd: spentUsd, assessedRiskBps, status: "success", txHash, holdings });
 
   return { ok: true, txHash };
 }

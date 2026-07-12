@@ -4,7 +4,7 @@
 // Buy quotes USDG (6dp) -> stock (18dp); sell quotes stock -> USDG. The 0x API key
 // lives server-side, so this calls our /api/quote route (mode: "price").
 import { useEffect, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, keepPreviousData } from "@tanstack/react-query";
 import { authHeader } from "@/lib/authedFetch";
 import { USDG, type Asset } from "@/lib/tokens";
 import { fromUnits } from "@/lib/format";
@@ -34,7 +34,7 @@ async function priceOut(
   symbol: string,
   sellAmount: bigint,
   taker: string,
-): Promise<{ out: bigint; kind: VenueKind }> {
+): Promise<{ out: bigint; kind: VenueKind; noLiquidity: boolean }> {
   const res = await fetch("/api/quote", {
     method: "POST",
     headers: { "content-type": "application/json", ...(await authHeader()) },
@@ -46,8 +46,12 @@ async function priceOut(
   if (res.status === 503) throw new Error("busy");
   const json = (await res.json()) as { liquidityAvailable?: boolean; buyAmount?: string; kind?: VenueKind };
   const kind = json.kind ?? "tx";
-  if (!res.ok || !json.liquidityAvailable || !json.buyAmount) return { out: BigInt(0), kind };
-  return { out: BigInt(json.buyAmount), kind };
+  // Distinguish "the venue can't fill this size" (a real, terminal answer) from
+  // "still loading". Folding them together made a no-liquidity quote look like an
+  // eternal spinner.
+  const noLiquidity = !res.ok || !json.liquidityAvailable || !json.buyAmount || json.buyAmount === "0";
+  if (noLiquidity) return { out: BigInt(0), kind, noLiquidity: true };
+  return { out: BigInt(json.buyAmount as string), kind, noLiquidity: false };
 }
 
 export interface Quote {
@@ -57,24 +61,32 @@ export interface Quote {
   pricePerToken: number; // USD per whole token
   /** "rfq" stocks settle in minutes and need at least RFQ_MIN_USD per trade. */
   kind: VenueKind;
+  /** The venue returned no fill for this size (terminal, not loading). */
+  noLiquidity: boolean;
 }
+
+// The taker is folded into the query key so that when the real smart-account
+// address arrives (after Privy hydration) the quote refetches instead of
+// staying stuck on the placeholder-taker result.
+const takerKey = (taker?: string) => (taker ?? PLACEHOLDER_TAKER).toLowerCase();
 
 /** Quote `amountUsd` of USDG into `asset` via 0x. Returns null while disabled/loading. */
 export function useQuote(asset: Asset | null, amountUsd: number, taker?: string) {
   const amount = useDebounced(amountUsd, QUOTE_DEBOUNCE_MS);
   const enabled = Boolean(asset && amount > 0);
   return useQuery({
-    queryKey: ["quote", asset?.symbol, Math.round(amount * 100)],
+    queryKey: ["quote", asset?.symbol, Math.round(amount * 100), takerKey(taker)],
     enabled,
     staleTime: 10_000,
     refetchInterval: 15_000,
+    placeholderData: keepPreviousData,
     queryFn: async (): Promise<Quote> => {
       const a = asset!;
       const amountInRaw = BigInt(Math.round(amount * 1_000_000));
-      const { out: expectedOutRaw, kind } = await priceOut("buy", a.symbol, amountInRaw, taker ?? PLACEHOLDER_TAKER);
+      const { out: expectedOutRaw, kind, noLiquidity } = await priceOut("buy", a.symbol, amountInRaw, taker ?? PLACEHOLDER_TAKER);
       const expectedOutQty = fromUnits(expectedOutRaw, a.decimals);
       const pricePerToken = expectedOutQty > 0 ? amount / expectedOutQty : 0;
-      return { amountInRaw, expectedOutRaw, expectedOutQty, pricePerToken, kind };
+      return { amountInRaw, expectedOutRaw, expectedOutQty, pricePerToken, kind, noLiquidity };
     },
   });
 }
@@ -85,6 +97,8 @@ export interface SellQuote {
   expectedUsd: number;
   /** "rfq" stocks settle in minutes; the minimum applies to the USDG proceeds. */
   kind: VenueKind;
+  /** The venue returned no fill for this size (terminal, not loading). */
+  noLiquidity: boolean;
 }
 
 /** Quote selling `tokenQtyRaw` raw units of `asset` into USDG via 0x. */
@@ -94,15 +108,16 @@ export function useSellQuote(asset: Asset | null, tokenQtyRaw: bigint, taker?: s
   const qtyRaw = BigInt(settledQty);
   const enabled = Boolean(asset && qtyRaw > BigInt(0));
   return useQuery({
-    queryKey: ["sell-quote", asset?.symbol, settledQty],
+    queryKey: ["sell-quote", asset?.symbol, settledQty, takerKey(taker)],
     enabled,
     staleTime: 10_000,
     refetchInterval: 15_000,
+    placeholderData: keepPreviousData,
     queryFn: async (): Promise<SellQuote> => {
       const a = asset!;
-      const { out: expectedUsdcRaw, kind } = await priceOut("sell", a.symbol, qtyRaw, taker ?? PLACEHOLDER_TAKER);
+      const { out: expectedUsdcRaw, kind, noLiquidity } = await priceOut("sell", a.symbol, qtyRaw, taker ?? PLACEHOLDER_TAKER);
       const expectedUsd = fromUnits(expectedUsdcRaw, USDG.decimals);
-      return { amountInRaw: qtyRaw, expectedUsdcRaw, expectedUsd, kind };
+      return { amountInRaw: qtyRaw, expectedUsdcRaw, expectedUsd, kind, noLiquidity };
     },
   });
 }

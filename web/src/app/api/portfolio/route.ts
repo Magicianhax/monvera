@@ -81,7 +81,11 @@ export async function GET(req: NextRequest) {
           })),
         ],
       }),
-      cachedPrices(),
+      // Prices are best-effort: a Chainlink/Arcus/Yahoo blip must NOT 500 the
+      // whole portfolio (that forced users to refresh repeatedly). Balances are
+      // the real answer; missing prices degrade to 0 and the client keeps its
+      // last values via keepPreviousData.
+      cachedPrices().catch(() => ({}) as Awaited<ReturnType<typeof priceAllWithFallback>>),
       getDaySummary().catch(() => ({}) as Awaited<ReturnType<typeof getDaySummary>>),
     ]);
 
