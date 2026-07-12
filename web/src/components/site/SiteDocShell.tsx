@@ -73,6 +73,7 @@ export function SiteDocShell({
             <Link href="/">Home</Link>
             <Link href="/demo">Try the demo</Link>
             <a href="https://docs.monvera.best">Docs</a>
+            <Link href="/brand">Brand kit</Link>
             <a href="https://x.com/monvera_best" target="_blank" rel="noreferrer">@monvera_best</a>
             <a href={`mailto:${SUPPORT_EMAIL}`}>{SUPPORT_EMAIL}</a>
           </div>

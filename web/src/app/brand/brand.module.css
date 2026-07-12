@@ -1,0 +1,125 @@
+/* Public brand asset page. Same ledger language as /strategies and /themes. */
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  margin-top: 18px;
+}
+@media (max-width: 900px) {
+  .grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.card {
+  border: 1px solid var(--s-line);
+  border-radius: 14px;
+  overflow: hidden;
+}
+.preview {
+  aspect-ratio: 1 / 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 18px;
+  background: var(--s-paper-2, #e7ecdf);
+}
+.preview.dark {
+  background: radial-gradient(120% 120% at 50% 40%, #1d2c23 0%, #0b110d 100%);
+}
+.preview img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+.preview.cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.meta {
+  padding: 10px 12px 12px;
+}
+.name {
+  font-size: 13.5px;
+  font-weight: 650;
+  color: var(--s-ink);
+}
+.actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 7px;
+}
+.copyBtn,
+.openLink {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--s-primary-d);
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  text-decoration: none;
+  font-family: inherit;
+}
+.copyBtn:hover,
+.openLink:hover {
+  text-decoration: underline;
+}
+
+.sectionTitle {
+  font-family: var(--s-display);
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  font-size: clamp(21px, 2.4vw, 26px);
+  margin: 44px 0 4px;
+  color: var(--s-ink);
+}
+.sectionSub {
+  font-size: 14px;
+  color: var(--s-ink-2);
+  margin: 0;
+  max-width: 66ch;
+}
+
+.colors {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin-top: 18px;
+}
+@media (max-width: 700px) {
+  .colors {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+.swatch {
+  border: 1px solid var(--s-line);
+  border-radius: 12px;
+  overflow: hidden;
+}
+.swatchColor {
+  height: 64px;
+}
+.swatchMeta {
+  padding: 8px 11px 10px;
+  font-size: 12.5px;
+}
+.swatchMeta b {
+  display: block;
+  color: var(--s-ink);
+}
+.swatchMeta code {
+  color: var(--s-ink-2);
+  font-family: var(--s-mono, ui-monospace, monospace);
+  font-size: 12px;
+}
+
+.note {
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--s-ink-3);
+  margin-top: 34px;
+  max-width: 74ch;
+}

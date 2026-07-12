@@ -724,6 +724,7 @@ export function SiteLanding({
               <Link href="/demo">Try the demo</Link>
               <Link href="/app">Open the app</Link>
               <Link href="/roadmap">Roadmap</Link>
+              <Link href="/themes">Theme baskets</Link>
               <a href="https://docs.monvera.best">Docs</a>
             </div>
             <div className={s.footerCol}>
@@ -734,6 +735,7 @@ export function SiteLanding({
             <div className={s.footerCol}>
               <h4>Connect</h4>
               <a href="https://x.com/monvera_best" target="_blank" rel="noreferrer">@monvera_best on X</a>
+              <Link href="/brand">Brand kit</Link>
               <a href={`mailto:${SUPPORT_EMAIL}`}>Contact support</a>
             </div>
           </div>
