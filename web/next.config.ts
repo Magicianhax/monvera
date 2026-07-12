@@ -23,7 +23,10 @@ const securityHeaders = [
 const nextConfig: NextConfig = {
   async headers() {
     return [
-      { source: "/(.*)", headers: securityHeaders },
+      // Everything EXCEPT /webview-test gets the security headers. The test
+      // route is a temporary header-free twin of /brand used to bisect the
+      // X in-app browser (Twitter 12.7) "page couldn't load" crash.
+      { source: "/((?!webview-test).*)", headers: securityHeaders },
       {
         // Never cache the worker file itself, so a CACHE_VERSION bump deploys instantly.
         source: "/sw.js",
