@@ -195,57 +195,79 @@ export function useInvest(): UseInvest {
         }
         if (quotes.length === 0) throw new Error("No tradable holdings in this plan.");
 
-        // 3. Sign every leg's Permit2 intent (+ one gasless USDG permit if needed).
+        // 3. Settle ONE leg per UserOp (mirrors the manual buy path). Batching
+        //    multiple Arcus RFQ settles into a single UserOp reverts with the
+        //    router's InvalidAction() guard, so each leg gets its own sponsored
+        //    UserOp. Each leg is best-effort: a bad leg is skipped and the rest
+        //    still invest, rather than failing the whole plan.
         setPhase("approving");
         const provider = (await wallet.getEthereumProvider()) as Eip1193;
         const signTyped = typedDataSigner(provider, eoa);
+        const viemProvider = asViemProvider(provider);
 
-        const calls: Call[] = [];
+        const relay = async (call: Call): Promise<`0x${string}`> => {
+          const r = await sendSponsoredCalls(viemProvider, [call]);
+          if (!r.success) throw new Error(`reverted (tx ${r.receipt.transactionHash})`);
+          return r.receipt.transactionHash as `0x${string}`;
+        };
+
+        // One-time USDG -> Permit2 allowance, its own UserOp.
         const first = quotes[0].quote;
         if (first.needsAllowance && first.permit2) {
-          calls.push(await buildUsdgPermitCall(signTyped, eoa, first.permit2));
-        }
-        for (const q of quotes) {
-          calls.push(await settleCallFor(q.quote, signTyped));
+          await relay(await buildUsdgPermitCall(signTyped, eoa, first.permit2));
         }
 
-        // 3b. The trust layer: Vera signs the risk inference server-side, and the
-        // VeraRecord contract verifies + records it in the SAME batch as the
-        // buys — atomic, on-chain, uneditable. Skipped gracefully if the record
-        // contract isn't deployed (env zero) so trading never blocks on it.
+        setPhase("investing");
+        const filled: { leg: (typeof quotes)[number]["leg"]; amountMicro: bigint }[] = [];
+        let lastTx: `0x${string}` | null = null;
+        for (const q of quotes) {
+          try {
+            lastTx = await relay(await settleCallFor(q.quote, signTyped));
+            filled.push({ leg: q.leg, amountMicro: q.amountMicro });
+          } catch (legErr) {
+            console.error(`[invest] leg ${q.leg.symbol} failed:`, legErr instanceof Error ? legErr.message : legErr);
+          }
+        }
+        if (filled.length === 0) throw new Error("The investment didn't go through. No funds were moved.");
+
+        // 3b. The trust layer: Vera signs the risk inference server-side and the
+        // VeraRecord contract records it as a final, separate UserOp over what
+        // ACTUALLY filled. Best-effort: a failed record never undoes real buys.
+        const spentMicro = filled.reduce((s, l) => s + l.amountMicro, BigInt(0));
         let commit: CommitPlan | null = null;
         if (INFERENCE_VERIFIER.toLowerCase() !== zeroAddress) {
-          commit = await postJson<CommitPlan>("/api/commit-plan", {
-            address: eoa,
-            allocation: alloc,
-            amountUsd,
-          });
-          calls.push({
-            to: INFERENCE_VERIFIER,
-            data: encodeFunctionData({
-              abi: VERA_RECORD_ABI,
-              functionName: "record",
-              args: [
-                commit.planId,
-                commit.recHash,
-                commit.assessedRisk,
-                commit.maxRisk,
-                BigInt(commit.expiry),
-                commit.signature,
-                eoa,
-                BigInt(commit.agentId),
-                grossMicro,
-                BigInt(quotes.length),
-              ],
-            }),
-          });
+          try {
+            commit = await postJson<CommitPlan>("/api/commit-plan", {
+              address: eoa,
+              allocation: alloc,
+              amountUsd,
+            });
+            await relay({
+              to: INFERENCE_VERIFIER,
+              data: encodeFunctionData({
+                abi: VERA_RECORD_ABI,
+                functionName: "record",
+                args: [
+                  commit.planId,
+                  commit.recHash,
+                  commit.assessedRisk,
+                  commit.maxRisk,
+                  BigInt(commit.expiry),
+                  commit.signature,
+                  eoa,
+                  BigInt(commit.agentId),
+                  spentMicro,
+                  BigInt(filled.length),
+                ],
+              }),
+            });
+          } catch (recErr) {
+            console.error("[invest] record failed (buys succeeded):", recErr instanceof Error ? recErr.message : recErr);
+            commit = null;
+          }
         }
 
-        // 4. One batched, sponsored UserOp settles the whole basket + record.
-        setPhase("investing");
-        const receipt = await sendSponsoredCalls(asViemProvider(provider), calls);
-
-        const holdings = quotes.map(({ leg, amountMicro }) => ({
+        const holdings = filled.map(({ leg, amountMicro }) => ({
           symbol: leg.symbol,
           name: leg.symbol,
           weightPct: leg.weightPct,
@@ -253,9 +275,9 @@ export function useInvest(): UseInvest {
         }));
 
         setSuccess({
-          txHash: receipt.receipt.transactionHash as `0x${string}`,
+          txHash: (lastTx ?? "0x") as `0x${string}`,
           holdings,
-          amountUsd,
+          amountUsd: Number(spentMicro) / 1_000_000,
           verification: commit
             ? {
                 riskScore: commit.assessedRisk,
