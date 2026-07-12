@@ -76,6 +76,9 @@ self.addEventListener("fetch", (event) => {
   if (url.pathname.startsWith("/api/")) return;
 
   // Navigations (HTML): network-first, fall back to cache, then /offline.
+  // Final fallback is a synthesized page, never Response.error(): a raw error
+  // makes the browser (or an in-app webview) show its native "page couldn't
+  // load" screen, which reads as an outage. Ours reads as what it is.
   if (request.mode === "navigate") {
     event.respondWith(
       (async () => {
@@ -83,7 +86,16 @@ self.addEventListener("fetch", (event) => {
           return await fetch(request);
         } catch {
           const cache = await caches.open(PRECACHE);
-          return (await cache.match(request)) || (await cache.match(OFFLINE_URL)) || Response.error();
+          const cached = (await cache.match(request)) || (await cache.match(OFFLINE_URL));
+          if (cached) return cached;
+          return new Response(
+            '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Monvera</title></head>' +
+              '<body style="margin:0;display:grid;place-items:center;min-height:100vh;background:#eef1e8;color:#232a24;font:16px system-ui,sans-serif;text-align:center">' +
+              '<div><p style="font-size:34px;margin:0 0 8px">&#127807;</p><h1 style="font-size:20px;margin:0 0 6px">You look offline</h1>' +
+              '<p style="margin:0 0 16px;color:#545d52">Monvera is fine, the connection dropped. Try again in a moment.</p>' +
+              '<button onclick="location.reload()" style="font:600 15px system-ui;padding:10px 22px;border-radius:999px;border:0;background:#57a07e;color:#fff">Retry</button></div></body></html>',
+            { status: 503, headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" } },
+          );
         }
       })(),
     );
