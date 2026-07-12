@@ -10,7 +10,9 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
-    "@virtuals-protocol/acp-node": "^0.3.0-beta.40",
-    "dotenv": "^17.4.2"
+    "@account-kit/infra": "^4.88.4",
+    "@virtuals-protocol/acp-node-v2": "^0.1.7",
+    "dotenv": "^17.4.2",
+    "viem": "^2.55.0"
   }
 }
