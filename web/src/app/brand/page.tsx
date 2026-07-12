@@ -6,11 +6,11 @@ import s from "./brand.module.css";
 export const metadata: Metadata = {
   title: "Brand assets",
   description:
-    "Monvera's public brand kit: logos, Vera the mascot, city art, the launch film, colors, and fonts. Free to use for community content.",
+    "Monvera's public brand kit: logos, Vera the mascot, city art, colors, and fonts. Free to use for community content.",
   alternates: { canonical: "/brand" },
   openGraph: {
     title: "Monvera · Brand assets",
-    description: "Logos, Vera the mascot, city art, the launch film, colors, and fonts. Free to use for community content.",
+    description: "Logos, Vera the mascot, city art, colors, and fonts. Free to use for community content.",
     url: "/brand",
   },
 };
@@ -46,11 +46,6 @@ const MASCOTS: Asset[] = [
   { file: "/brand/hero/vera-06-rio.webp", name: "Vera · Rio" },
   { file: "/brand/hero/vera-07-capetown.webp", name: "Vera · Cape Town" },
   { file: "/brand/hero/vera-08-cairo.webp", name: "Vera · Cairo" },
-  { file: "/brand/vera.png", name: "Vera orb (in-app avatar)", dark: true },
-  { file: "/brand/vera-orb-1.png", name: "Vera orb · 1", dark: true },
-  { file: "/brand/vera-orb-2.png", name: "Vera orb · 2", dark: true },
-  { file: "/brand/vera-orb-3.png", name: "Vera orb · 3", dark: true },
-  { file: "/brand/vera-orb-4.png", name: "Vera orb · 4", dark: true },
 ];
 
 const HEROES: Asset[] = Array.from({ length: 8 }, (_, i) => {
@@ -101,9 +96,9 @@ export default function BrandPage() {
       title="Everything you need to talk about Monvera"
       lead={
         <>
-          Logos, Vera the mascot, city art, colors, and the launch film, all hosted and free to use for
-          community content, posts, and memes. Open an image and save it, or copy its URL straight into
-          whatever you are making.
+          Logos, Vera the mascot, city art, colors, and fonts, all hosted and free to use for community
+          content, posts, and memes. Tap Copy image and paste it straight into whatever you are making,
+          or Open to save the file.
         </>
       }
     >
@@ -130,15 +125,6 @@ export default function BrandPage() {
           <AssetCard key={a.file} a={a} />
         ))}
       </div>
-
-      <h2 className={s.sectionTitle}>The launch film</h2>
-      <p className={s.sectionSub}>
-        43 seconds, 1080p, with sound.{" "}
-        <a className={s.openLink} href={`${CDN}/promo/vera-launch.mp4`} target="_blank" rel="noreferrer">
-          Open the mp4
-        </a>{" "}
-        and save it, or copy the URL: <code>{CDN}/promo/vera-launch.mp4</code>
-      </p>
 
       <h2 className={s.sectionTitle}>Colors</h2>
       <div className={s.colors}>
