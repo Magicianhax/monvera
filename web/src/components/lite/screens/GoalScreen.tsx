@@ -11,6 +11,7 @@ import { useSmartAccount } from "@/hooks/useSmartAccount";
 import { Icon, VeraOrb, type IconName } from "@/components/design";
 import { usd } from "@/lib/format";
 import { haptic } from "@/lib/haptics";
+import { MIN_INVEST_USD } from "@/lib/arcusShared";
 import { iconBtn, VeraTag } from "./primitives";
 
 const SUGGESTIONS: { icon: IconName; label: string }[] = [
@@ -47,7 +48,11 @@ export function GoalScreen({
 
   const amount = parseFloat(amt) || 0;
   const over = balance > 0 && amount > balance + 1e-6;
-  const ready = goal.trim().length > 3 && amount > 0 && !over;
+  // Below the RFQ floor, a plan can't buy a single holding that fills — so a
+  // plan needs at least one leg's worth. Enforced here so the user never lands
+  // in a partial fill.
+  const under = amount > 0 && amount < MIN_INVEST_USD;
+  const ready = goal.trim().length > 3 && amount >= MIN_INVEST_USD && !over;
 
   const setPreset = (frac: number) => {
     // Whole dollars, never more than the balance; Max uses the full balance.
@@ -173,6 +178,11 @@ export function GoalScreen({
         {over && (
           <p style={{ textAlign: "center", margin: "0 0 10px", fontSize: 12.5, color: "var(--ink-3)" }}>
             That&apos;s more than your {usd(balance)}. Lower the amount or add money first.
+          </p>
+        )}
+        {under && !over && (
+          <p style={{ textAlign: "center", margin: "0 0 10px", fontSize: 12.5, color: "var(--ink-3)" }}>
+            The smallest plan is ${MIN_INVEST_USD}. Below that, a holding can&apos;t be bought reliably.
           </p>
         )}
         <button

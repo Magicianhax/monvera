@@ -43,7 +43,7 @@ interface CommitPlan {
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 // Below ~$0.50 a leg, RFQ quotes get unreliable and the fill is all spread.
-const MIN_LEG_MICRO = BigInt(500_000);
+const MIN_LEG_MICRO = BigInt(11_000_000); // $11 — the RFQ floor (was $0.50, which let sub-min legs fail)
 
 type Phase = "idle" | "thinking" | "planning" | "approving" | "investing" | "done" | "error";
 

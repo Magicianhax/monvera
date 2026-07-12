@@ -15,6 +15,7 @@ import { authHeader } from "@/lib/authedFetch";
 import { CADENCE_LABEL, type Cadence, type AutopilotConfig } from "@/lib/autopilot";
 import { usd, txUrl } from "@/lib/format";
 import { haptic } from "@/lib/haptics";
+import { MIN_INVEST_USD } from "@/lib/arcusShared";
 import { iconBtn, Spinner, LogoStack } from "./primitives";
 
 const CADENCES: Cadence[] = ["daily", "weekly", "biweekly", "monthly"];
@@ -33,7 +34,7 @@ const TEMPLATES: { name: string; goal: string; amount: string; cadence: Cadence;
   { name: "Steady saver", goal: "Grow my long-term plan", amount: "25", cadence: "weekly", risk: 1, icon: "shieldPlain" },
   { name: "Play it safe", goal: "Safe, steady growth", amount: "20", cadence: "weekly", risk: 0, icon: "lock" },
   { name: "Big tech DCA", goal: "Weekly into big tech names", amount: "50", cadence: "weekly", risk: 2, icon: "trend" },
-  { name: "Daily dollars", goal: "A little into the market each day", amount: "5", cadence: "daily", risk: 1, icon: "clock" },
+  { name: "Daily dollars", goal: "A little into the market each day", amount: "11", cadence: "daily", risk: 1, icon: "clock" },
 ];
 
 // Shared glass stat tile (plan summary) — replaces hairline dividers so the
@@ -185,8 +186,8 @@ export function AutopilotScreen({
       notify("Authorize Vera first", "info");
       return;
     }
-    if (amountNum <= 0) {
-      notify("Set an amount", "info");
+    if (amountNum < MIN_INVEST_USD) {
+      notify(`Each run needs at least $${MIN_INVEST_USD}`, "info");
       return;
     }
     setBusy(true);

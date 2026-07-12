@@ -53,6 +53,12 @@ export function Providers({ children }: { children: ReactNode }) {
         // their own wallet keep using that EOA (it owns their gasless smart account).
         embeddedWallets: {
           ethereum: { createOnLogin: "users-without-wallets" },
+          // Sign silently: a plan invest signs one Permit2 witness PER leg, so
+          // the modal popped 10+ times for a single tap. The user already
+          // reviews and approves the whole plan/trade before signing begins, so
+          // per-signature confirmations only add friction. (External wallets
+          // still show their own UI — this only affects Privy embedded wallets.)
+          showWalletUIs: false,
         },
         // Branded to match the app: deep "Soft"-dark surface, sage-green accent,
         // the Monvera logo, email/social first (beginner-friendly), on-voice copy.

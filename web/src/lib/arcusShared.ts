@@ -53,6 +53,55 @@ export type VenueKind = "tx" | "rfq" | "none";
 export const RFQ_MIN_BUY_USD = 11;
 export const RFQ_MIN_SELL_USD = 5;
 
+/** Minimum a plan/autopilot run must invest — one leg that clears the RFQ floor. */
+export const MIN_INVEST_USD = RFQ_MIN_BUY_USD;
+
+/** Most legs an amount can support with every leg at or above the RFQ floor. */
+export function maxLegsForAmount(amountUsd: number): number {
+  return Math.max(1, Math.floor(amountUsd / RFQ_MIN_BUY_USD));
+}
+
+/**
+ * Cap a plan's holdings so every leg clears the RFQ floor when the amount is
+ * split by weight. Splitting $40 across 8 names makes ~$5 legs that the makers
+ * reject; only the AMM-routed ones fill, so the user's money lands short.
+ *
+ * Keeps the highest-weight names up to floor(amount / $11), then drops the
+ * smallest remaining leg until each survivor's dollar share is >= $11, and
+ * renormalizes to whole percents summing to 100.
+ */
+export function capAllocationLegs<T extends { weightPct: number }>(
+  allocations: T[],
+  amountUsd: number,
+): T[] {
+  let list = [...allocations]
+    .filter((a) => a.weightPct > 0)
+    .sort((a, b) => b.weightPct - a.weightPct)
+    .slice(0, maxLegsForAmount(amountUsd));
+
+  // Drop the smallest leg until every survivor's share clears the floor.
+  while (list.length > 1) {
+    const total = list.reduce((s, a) => s + a.weightPct, 0);
+    const min = list[list.length - 1];
+    if ((min.weightPct / total) * amountUsd >= RFQ_MIN_BUY_USD) break;
+    list = list.slice(0, -1);
+  }
+
+  // Renormalize to integer percents summing to exactly 100 (largest remainder).
+  const total = list.reduce((s, a) => s + a.weightPct, 0) || 1;
+  const scaled = list.map((a) => ({ a, exact: (a.weightPct / total) * 100 }));
+  const floored = scaled.map((x) => ({ ...x, floor: Math.floor(x.exact) }));
+  let left = 100 - floored.reduce((s, x) => s + x.floor, 0);
+  const byRem = [...floored].sort((x, y) => y.exact - y.floor - (x.exact - x.floor));
+  const bump = new Set<T>();
+  for (const x of byRem) {
+    if (left <= 0) break;
+    bump.add(x.a);
+    left--;
+  }
+  return floored.map((x) => ({ ...x.a, weightPct: x.floor + (bump.has(x.a) ? 1 : 0) }));
+}
+
 /** The typed-data payload Arcus asks the taker to sign (Permit2 witness transfer). */
 export interface ArcusToSign {
   domain: Record<string, unknown>;

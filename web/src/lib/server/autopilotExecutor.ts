@@ -32,7 +32,7 @@ const EXPIRY_SECONDS = 15 * 60;
 
 const RISK_CEILING_BPS = 10000;
 // Below ~$0.50 a leg, RFQ quotes get unreliable and the fill is all spread.
-const MIN_LEG_MICRO = BigInt(500_000);
+const MIN_LEG_MICRO = BigInt(11_000_000); // $11 — the RFQ floor (was $0.50, which let sub-min legs fail)
 const MAX_UINT256 = (BigInt(1) << BigInt(256)) - BigInt(1);
 
 const publicClient = createPublicClient({ chain, transport: http(SERVER_RPC_URL) });

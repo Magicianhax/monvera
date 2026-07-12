@@ -5,6 +5,7 @@ import "server-only";
 // goal + amount into a validated, normalized allocation over BUYABLE assets.
 import { generateObject } from "ai";
 import { AllocationSchema, type Allocation } from "@/lib/allocation-schema";
+import { capAllocationLegs } from "@/lib/arcusShared";
 import { ALL_ASSETS } from "@/lib/tokens";
 import { displayFor } from "@/lib/displayAssets";
 import { resolveAllocationModel } from "./aiModel";
@@ -134,5 +135,10 @@ export async function buildAllocation(
     weightPct: total > 0 ? Math.round((a.weightPct / total) * 10000) / 100 : 0,
   }));
 
-  return { ...object, allocations: normalized };
+  // Cap the plan so every leg clears the RFQ floor ($11) once the amount is
+  // split by weight — otherwise a $40 plan across 8 names makes ~$5 legs the
+  // makers reject, and the user's money lands short.
+  const capped = capAllocationLegs(normalized, amountUsd);
+
+  return { ...object, allocations: capped };
 }
