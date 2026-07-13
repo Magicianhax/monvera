@@ -141,16 +141,21 @@ export function useSellAll() {
             filledSymbols: [...filledSyms],
           });
           try {
-            const { txHash, settling } = await executeSwap(
-              wallet,
-              { side: "sell", symbol: sel.asset.symbol, sellAmount: sel.amountIn },
-              signTyped,
-            );
-            sold.push({ symbol: sel.asset.symbol, name: sel.asset.name, amountUsd: sel.estUsd, txHash, settling });
+            const trade = { side: "sell" as const, symbol: sel.asset.symbol, sellAmount: sel.amountIn };
+            let res: { txHash: `0x${string}`; settling: boolean };
+            try {
+              res = await executeSwap(wallet, trade, signTyped);
+            } catch (firstErr) {
+              // A maker can pull between quote and settle — executeSwap re-quotes
+              // internally, so one retry recovers most transient failures.
+              console.warn(`[sell-all] ${sel.asset.symbol} retrying:`, firstErr instanceof Error ? firstErr.message : firstErr);
+              res = await executeSwap(wallet, trade, signTyped);
+            }
+            sold.push({ symbol: sel.asset.symbol, name: sel.asset.name, amountUsd: sel.estUsd, txHash: res.txHash, settling: res.settling });
             filledSyms.push(sel.asset.symbol);
             proceeds += sel.estUsd;
           } catch (legErr) {
-            console.error(`[sell-all] ${sel.asset.symbol} failed:`, legErr instanceof Error ? legErr.message : legErr);
+            console.error(`[sell-all] ${sel.asset.symbol} failed (after retry):`, legErr instanceof Error ? legErr.message : legErr);
           }
           const doneCount = idx + 1;
           const perLeg = (Date.now() - startedAt) / 1000 / doneCount;

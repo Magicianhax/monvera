@@ -86,11 +86,17 @@ async function blockscoutLogs(event: AbiEvent, user?: `0x${string}`): Promise<Es
   return all;
 }
 
-// ── 2) chunked RPC fallback (sequential-ish batches) ──────────────────────────
-async function chunkedLogs(event: AbiEvent, user?: `0x${string}`) {
-  const latest = await logsClient.getBlockNumber();
+// ── 2) chunked RPC scan over an explicit [from, to] range ─────────────────────
+async function chunkedLogs(
+  event: AbiEvent,
+  user?: `0x${string}`,
+  fromBlock?: bigint,
+  toBlock?: bigint,
+) {
+  const latest = toBlock ?? (await logsClient.getBlockNumber());
+  const start = fromBlock ?? DEPLOY_BLOCK;
   const ranges: { from: bigint; to: bigint }[] = [];
-  for (let from = DEPLOY_BLOCK; from <= latest; from += CHUNK + BigInt(1)) {
+  for (let from = start; from <= latest; from += CHUNK + BigInt(1)) {
     const to = from + CHUNK > latest ? latest : from + CHUNK;
     ranges.push({ from, to });
   }
@@ -116,27 +122,61 @@ async function chunkedLogs(event: AbiEvent, user?: `0x${string}`) {
 // ── decode + row mapping ──────────────────────────────────────────────────────
 type DecodedArgs = Record<string, unknown>;
 
-async function readEvent(event: AbiEvent, user?: `0x${string}`): Promise<
-  { args: DecodedArgs; txHash: `0x${string}`; blockNumber: bigint }[]
-> {
-  if (!EXECUTOR_LIVE) return [];
-  try {
-    const raw = await blockscoutLogs(event, user);
-    return raw.map((l) => {
-      const { args } = decodeEventLog({ abi: [event], data: l.data, topics: l.topics as [`0x${string}`, ...`0x${string}`[]] });
-      return { args: args as DecodedArgs, txHash: l.transactionHash, blockNumber: BigInt(l.blockNumber) };
-    });
-  } catch {
-    /* fall through to chunked RPC */
-  }
-  const logs = await chunkedLogs(event, user);
-  // getLogs with a runtime AbiEvent loses the decoded-args generic; the logs DO
-  // carry decoded args at runtime (viem decodes when `event` is passed).
+type EventRow = { args: DecodedArgs; txHash: `0x${string}`; blockNumber: bigint };
+
+// getLogs with a runtime AbiEvent loses the decoded-args generic; the logs DO
+// carry decoded args at runtime (viem decodes when `event` is passed).
+function decodeChunked(
+  logs: Awaited<ReturnType<typeof logsClient.getLogs>>,
+): EventRow[] {
   return (logs as unknown as { args: DecodedArgs; transactionHash: `0x${string}`; blockNumber: bigint | null }[]).map((l) => ({
     args: l.args,
     txHash: l.transactionHash,
     blockNumber: l.blockNumber ?? BigInt(0),
   }));
+}
+
+// Only scan this far back from the head when supplementing Blockscout — a huge
+// gap means Blockscout is cold, not lagging, and the full history is its job.
+const TAIL_WINDOW = BigInt(60_000);
+
+async function readEvent(event: AbiEvent, user?: `0x${string}`): Promise<EventRow[]> {
+  if (!EXECUTOR_LIVE) return [];
+
+  let rows: EventRow[];
+  try {
+    const raw = await blockscoutLogs(event, user);
+    rows = raw.map((l) => {
+      const { args } = decodeEventLog({ abi: [event], data: l.data, topics: l.topics as [`0x${string}`, ...`0x${string}`[]] });
+      return { args: args as DecodedArgs, txHash: l.transactionHash, blockNumber: BigInt(l.blockNumber) };
+    });
+  } catch {
+    // Blockscout down → full chunked RPC scan (historical fallback).
+    return decodeChunked(await chunkedLogs(event, user));
+  }
+
+  // Blockscout's indexer can trail the chain head by thousands of blocks, so a
+  // record written a few minutes ago is missing from its getLogs even though
+  // it's on-chain. Supplement the tail straight from the RPC (which is at head)
+  // and merge, so Vera's volume includes the most recent plans.
+  try {
+    const head = await logsClient.getBlockNumber();
+    const bsMax = rows.reduce((m, r) => (r.blockNumber > m ? r.blockNumber : m), DEPLOY_BLOCK);
+    if (head > bsMax) {
+      const from = bsMax + BigInt(1) > head - TAIL_WINDOW ? bsMax + BigInt(1) : head - TAIL_WINDOW;
+      const tail = decodeChunked(await chunkedLogs(event, user, from, head));
+      const seen = new Set(rows.map((r) => r.txHash.toLowerCase()));
+      for (const r of tail) {
+        if (!seen.has(r.txHash.toLowerCase())) {
+          rows.push(r);
+          seen.add(r.txHash.toLowerCase());
+        }
+      }
+    }
+  } catch {
+    /* keep the Blockscout rows we already have */
+  }
+  return rows;
 }
 
 function usdToNumber(raw: bigint): number {

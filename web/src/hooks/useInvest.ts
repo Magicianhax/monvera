@@ -284,24 +284,32 @@ export function useInvest(): UseInvest {
             mode,
             filledSymbols: [...filledSyms],
           });
-          try {
-            // Settle by venue: "rfq" legs go to the router (settles off-Pimlico,
-            // minutes later); "tx" legs relay [settle] through Pimlico now.
-            let legTx: `0x${string}`;
-            let settling = false;
-            if (q.quote.kind === "rfq") {
-              const submitted = await submitRfqIntent(q.quote, eoa, signTyped);
-              legTx = submitted.txHash;
-              settling = true;
-            } else {
-              legTx = await relay(await settleCallFor(q.quote, signTyped));
+          // Settle by venue: "rfq" legs go to the router (settles off-Pimlico,
+          // minutes later); "tx" legs relay [settle] through Pimlico now.
+          const settleQuote = async (quote: typeof q.quote): Promise<{ txHash: `0x${string}`; settling: boolean }> => {
+            if (quote.kind === "rfq") {
+              const submitted = await submitRfqIntent(quote, eoa, signTyped);
+              return { txHash: submitted.txHash, settling: true };
             }
-            lastTx = legTx;
-            filled.push({ leg: q.leg, amountMicro: q.amountMicro, txHash: legTx, settling });
+            return { txHash: await relay(await settleCallFor(quote, signTyped)), settling: false };
+          };
+          try {
+            let res: { txHash: `0x${string}`; settling: boolean };
+            try {
+              res = await settleQuote(q.quote);
+            } catch (firstErr) {
+              // The upfront quote can go stale if a maker pulls between showing
+              // the plan and settling. Re-quote once and retry before giving up.
+              console.warn(`[invest] leg ${q.leg.symbol} retrying with a fresh quote:`, firstErr instanceof Error ? firstErr.message : firstErr);
+              const fresh = await fetchArcusQuote({ side: "buy", symbol: q.leg.symbol, sellAmount: q.amountMicro, taker: eoa });
+              res = await settleQuote(fresh);
+            }
+            lastTx = res.txHash;
+            filled.push({ leg: q.leg, amountMicro: q.amountMicro, txHash: res.txHash, settling: res.settling });
             filledSyms.push(q.leg.symbol);
             spentMicroRunning += q.amountMicro;
           } catch (legErr) {
-            console.error(`[invest] leg ${q.leg.symbol} failed:`, legErr instanceof Error ? legErr.message : legErr);
+            console.error(`[invest] leg ${q.leg.symbol} failed (after retry):`, legErr instanceof Error ? legErr.message : legErr);
           }
           const doneCount = idx + 1;
           const perLeg = (Date.now() - startedAt) / 1000 / doneCount;
