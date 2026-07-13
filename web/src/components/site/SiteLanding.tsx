@@ -9,7 +9,7 @@
 // Styles live in the committed SiteLanding.module.css (globals.css is local-only).
 import { Fragment, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { ArrowUpRight, Sun, Moon, Menu, ChevronDown } from "lucide-react";
+import { ArrowUpRight, Sun, Moon, Menu, ChevronDown, Copy, Check } from "lucide-react";
 import { gsap } from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import { TextPlugin } from "gsap/TextPlugin";
@@ -19,6 +19,12 @@ import { PARTNERS } from "@/components/shared/Partners";
 import { FAQ } from "@/lib/faq";
 import { SUPPORT_EMAIL } from "@/lib/seo";
 import { MonveraIcon } from "@/components/design";
+
+// $MONVERA — the project token, launched on Virtuals Protocol on ROBINHOOD CHAIN
+// (verified via the Virtuals API: chain "ROBINHOOD"), same chain the app runs on.
+const TOKEN_CA = "0x7541872e32Bb529d7FF11D6C59832269ce33a6FF";
+const TOKEN_BUY_URL = "https://app.virtuals.io/virtuals/105667";
+const TOKEN_EXPLORER_URL = `https://robinhoodchain.blockscout.com/token/${TOKEN_CA}`;
 import { DemoMount } from "@/components/demo/DemoMount";
 import type { DemoPlay } from "@/components/demo/DemoProvider";
 import { ROADMAP } from "@/lib/roadmap";
@@ -132,6 +138,17 @@ export function SiteLanding({
   const root = useRef<HTMLDivElement>(null);
   const [mode, setMode] = useState<Mode>("light");
   const [menuOpen, setMenuOpen] = useState(false);
+  // $MONVERA contract-address copy feedback (resets after a beat).
+  const [caCopied, setCaCopied] = useState(false);
+  const copyCa = () => {
+    navigator.clipboard
+      .writeText(TOKEN_CA)
+      .then(() => {
+        setCaCopied(true);
+        setTimeout(() => setCaCopied(false), 1800);
+      })
+      .catch(() => {});
+  };
   const [moreOpen, setMoreOpen] = useState(false);
   const moreRef = useRef<HTMLDivElement>(null);
   const moreCloseTimer = useRef<number | null>(null);
@@ -318,6 +335,7 @@ export function SiteLanding({
     ["#vera", "Vera"],
     ["#how", "How it works"],
     ["#strategies", "Strategies"],
+    ["#token", "$MONVERA"],
     ["#roadmap", "Roadmap"],
   ] as const;
   const SECONDARY = [
@@ -669,6 +687,34 @@ export function SiteLanding({
         </div>
       </section>
 
+      {/* $MONVERA — the token, plainly: what it is, where it trades, the contract. */}
+      <section className={s.section} id="token">
+        <div className={s.wrap}>
+          <div className={`${s.ctaCard} js-cta`}>
+            <div className={s.ctaGlow} aria-hidden />
+            <h2>$MONVERA</h2>
+            <p>
+              Monvera&apos;s token, launched on Virtuals Protocol and live on Robinhood Chain — the same chain the app
+              settles on. It&apos;s how the community backs Vera — the app itself never requires it, and it isn&apos;t an
+              investment product.
+            </p>
+            <div className={s.ctaCtas}>
+              <a className={`${s.btn} ${s.btnLg} ${s.btnOnDark}`} href={TOKEN_BUY_URL} target="_blank" rel="noreferrer">
+                Buy on Virtuals <ArrowUpRight size={18} strokeWidth={2.2} />
+              </a>
+              <a className={`${s.btn} ${s.btnLg} ${s.btnGhostOnDark}`} href={TOKEN_EXPLORER_URL} target="_blank" rel="noreferrer">
+                View on Blockscout <ArrowUpRight size={18} strokeWidth={2.2} />
+              </a>
+            </div>
+            <button type="button" className={s.tokenCa} onClick={copyCa} aria-label="Copy the $MONVERA contract address">
+              <span className={s.mono}>{TOKEN_CA}</span>
+              {caCopied ? <Check size={15} strokeWidth={2.4} aria-hidden /> : <Copy size={15} strokeWidth={2} aria-hidden />}
+              <b>{caCopied ? "Copied" : "Copy"}</b>
+            </button>
+          </div>
+        </div>
+      </section>
+
       {/* FAQ */}
       <section className={s.section} id="faq">
         <div className={s.wrap}>
@@ -735,6 +781,8 @@ export function SiteLanding({
             <div className={s.footerCol}>
               <h4>Connect</h4>
               <a href="https://x.com/monvera_best" target="_blank" rel="noreferrer">@monvera_best on X</a>
+              <a href={TOKEN_BUY_URL} target="_blank" rel="noreferrer">Buy $MONVERA</a>
+              <a href={TOKEN_EXPLORER_URL} target="_blank" rel="noreferrer">$MONVERA on Blockscout</a>
               <Link href="/brand">Brand kit</Link>
               <a href={`mailto:${SUPPORT_EMAIL}`}>Contact support</a>
             </div>

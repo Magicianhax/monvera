@@ -492,6 +492,27 @@ details[open] .faqIco { transform: rotate(180deg); }
 .ctaCard h2, .ctaCard p { position: relative; z-index: 1; }
 .ctaCtas { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; margin-top: 30px; position: relative; }
 .ctaGlow { position: absolute; inset: -40% -10% auto; height: 80%; background: radial-gradient(50% 60% at 50% 0%, rgba(255,255,255,0.16), transparent 70%); pointer-events: none; z-index: 0; }
+/* $MONVERA contract row — one tap copies the address; sits inside the dark card. */
+.tokenCa {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 22px;
+  padding: 10px 16px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.26);
+  color: #fff;
+  cursor: pointer;
+  max-width: 100%;
+  transition: background 0.18s;
+}
+.tokenCa:hover { background: rgba(255, 255, 255, 0.2); }
+.tokenCa .mono { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tokenCa b { font-size: 12.5px; font-weight: 700; flex: none; }
+.tokenCa svg { flex: none; }
 
 /* ── Footer ───────────────────────────────────────────────────────────────── */
 .footer { position: relative; z-index: 1; padding: 64px 0 40px; border-top: 1px solid var(--s-line); margin-top: var(--gap); }

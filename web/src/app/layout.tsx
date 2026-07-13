@@ -73,6 +73,10 @@ export const metadata: Metadata = {
     "Monvera",
   ],
   manifest: "/manifest.webmanifest",
+  // Virtuals Protocol site-ownership proof for the $MONVERA token page.
+  other: {
+    "virtual-protocol-site-verification": "ea6243e9ad15c394394100d281732f69",
+  },
   alternates: {
     canonical: "/",
   },
