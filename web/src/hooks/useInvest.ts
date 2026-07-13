@@ -260,7 +260,7 @@ export function useInvest(): UseInvest {
         }
 
         setPhase("investing");
-        const filled: { leg: (typeof quotes)[number]["leg"]; amountMicro: bigint }[] = [];
+        const filled: { leg: (typeof quotes)[number]["leg"]; amountMicro: bigint; txHash: `0x${string}` }[] = [];
         let lastTx: `0x${string}` | null = null;
         const total = quotes.length;
         const startedAt = Date.now();
@@ -278,8 +278,9 @@ export function useInvest(): UseInvest {
             mode,
           });
           try {
-            lastTx = await relay(await settleCallFor(q.quote, signTyped));
-            filled.push({ leg: q.leg, amountMicro: q.amountMicro });
+            const legTx = await relay(await settleCallFor(q.quote, signTyped));
+            lastTx = legTx;
+            filled.push({ leg: q.leg, amountMicro: q.amountMicro, txHash: legTx });
             spentMicroRunning += q.amountMicro;
           } catch (legErr) {
             console.error(`[invest] leg ${q.leg.symbol} failed:`, legErr instanceof Error ? legErr.message : legErr);
@@ -306,6 +307,7 @@ export function useInvest(): UseInvest {
         // ACTUALLY filled. Best-effort: a failed record never undoes real buys.
         const spentMicro = filled.reduce((s, l) => s + l.amountMicro, BigInt(0));
         let commit: CommitPlan | null = null;
+        let recordTx: `0x${string}` | null = null;
         if (INFERENCE_VERIFIER.toLowerCase() !== zeroAddress) {
           try {
             commit = await postJson<CommitPlan>("/api/commit-plan", {
@@ -313,7 +315,7 @@ export function useInvest(): UseInvest {
               allocation: alloc,
               amountUsd,
             });
-            await relay({
+            recordTx = await relay({
               to: INFERENCE_VERIFIER,
               data: encodeFunctionData({
                 abi: VERA_RECORD_ABI,
@@ -338,15 +340,17 @@ export function useInvest(): UseInvest {
           }
         }
 
-        const holdings = filled.map(({ leg, amountMicro }) => ({
+        const holdings = filled.map(({ leg, amountMicro, txHash }) => ({
           symbol: leg.symbol,
           name: leg.symbol,
           weightPct: leg.weightPct,
           amountUsd: Number(amountMicro) / 1_000_000,
+          txHash,
         }));
 
         setSuccess({
-          txHash: (lastTx ?? "0x") as `0x${string}`,
+          // Top-level link = the on-chain plan record when it ran, else last buy.
+          txHash: (recordTx ?? lastTx ?? "0x") as `0x${string}`,
           holdings,
           amountUsd: Number(spentMicro) / 1_000_000,
           verification: commit

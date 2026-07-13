@@ -1,0 +1,36 @@
+/* Placing / Selling conveyor animation — self-contained (a CSS module, so it's
+   committed and deploys independently of the local-only globals.css). The holding
+   being bought/sold flies in from the left; the completed one exits to the right,
+   so each trade reads as a discrete step. --ease-out/--ease-in are global tokens. */
+@keyframes flyInLeft {
+  from {
+    transform: translateX(-150px) scale(0.82);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0) scale(1);
+    opacity: 1;
+  }
+}
+@keyframes flyOutRight {
+  from {
+    transform: translateX(0) scale(1);
+    opacity: 1;
+  }
+  to {
+    transform: translateX(150px) scale(0.82);
+    opacity: 0;
+  }
+}
+.flyInLeft {
+  animation: flyInLeft 0.5s var(--ease-out, ease-out) both;
+}
+.flyOutRight {
+  animation: flyOutRight 0.46s var(--ease-in, ease-in) both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .flyInLeft,
+  .flyOutRight {
+    animation: none;
+  }
+}

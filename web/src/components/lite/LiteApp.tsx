@@ -51,6 +51,10 @@ import { HelpScreen } from "./screens/HelpScreen";
 import { WalletScreen } from "./screens/WalletScreen";
 import { SendScreen } from "./screens/SendScreen";
 import { AutopilotScreen } from "./screens/AutopilotScreen";
+import { SellScreen } from "./screens/SellScreen";
+import { SellingScreen } from "./screens/SellingScreen";
+import { SoldScreen } from "./screens/SoldScreen";
+import { useSellAll, type SellSelection } from "@/hooks/useSellAll";
 
 gsap.registerPlugin(useGSAP);
 
@@ -65,6 +69,9 @@ type Screen =
   | "confirm"
   | "placing"
   | "success"
+  | "sellall"
+  | "selling"
+  | "sold"
   | "portfolio"
   | "review"
   | "market"
@@ -111,6 +118,7 @@ function tabFor(screen: Screen): TabId {
 
 export function LiteApp({ demoPlay = null }: { demoPlay?: "invest" | "vera" | null }) {
   const invest = useInvest();
+  const sell = useSellAll();
   const { address } = useSmartAccount();
   const { notify } = useToast();
   // Keep the device-local watchlist reconciled with the server for this wallet.
@@ -246,6 +254,19 @@ export function LiteApp({ demoPlay = null }: { demoPlay?: "invest" | "vera" | nu
     [invest, address, amount],
   );
 
+  // Sell-all: the SellScreen builds the selections + mode, then we run it and
+  // swap in the live "selling" progress screen (mirrors invest's onPlace).
+  const onSellStart = useCallback(
+    (selections: SellSelection[], mode: "auto" | "manual") => {
+      if (selections.length === 0) return;
+      sell.reset();
+      setDir("push");
+      setStack((s) => [...s.filter((r) => r.screen !== "sellall"), { screen: "selling", params: {} }]);
+      void sell.sellAll(selections, mode);
+    },
+    [sell],
+  );
+
   // Latest handlers for the demo autoplay driver (avoids stale closures).
   const goRef = useRef(go);
   goRef.current = go;
@@ -320,6 +341,20 @@ export function LiteApp({ demoPlay = null }: { demoPlay?: "invest" | "vera" | nu
     }
   }, [invest.phase, invest.success, screen]);
 
+  // Drive screen from the real sell-all phase. Gate on being ON the selling
+  // screen so the completion push can't re-fire once we've moved to "sold".
+  useEffect(() => {
+    if (sell.phase === "done" && sell.success && screen === "selling") {
+      setDir("push");
+      setStack((s) => [...s.filter((r) => r.screen !== "selling"), { screen: "sold", params: {} }]);
+    }
+    if (sell.phase === "error" && screen === "selling") {
+      if (sell.error) notify(sell.error, "info");
+      setDir("pop");
+      setStack((s) => s.filter((r) => r.screen !== "selling"));
+    }
+  }, [sell.phase, sell.success, sell.error, screen, notify]);
+
   // Each screen names the browser tab (e.g. "Market · Monvera").
   useEffect(() => {
     const NAMES: Record<Screen, string> = {
@@ -333,6 +368,9 @@ export function LiteApp({ demoPlay = null }: { demoPlay?: "invest" | "vera" | nu
       confirm: "Place your plan",
       placing: "Securing your investment",
       success: "Invested",
+      sellall: "Sell holdings",
+      selling: "Cashing out",
+      sold: "Sold",
       portfolio: "What you own",
       review: "Portfolio review",
       market: "Market",
@@ -495,14 +533,34 @@ export function LiteApp({ demoPlay = null }: { demoPlay?: "invest" | "vera" | nu
         <GoalScreen go={go} />
       );
       break;
-    case "placing":
-      view = <PlacingScreen phase={invest.phase} progress={invest.progress} />;
+    case "placing": {
+      // Ordered legs (symbol + its dollar slice) power the conveyor + queue rail.
+      const legs = invest.allocation
+        ? invest.allocation.allocations
+            .filter((a) => a.weightPct > 0)
+            .map((a) => ({ symbol: a.symbol, usd: (amount * a.weightPct) / 100 }))
+        : undefined;
+      view = <PlacingScreen phase={invest.phase} progress={invest.progress} legs={legs} />;
       break;
+    }
     case "success":
       view = invest.success ? (
         <SuccessScreen success={invest.success} onDone={() => go("home")} />
       ) : (
         <HomeScreen go={go} />
+      );
+      break;
+    case "sellall":
+      view = <SellScreen onBack={() => go(-1)} onSell={onSellStart} />;
+      break;
+    case "selling":
+      view = <SellingScreen progress={sell.progress} />;
+      break;
+    case "sold":
+      view = sell.success ? (
+        <SoldScreen success={sell.success} onDone={() => go("wallet")} />
+      ) : (
+        <WalletScreen go={go} />
       );
       break;
     case "portfolio":

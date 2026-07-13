@@ -118,8 +118,22 @@ export function SuccessScreen({
                 sub={catFor(h.symbol, h.name)}
                 showSpark={false}
                 right={
-                  <div className="tnum" style={{ fontWeight: 600, fontSize: 16 }}>
-                    {usd(h.amountUsd)}
+                  <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 2 }}>
+                    <div className="tnum" style={{ fontWeight: 600, fontSize: 16 }}>
+                      {usd(h.amountUsd)}
+                    </div>
+                    {h.txHash && (
+                      <a
+                        href={txUrl(h.txHash)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="tap"
+                        onClick={(e) => e.stopPropagation()}
+                        style={{ fontSize: 11.5, fontWeight: 500, color: "var(--primary)", display: "inline-flex", alignItems: "center", gap: 3, textDecoration: "none" }}
+                      >
+                        Receipt <Icon name="arrowUR" size={11} />
+                      </a>
+                    )}
                   </div>
                 }
               />

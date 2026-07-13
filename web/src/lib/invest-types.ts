@@ -32,8 +32,11 @@ export interface AllocateResult extends Allocation {
 
 /** A receipt-ish summary surfaced to the success screen. */
 export interface InvestSuccess {
+  /** The on-chain record tx (VeraRecord) when it ran, else the last filled buy. */
   txHash: `0x${string}`;
-  holdings: { symbol: string; name: string; weightPct: number; amountUsd: number }[];
+  /** Each buy is its own sponsored UserOp now (not a bundle), so every holding
+      carries its own Blockscout receipt — surfaced per-row on the success screen. */
+  holdings: { symbol: string; name: string; weightPct: number; amountUsd: number; txHash?: `0x${string}` }[];
   amountUsd: number;
   /** The on-chain AI verification this plan passed (for the "Verified on-chain" panel). */
   verification?: {

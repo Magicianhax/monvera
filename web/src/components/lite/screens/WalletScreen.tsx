@@ -186,6 +186,7 @@ export function WalletScreen({
         <ActionBtn icon="arrowUR" label="Send" onClick={() => go("send")} />
         <ActionBtn icon="arrowDR" label="Receive" onClick={() => { haptic.light(); setReceiveOpen(true); }} />
         <ActionBtn icon="plus" label="Invest" onClick={() => go("market")} />
+        {holdings.length > 0 && <ActionBtn icon="trendDown" label="Sell" onClick={() => go("sellall")} />}
       </div>
 
       {/* cash */}

@@ -106,11 +106,13 @@ export function demoSuccess(alloc: Allocation, amountUsd: number): InvestSuccess
   return {
     txHash: hx("e1f0a1b2"),
     amountUsd,
-    holdings: alloc.allocations.map((a) => ({
+    holdings: alloc.allocations.map((a, i) => ({
       symbol: a.symbol,
       name: a.symbol,
       weightPct: a.weightPct,
       amountUsd: (amountUsd * a.weightPct) / 100,
+      // Each buy is its own tx now — give the demo distinct per-holding receipts.
+      txHash: hx((0xd0000000 + i * 0x1111).toString(16).padStart(8, "0")),
     })),
   };
 }

@@ -44,9 +44,18 @@ function isHttp(req: NextRequest): boolean {
   return false;
 }
 
+// Local dev runs plain http on localhost; Next's dev server injects
+// x-forwarded-proto: http, which would 301 every request to https://localhost
+// (no TLS server there) and make `npm run dev` unreachable. The edge upgrade is
+// only meaningful for the real domain, so skip it for loopback hosts.
+function isLocalhost(req: NextRequest): boolean {
+  const h = req.nextUrl.hostname;
+  return h === "localhost" || h === "127.0.0.1" || h === "0.0.0.0" || h === "[::1]";
+}
+
 export function middleware(req: NextRequest) {
-  // ── 1. http -> https, permanent ──
-  if (isHttp(req)) {
+  // ── 1. http -> https, permanent (skipped on loopback for local dev) ──
+  if (isHttp(req) && !isLocalhost(req)) {
     const url = req.nextUrl.clone();
     url.protocol = "https:";
     url.port = "";

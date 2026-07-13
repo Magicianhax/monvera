@@ -55,15 +55,18 @@ interface SwapSubmission {
  *           must be relayed first, on its own, since there's no call to batch it
  *           with. The fill arrives wrapped and auto-unwraps within ~1-15 min.
  */
-async function executeSwap(
+export async function executeSwap(
   wallet: NonNullable<ReturnType<typeof useActiveWallet>>,
   params: { side: "buy" | "sell"; symbol: string; sellAmount: bigint },
+  // Optional signer override — the silent embedded-wallet signer by default, or a
+  // UI-prompting signer for "approve each step" (manual) flows like batch sell.
+  signTypedOverride?: (json: string) => Promise<`0x${string}`>,
 ): Promise<SwapSubmission> {
   const eoa = wallet.address as `0x${string}`;
   const quote = await fetchArcusQuote({ ...params, taker: eoa });
 
   const provider = (await wallet.getEthereumProvider()) as Eip1193;
-  const signTyped = typedDataSigner(provider, eoa);
+  const signTyped = signTypedOverride ?? typedDataSigner(provider, eoa);
 
   if (quote.kind === "rfq") {
     // No size check here: the maker's minimum is theirs to enforce, and the trade
