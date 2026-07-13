@@ -35,6 +35,8 @@ export interface SellProgress {
   totalUsd: number;
   etaSeconds: number | null;
   mode: InvestMode;
+  /** Symbols actually sold — the conveyor only checks off real fills. */
+  filledSymbols: string[];
 }
 
 export interface SoldHolding {
@@ -92,6 +94,7 @@ export function useSellAll() {
             totalUsd,
             etaSeconds: (sels.length - i) * 2,
             mode,
+            filledSymbols: sels.slice(0, i).map((s) => s.asset.symbol),
           });
           await sleep(700);
         }
@@ -121,6 +124,7 @@ export function useSellAll() {
 
         setPhase("selling");
         const sold: SoldHolding[] = [];
+        const filledSyms: string[] = [];
         const total = sels.length;
         const startedAt = Date.now();
         let proceeds = 0;
@@ -134,6 +138,7 @@ export function useSellAll() {
             totalUsd,
             etaSeconds: idx === 0 ? total * 6 : Math.ceil(((Date.now() - startedAt) / 1000 / idx) * (total - idx)),
             mode,
+            filledSymbols: [...filledSyms],
           });
           try {
             const { txHash, settling } = await executeSwap(
@@ -142,6 +147,7 @@ export function useSellAll() {
               signTyped,
             );
             sold.push({ symbol: sel.asset.symbol, name: sel.asset.name, amountUsd: sel.estUsd, txHash, settling });
+            filledSyms.push(sel.asset.symbol);
             proceeds += sel.estUsd;
           } catch (legErr) {
             console.error(`[sell-all] ${sel.asset.symbol} failed:`, legErr instanceof Error ? legErr.message : legErr);
@@ -156,6 +162,7 @@ export function useSellAll() {
             totalUsd,
             etaSeconds: doneCount < total ? Math.ceil(perLeg * (total - doneCount)) : 0,
             mode,
+            filledSymbols: [...filledSyms],
           });
         }
         if (sold.length === 0) {

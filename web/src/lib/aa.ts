@@ -35,6 +35,19 @@ const BUNDLER_URL = "/api/pimlico";
 
 const ENTRY_POINT = { address: entryPoint07Address, version: "0.7" } as const;
 
+// Gas price barely moves within the few seconds a multi-leg invest/sell takes,
+// so cache pimlico_getUserOperationGasPrice for a short window instead of calling
+// it once per leg's UserOp. One of several cuts to stay well under Pimlico limits.
+type FeePrice = { maxFeePerGas: bigint; maxPriorityFeePerGas: bigint };
+let gasPriceCache: { at: number; fast: FeePrice } | null = null;
+async function cachedFastGas(pimlico: ReturnType<typeof createPimlicoClient>): Promise<FeePrice> {
+  const now = Date.now();
+  if (gasPriceCache && now - gasPriceCache.at < 8_000) return gasPriceCache.fast;
+  const { fast } = await pimlico.getUserOperationGasPrice();
+  gasPriceCache = { at: now, fast };
+  return fast;
+}
+
 async function buildClient(provider: EIP1193Provider) {
   // Pimlico client serves BOTH paymaster sponsorship and user-op gas pricing,
   // through our same-origin proxy (transport target = /api/pimlico).
@@ -60,7 +73,7 @@ async function buildClient(provider: EIP1193Provider) {
     // sponsorship calls explicitly to the Pimlico client.
     paymaster: pimlico,
     userOperation: {
-      estimateFeesPerGas: async () => (await pimlico.getUserOperationGasPrice()).fast,
+      estimateFeesPerGas: async () => cachedFastGas(pimlico),
     },
   });
 
@@ -99,7 +112,13 @@ export async function sendSponsoredCalls(provider: EIP1193Provider, calls: Call[
     calls: calls.map((c) => ({ to: c.to, data: c.data, value: c.value ?? BigInt(0) })),
   });
 
-  const receipt = await smartAccountClient.waitForUserOperationReceipt({ hash: userOpHash });
+  // Poll the bundler for the receipt less aggressively (default is ~1s) — fewer
+  // eth_getUserOperationReceipt calls per leg, which adds up across a basket.
+  const receipt = await smartAccountClient.waitForUserOperationReceipt({
+    hash: userOpHash,
+    pollingInterval: 2_500,
+    timeout: 90_000,
+  });
   if (!receipt.success) {
     throw new Error(`UserOperation reverted (txHash ${receipt.receipt.transactionHash}).`);
   }

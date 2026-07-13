@@ -14,7 +14,7 @@ import fx from "./conveyor.module.css";
 
 const nameFor = (sym: string) => displayFor(sym).name || sym;
 
-function StageCard({ symbol, leaving }: { symbol: string; leaving?: boolean }) {
+function StageCard({ symbol, leaving, skipped }: { symbol: string; leaving?: boolean; skipped?: boolean }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}>
       <div style={{ position: "relative", width: 100, height: 100, display: "grid", placeItems: "center" }}>
@@ -26,6 +26,7 @@ function StageCard({ symbol, leaving }: { symbol: string; leaving?: boolean }) {
             borderRadius: "50%",
             background: "radial-gradient(circle, color-mix(in srgb, var(--primary) 32%, transparent), transparent 70%)",
             filter: "blur(14px)",
+            opacity: skipped ? 0 : 1,
           }}
         />
         <span
@@ -34,7 +35,7 @@ function StageCard({ symbol, leaving }: { symbol: string; leaving?: boolean }) {
             position: "absolute",
             inset: 0,
             borderRadius: "50%",
-            background: leaving ? "var(--primary)" : "conic-gradient(from 0deg, transparent 40deg, var(--primary))",
+            background: leaving ? (skipped ? "var(--line-2)" : "var(--primary)") : "conic-gradient(from 0deg, transparent 40deg, var(--primary))",
             WebkitMask: "radial-gradient(farthest-side, transparent calc(100% - 4px), #000 calc(100% - 4px))",
             mask: "radial-gradient(farthest-side, transparent calc(100% - 4px), #000 calc(100% - 4px))",
             animation: leaving ? "none" : "spin 1.1s linear infinite",
@@ -42,13 +43,13 @@ function StageCard({ symbol, leaving }: { symbol: string; leaving?: boolean }) {
         />
         <TokenLogo symbol={symbol} size={74} />
         {leaving && (
-          <span style={{ position: "absolute", right: 0, bottom: 0, width: 30, height: 30, borderRadius: "50%", background: "var(--primary)", color: "var(--primary-ink)", display: "grid", placeItems: "center", boxShadow: "0 2px 8px rgba(0,0,0,.2)" }}>
-            <Icon name="check" size={17} stroke={3} />
+          <span style={{ position: "absolute", right: 0, bottom: 0, width: 30, height: 30, borderRadius: "50%", background: skipped ? "var(--surface-2)" : "var(--primary)", color: skipped ? "var(--ink-3)" : "var(--primary-ink)", display: "grid", placeItems: "center", boxShadow: "0 2px 8px rgba(0,0,0,.2)" }}>
+            <Icon name={skipped ? "close" : "check"} size={skipped ? 14 : 17} stroke={3} />
           </span>
         )}
       </div>
       <div style={{ fontSize: 16, fontWeight: 700, color: leaving ? "var(--ink-2)" : "var(--ink)" }}>
-        {leaving ? "Sold" : "Selling"} {nameFor(symbol)}
+        {leaving ? (skipped ? "Skipped" : "Sold") : "Selling"} {nameFor(symbol)}
       </div>
     </div>
   );
@@ -67,6 +68,8 @@ export function SellingScreen({ progress }: { progress?: SellProgress | null }) 
   }, [stage.leaving]);
 
   const selling = !!stage.cur;
+  const filledSet = new Set(progress?.filledSymbols ?? []);
+  const filledCount = progress?.filledSymbols?.length ?? 0;
 
   return (
     <div className="screen screen-pad-top" style={{ alignItems: "center", justifyContent: "center", padding: "0 30px", textAlign: "center" }}>
@@ -88,7 +91,7 @@ export function SellingScreen({ progress }: { progress?: SellProgress | null }) 
           <>
             {stage.leaving && (
               <div key={`leave-${stage.leaving}`} className={fx.flyOutRight} style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center" }}>
-                <StageCard symbol={stage.leaving} leaving />
+                <StageCard symbol={stage.leaving} leaving skipped={!filledSet.has(stage.leaving)} />
               </div>
             )}
             {stage.cur && (
@@ -104,14 +107,14 @@ export function SellingScreen({ progress }: { progress?: SellProgress | null }) 
         <div style={{ width: "100%", maxWidth: 300, marginTop: 20 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 8 }}>
             <span className="tnum" style={{ fontSize: 12.5, color: "var(--ink-3)" }}>
-              {Math.min(progress.done + (progress.currentSymbol ? 1 : 0), progress.total)} of {progress.total} holdings
+              {filledCount} of {progress.total} sold
             </span>
             {progress.etaSeconds !== null && progress.etaSeconds > 0 && (
               <span className="tnum" style={{ fontSize: 12.5, color: "var(--ink-3)" }}>~{progress.etaSeconds}s left</span>
             )}
           </div>
           <div style={{ height: 8, borderRadius: 99, background: "var(--surface-2)", overflow: "hidden" }}>
-            <div style={{ height: "100%", width: `${Math.round((progress.done / progress.total) * 100)}%`, background: "var(--primary)", borderRadius: 99, transition: "width .4s var(--ease-out)" }} />
+            <div style={{ height: "100%", width: `${Math.round((filledCount / progress.total) * 100)}%`, background: "var(--primary)", borderRadius: 99, transition: "width .4s var(--ease-out)" }} />
           </div>
           <div className="tnum" style={{ marginTop: 9, fontSize: 12.5, color: "var(--ink-2)" }}>
             {usd(progress.proceedsUsd)} of ~{usd(progress.totalUsd)} sold

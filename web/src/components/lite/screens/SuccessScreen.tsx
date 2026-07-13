@@ -102,6 +102,11 @@ export function SuccessScreen({
           <b className="tnum">{usd(amountUsd)}</b> is now working across {holdings.length}{" "}
           {holdings.length === 1 ? "holding" : "holdings"}.
         </p>
+        {success.anySettling && (
+          <p data-fx="sub" style={{ fontSize: 13, color: "var(--ink-3)", margin: "10px auto 0", maxWidth: 300 }}>
+            Some are signed and on-chain now; those shares finish settling in a couple of minutes.
+          </p>
+        )}
       </div>
 
       {/* what you own */}

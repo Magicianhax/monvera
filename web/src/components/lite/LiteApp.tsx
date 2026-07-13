@@ -558,7 +558,19 @@ export function LiteApp({ demoPlay = null }: { demoPlay?: "invest" | "vera" | nu
       break;
     case "sold":
       view = sell.success ? (
-        <SoldScreen success={sell.success} onDone={() => go("wallet")} />
+        <SoldScreen
+          success={sell.success}
+          onDone={() => {
+            // Land on Wallet WITHOUT leaving "sold" (or the sell-flow screens)
+            // underneath — otherwise Back from Wallet returns to the receipt.
+            setDir("pop");
+            setStack([
+              { screen: "home", params: {} },
+              { screen: "wallet", params: {} },
+            ]);
+            sell.reset();
+          }}
+        />
       ) : (
         <WalletScreen go={go} />
       );

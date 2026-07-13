@@ -32,17 +32,20 @@ function StageCard({
   symbol,
   amount,
   leaving,
+  skipped,
 }: {
   symbol: string;
   amount?: number;
   leaving?: boolean;
+  /** Only when leaving: this leg was attempted but did NOT fill. */
+  skipped?: boolean;
 }) {
   return (
     <div
       style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}
     >
       <div style={{ position: "relative", width: 100, height: 100, display: "grid", placeItems: "center" }}>
-        {/* soft glow */}
+        {/* soft glow (hidden for a skipped leg) */}
         <span
           aria-hidden
           style={{
@@ -51,9 +54,10 @@ function StageCard({
             borderRadius: "50%",
             background: "radial-gradient(circle, color-mix(in srgb, var(--primary) 32%, transparent), transparent 70%)",
             filter: "blur(14px)",
+            opacity: skipped ? 0 : 1,
           }}
         />
-        {/* spinning progress ring while buying; steady soft ring once it's leaving (bought) */}
+        {/* spinning ring while buying; solid ring when bought; muted ring when skipped */}
         <span
           aria-hidden
           style={{
@@ -61,7 +65,9 @@ function StageCard({
             inset: 0,
             borderRadius: "50%",
             background: leaving
-              ? "var(--primary)"
+              ? skipped
+                ? "var(--line-2)"
+                : "var(--primary)"
               : "conic-gradient(from 0deg, transparent 40deg, var(--primary))",
             WebkitMask: "radial-gradient(farthest-side, transparent calc(100% - 4px), #000 calc(100% - 4px))",
             mask: "radial-gradient(farthest-side, transparent calc(100% - 4px), #000 calc(100% - 4px))",
@@ -78,14 +84,14 @@ function StageCard({
               width: 30,
               height: 30,
               borderRadius: "50%",
-              background: "var(--primary)",
-              color: "var(--primary-ink)",
+              background: skipped ? "var(--surface-2)" : "var(--primary)",
+              color: skipped ? "var(--ink-3)" : "var(--primary-ink)",
               display: "grid",
               placeItems: "center",
               boxShadow: "0 2px 8px rgba(0,0,0,.2)",
             }}
           >
-            <Icon name="check" size={17} stroke={3} />
+            <Icon name={skipped ? "close" : "check"} size={skipped ? 14 : 17} stroke={3} />
           </span>
         )}
       </div>
@@ -95,7 +101,7 @@ function StageCard({
         </div>
         {amount !== undefined && (
           <div className="tnum" style={{ fontSize: 13, color: "var(--ink-2)", marginTop: 2 }}>
-            {leaving ? "Bought" : "Buying"} {usd(amount)}
+            {leaving ? (skipped ? "Skipped" : "Bought") : "Buying"} {skipped ? "" : usd(amount)}
           </div>
         )}
       </div>
@@ -127,6 +133,9 @@ export function PlacingScreen({
 
   const usdFor = (sym: string | null) =>
     sym && legs ? legs.find((l) => l.symbol === sym)?.usd : undefined;
+
+  const filledSet = new Set(progress?.filledSymbols ?? []);
+  const filledCount = progress?.filledSymbols?.length ?? 0;
 
   const buying = !!stage.cur;
   const finishing = !!progress && progress.total > 0 && progress.done >= progress.total && !cur;
@@ -172,7 +181,7 @@ export function PlacingScreen({
                 className={fx.flyOutRight}
                 style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center" }}
               >
-                <StageCard symbol={stage.leaving} amount={usdFor(stage.leaving)} leaving />
+                <StageCard symbol={stage.leaving} amount={usdFor(stage.leaving)} leaving skipped={!filledSet.has(stage.leaving)} />
               </div>
             )}
             {stage.cur && (
@@ -188,12 +197,15 @@ export function PlacingScreen({
         )}
       </div>
 
-      {/* Queue rail — the whole plan at a glance: done ✓ · buying (ringed) · upcoming (dim). */}
+      {/* Queue rail — the whole plan at a glance: bought ✓ · buying (ringed) ·
+          skipped ✕ · upcoming (dim). Only real fills get the check. */}
       {legs && legs.length > 0 && (
         <div style={{ display: "flex", justifyContent: "center", flexWrap: "wrap", gap: 9, maxWidth: 300 }}>
           {legs.map((leg, idx) => {
-            const done = progress ? idx < progress.done : false;
+            const filled = filledSet.has(leg.symbol);
             const active = progress ? idx === progress.done && !!progress.currentSymbol : false;
+            const attempted = progress ? idx < progress.done : false;
+            const failed = attempted && !filled;
             return (
               <div
                 key={leg.symbol}
@@ -202,18 +214,18 @@ export function PlacingScreen({
                   width: 30,
                   height: 30,
                   borderRadius: "50%",
-                  opacity: done || active ? 1 : 0.4,
+                  opacity: filled || active ? 1 : failed ? 0.55 : 0.4,
                   transform: active ? "scale(1.14)" : "scale(1)",
                   boxShadow: active
                     ? "0 0 0 2px var(--primary)"
-                    : done
+                    : filled
                       ? "0 0 0 2px var(--primary-soft)"
                       : "none",
                   transition: "opacity .3s var(--ease-out), transform .3s var(--ease-out)",
                 }}
               >
                 <TokenLogo symbol={leg.symbol} size={30} />
-                {done && (
+                {(filled || failed) && (
                   <span
                     style={{
                       position: "absolute",
@@ -222,13 +234,13 @@ export function PlacingScreen({
                       width: 15,
                       height: 15,
                       borderRadius: "50%",
-                      background: "var(--primary)",
-                      color: "var(--primary-ink)",
+                      background: filled ? "var(--primary)" : "var(--surface-2)",
+                      color: filled ? "var(--primary-ink)" : "var(--ink-3)",
                       display: "grid",
                       placeItems: "center",
                     }}
                   >
-                    <Icon name="check" size={9} stroke={3.6} />
+                    <Icon name={filled ? "check" : "close"} size={9} stroke={3.6} />
                   </span>
                 )}
               </div>
@@ -242,7 +254,7 @@ export function PlacingScreen({
         <div style={{ width: "100%", maxWidth: 300, marginTop: 20 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 8 }}>
             <span className="tnum" style={{ fontSize: 12.5, color: "var(--ink-3)" }}>
-              {Math.min(progress.done + (progress.currentSymbol ? 1 : 0), progress.total)} of {progress.total} holdings
+              {filledCount} of {progress.total} bought
             </span>
             {progress.etaSeconds !== null && progress.etaSeconds > 0 && (
               <span className="tnum" style={{ fontSize: 12.5, color: "var(--ink-3)" }}>~{progress.etaSeconds}s left</span>
@@ -252,7 +264,7 @@ export function PlacingScreen({
             <div
               style={{
                 height: "100%",
-                width: `${Math.round((progress.done / progress.total) * 100)}%`,
+                width: `${Math.round((filledCount / progress.total) * 100)}%`,
                 background: "var(--primary)",
                 borderRadius: 99,
                 transition: "width .4s var(--ease-out)",

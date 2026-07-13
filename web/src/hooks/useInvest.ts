@@ -21,7 +21,7 @@ import { sendSponsoredCalls, type Call } from "@/lib/aa";
 import { buildUsdgPermitCall } from "@/lib/permit";
 import { asViemProvider } from "@/lib/provider";
 import { splitByWeights } from "@/lib/arcusShared";
-import { fetchArcusQuote, settleCallFor, typedDataSigner, type Eip1193 } from "@/lib/arcusTrade";
+import { fetchArcusQuote, settleCallFor, submitRfqIntent, typedDataSigner, type Eip1193 } from "@/lib/arcusTrade";
 import { VERA_RECORD_ABI } from "@/lib/abis";
 import { INFERENCE_VERIFIER } from "@/lib/tokens";
 import { useDemo } from "@/components/demo/DemoProvider";
@@ -61,6 +61,9 @@ export interface InvestProgress {
   /** Estimated seconds remaining, refined after each leg. Null before the first completes. */
   etaSeconds: number | null;
   mode: InvestMode;
+  /** Symbols that actually filled — so the conveyor only checks off real buys,
+      never a leg that was attempted and failed. */
+  filledSymbols: string[];
 }
 
 export interface UseInvest {
@@ -179,6 +182,7 @@ export function useInvest(): UseInvest {
             totalUsd: amountUsd,
             etaSeconds: (dLegs.length - i) * 2,
             mode,
+            filledSymbols: dLegs.slice(0, i).map((a) => a.symbol),
           });
           await sleep(700);
         }
@@ -217,10 +221,11 @@ export function useInvest(): UseInvest {
               sellAmount: legAmounts[i],
               taker: eoa,
             });
-            // RFQ-settled stocks can't join the batched userOp (the router submits
-            // them, minutes later, one intent at a time). Drop the leg exactly as
-            // an illiquid one is dropped; the remaining weights renormalize.
-            if (quote.kind !== "tx") continue;
+            // Keep BOTH venues now that we settle one leg per UserOp: "tx" legs
+            // relay [permit?, settle] through Pimlico; "rfq" legs are submitted to
+            // the router (which settles them, off Pimlico, minutes later). Only a
+            // genuinely illiquid leg is dropped. (Previously rfq legs were skipped
+            // for batching — which silently dropped most stocks from a plan.)
             quotes.push({ leg: legs[i], amountMicro: legAmounts[i], quote });
           } catch (e) {
             if (e instanceof Error && /no liquidity/i.test(e.message)) continue;
@@ -260,7 +265,8 @@ export function useInvest(): UseInvest {
         }
 
         setPhase("investing");
-        const filled: { leg: (typeof quotes)[number]["leg"]; amountMicro: bigint; txHash: `0x${string}` }[] = [];
+        const filled: { leg: (typeof quotes)[number]["leg"]; amountMicro: bigint; txHash: `0x${string}`; settling: boolean }[] = [];
+        const filledSyms: string[] = [];
         let lastTx: `0x${string}` | null = null;
         const total = quotes.length;
         const startedAt = Date.now();
@@ -276,11 +282,23 @@ export function useInvest(): UseInvest {
             totalUsd: amountUsd,
             etaSeconds: idx === 0 ? total * 6 : Math.ceil(((Date.now() - startedAt) / 1000 / idx) * (total - idx)),
             mode,
+            filledSymbols: [...filledSyms],
           });
           try {
-            const legTx = await relay(await settleCallFor(q.quote, signTyped));
+            // Settle by venue: "rfq" legs go to the router (settles off-Pimlico,
+            // minutes later); "tx" legs relay [settle] through Pimlico now.
+            let legTx: `0x${string}`;
+            let settling = false;
+            if (q.quote.kind === "rfq") {
+              const submitted = await submitRfqIntent(q.quote, eoa, signTyped);
+              legTx = submitted.txHash;
+              settling = true;
+            } else {
+              legTx = await relay(await settleCallFor(q.quote, signTyped));
+            }
             lastTx = legTx;
-            filled.push({ leg: q.leg, amountMicro: q.amountMicro, txHash: legTx });
+            filled.push({ leg: q.leg, amountMicro: q.amountMicro, txHash: legTx, settling });
+            filledSyms.push(q.leg.symbol);
             spentMicroRunning += q.amountMicro;
           } catch (legErr) {
             console.error(`[invest] leg ${q.leg.symbol} failed:`, legErr instanceof Error ? legErr.message : legErr);
@@ -295,6 +313,7 @@ export function useInvest(): UseInvest {
             totalUsd: amountUsd,
             etaSeconds: doneCount < total ? Math.ceil(perLeg * (total - doneCount)) : 0,
             mode,
+            filledSymbols: [...filledSyms],
           });
         }
         if (filled.length === 0) {
@@ -353,6 +372,7 @@ export function useInvest(): UseInvest {
           txHash: (recordTx ?? lastTx ?? "0x") as `0x${string}`,
           holdings,
           amountUsd: Number(spentMicro) / 1_000_000,
+          anySettling: filled.some((f) => f.settling),
           verification: commit
             ? {
                 riskScore: commit.assessedRisk,

@@ -38,6 +38,8 @@ export interface InvestSuccess {
       carries its own Blockscout receipt — surfaced per-row on the success screen. */
   holdings: { symbol: string; name: string; weightPct: number; amountUsd: number; txHash?: `0x${string}` }[];
   amountUsd: number;
+  /** Some legs settled via RFQ — submitted + on-chain, shares unwrap in minutes. */
+  anySettling?: boolean;
   /** The on-chain AI verification this plan passed (for the "Verified on-chain" panel). */
   verification?: {
     riskScore: number; // assessed portfolio risk, bps
