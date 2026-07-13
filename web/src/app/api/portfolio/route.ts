@@ -132,7 +132,10 @@ export async function GET(req: NextRequest) {
         holdings,
         asOf: new Date().toISOString(),
       },
-      { headers: { "Cache-Control": "public, s-maxage=10, stale-while-revalidate=30" } },
+      // Short edge cache: long enough to absorb bursts, short enough that a
+      // refreshBalances() fired when an RFQ fill unwraps sees the new balance
+      // instead of a stale edge copy.
+      { headers: { "Cache-Control": "public, s-maxage=5, stale-while-revalidate=10" } },
     );
   } catch (err) {
     return serverError("portfolio", err);

@@ -16,7 +16,7 @@ import { useActiveWallet } from "@/hooks/useActiveWallet";
 import { useRefreshBalances } from "@/hooks/useBalances";
 import { useDemo } from "@/components/demo/DemoProvider";
 import { executeSwap } from "@/hooks/useSwap";
-import { typedDataSigner, type Eip1193 } from "@/lib/arcusTrade";
+import { typedDataSigner, waitForRfqFill, type Eip1193 } from "@/lib/arcusTrade";
 import type { Asset } from "@/lib/tokens";
 import type { InvestMode } from "@/hooks/useInvest";
 
@@ -178,6 +178,18 @@ export function useSellAll() {
         setPhase("done");
         setProgress(null);
         refreshBalances();
+
+        // RFQ proceeds unwrap into USDG minutes later — watch each settling fill
+        // and refetch balances the moment it lands, instead of waiting for the
+        // passive 30s poll to notice the cash.
+        for (const s of sold) {
+          if (!s.settling || !s.txHash) continue;
+          void waitForRfqFill(s.txHash, { timeoutMs: 15 * 60_000 })
+            .then((st) => {
+              if (st.filled) refreshBalances();
+            })
+            .catch(() => {});
+        }
       } catch (e) {
         setError(e instanceof Error ? e.message : "The sell didn't go through.");
         setPhase("error");

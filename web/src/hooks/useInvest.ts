@@ -21,7 +21,7 @@ import { sendSponsoredCalls, type Call } from "@/lib/aa";
 import { buildUsdgPermitCall } from "@/lib/permit";
 import { asViemProvider } from "@/lib/provider";
 import { splitByWeights } from "@/lib/arcusShared";
-import { fetchArcusQuote, settleCallFor, submitRfqIntent, typedDataSigner, type Eip1193 } from "@/lib/arcusTrade";
+import { fetchArcusQuote, settleCallFor, submitRfqIntent, typedDataSigner, waitForRfqFill, type Eip1193 } from "@/lib/arcusTrade";
 import { VERA_RECORD_ABI } from "@/lib/abis";
 import { INFERENCE_VERIFIER } from "@/lib/tokens";
 import { useDemo } from "@/components/demo/DemoProvider";
@@ -390,6 +390,19 @@ export function useInvest(): UseInvest {
         setPhase("done");
         setProgress(null);
         refreshBalances(); // cash + holdings + activity refetch now, no manual refresh
+
+        // RFQ legs land as wrapped fills that unwrap minutes later — the refresh
+        // above can't see them yet. Watch each settling fill in the background
+        // and refetch balances the moment it unwraps, so the portfolio counts
+        // the new shares without waiting for the passive 30s poll to notice.
+        for (const f of filled) {
+          if (!f.settling) continue;
+          void waitForRfqFill(f.txHash, { timeoutMs: 15 * 60_000 })
+            .then((s) => {
+              if (s.filled) refreshBalances();
+            })
+            .catch(() => {});
+        }
       } catch (e) {
         setError(e instanceof Error ? e.message : "The investment didn't go through.");
         setPhase("error");
