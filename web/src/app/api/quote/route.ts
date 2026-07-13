@@ -24,6 +24,10 @@ const QuoteSchema = z.object({
   // 30 digits covers any real amount at 18 decimals.
   sellAmount: z.string().regex(/^\d{1,30}$/),
   taker: z.string().regex(ADDR),
+  // Force the RFQ venue. Some symbols' executable ("tx") settlements revert the
+  // router's InvalidAction() guard when relayed from the smart account; the
+  // client retries those legs router-settled instead.
+  venue: z.enum(["rfq"]).optional(),
 });
 
 export async function POST(req: NextRequest) {
@@ -68,7 +72,9 @@ export async function POST(req: NextRequest) {
     }
 
     const taker = body.taker as Address;
-    const q = await getQuote(sellToken, buyToken, sellAmount, taker);
+    const q = body.venue === "rfq"
+      ? { liquidityAvailable: false as const, tx: null }
+      : await getQuote(sellToken, buyToken, sellAmount, taker);
     if (q.liquidityAvailable && q.tx) {
       return Response.json({
         kind: "tx",

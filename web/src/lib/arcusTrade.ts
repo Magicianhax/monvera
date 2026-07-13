@@ -36,6 +36,8 @@ export async function fetchArcusQuote(params: {
   symbol: string;
   sellAmount: bigint;
   taker: string;
+  /** Force the router-settled venue (used to retry legs whose "tx" settle reverts). */
+  venue?: "rfq";
 }): Promise<ArcusQuoteResponse> {
   const res = await fetch("/api/quote", {
     method: "POST",

@@ -63,34 +63,47 @@ export async function executeSwap(
   signTypedOverride?: (json: string) => Promise<`0x${string}`>,
 ): Promise<SwapSubmission> {
   const eoa = wallet.address as `0x${string}`;
-  const quote = await fetchArcusQuote({ ...params, taker: eoa });
-
   const provider = (await wallet.getEthereumProvider()) as Eip1193;
   const signTyped = signTypedOverride ?? typedDataSigner(provider, eoa);
 
-  if (quote.kind === "rfq") {
-    // No size check here: the maker's minimum is theirs to enforce, and the trade
-    // screen already warned. A rejected order costs the user a signature, not money.
-    if (quote.needsAllowance && quote.permit2 && quote.sellToken) {
-      const permit = await buildPermitCall(signTyped, eoa, quote.permit2, quote.sellToken);
-      await sendSponsoredCalls(asViemProvider(provider), [permit]);
+  const settle = async (quote: Awaited<ReturnType<typeof fetchArcusQuote>>): Promise<SwapSubmission> => {
+    if (quote.kind === "rfq") {
+      // No size check here: the maker's minimum is theirs to enforce, and the trade
+      // screen already warned. A rejected order costs the user a signature, not money.
+      if (quote.needsAllowance && quote.permit2 && quote.sellToken) {
+        const permit = await buildPermitCall(signTyped, eoa, quote.permit2, quote.sellToken);
+        await sendSponsoredCalls(asViemProvider(provider), [permit]);
+      }
+      const submitted = await submitRfqIntent(quote, eoa, signTyped);
+      return { txHash: submitted.txHash, settling: true };
     }
-    const submitted = await submitRfqIntent(quote, eoa, signTyped);
-    return { txHash: submitted.txHash, settling: true };
-  }
 
-  const calls: Call[] = [];
-  if (quote.needsAllowance && quote.permit2 && quote.sellToken) {
-    // Gasless sellToken -> Permit2 allowance (EOA signs, relayer submits).
-    // The pulled token is USDG on a buy and the STOCK token on a sell, so
-    // permit whichever the quote is selling — not USDG unconditionally.
-    calls.push(await buildPermitCall(signTyped, eoa, quote.permit2, quote.sellToken));
-  }
-  calls.push(await settleCallFor(quote, signTyped));
+    const calls: Call[] = [];
+    if (quote.needsAllowance && quote.permit2 && quote.sellToken) {
+      // Gasless sellToken -> Permit2 allowance (EOA signs, relayer submits).
+      // The pulled token is USDG on a buy and the STOCK token on a sell, so
+      // permit whichever the quote is selling — not USDG unconditionally.
+      calls.push(await buildPermitCall(signTyped, eoa, quote.permit2, quote.sellToken));
+    }
+    calls.push(await settleCallFor(quote, signTyped));
 
-  // Relay through the Pimlico smart account — sponsored, so the EOA never pays gas.
-  const receipt = await sendSponsoredCalls(asViemProvider(provider), calls);
-  return { txHash: receipt.receipt.transactionHash as `0x${string}`, settling: false };
+    // Relay through the Pimlico smart account — sponsored, so the EOA never pays gas.
+    const receipt = await sendSponsoredCalls(asViemProvider(provider), calls);
+    return { txHash: receipt.receipt.transactionHash as `0x${string}`, settling: false };
+  };
+
+  const quote = await fetchArcusQuote({ ...params, taker: eoa });
+  try {
+    return await settle(quote);
+  } catch (err) {
+    // Symbol-dependent: some "tx" settlements revert the router's InvalidAction()
+    // guard when relayed from the smart account. Retry those router-settled
+    // (venue: "rfq") before surfacing a failure.
+    if (quote.kind !== "tx") throw err;
+    console.warn(`[swap] ${params.symbol} tx settle failed, retrying via RFQ:`, err instanceof Error ? err.message : err);
+    const rfq = await fetchArcusQuote({ ...params, taker: eoa, venue: "rfq" });
+    return await settle(rfq);
+  }
 }
 
 /**

@@ -286,10 +286,16 @@ export function useInvest(): UseInvest {
             try {
               res = await settleQuote(quote);
             } catch (firstErr) {
-              // A maker can still pull in the seconds between quote and settle —
-              // re-quote once and retry before giving up on the leg.
-              console.warn(`[invest] leg ${q.leg.symbol} retrying with a fresh quote:`, firstErr instanceof Error ? firstErr.message : firstErr);
-              quote = await freshQuote();
+              // Two known transient failures:
+              //  - a "tx" settle reverts the router's InvalidAction() guard when
+              //    relayed from the smart account (symbol-dependent) → retry the
+              //    leg ROUTER-SETTLED (venue: "rfq", off-Pimlico);
+              //  - a maker pulls between quote and settle → a fresh quote fixes it.
+              console.warn(`[invest] leg ${q.leg.symbol} retrying (${quote.kind} settle failed):`, firstErr instanceof Error ? firstErr.message : firstErr);
+              quote =
+                quote.kind === "tx"
+                  ? await fetchArcusQuote({ side: "buy", symbol: q.leg.symbol, sellAmount: q.amountMicro, taker: eoa, venue: "rfq" })
+                  : await freshQuote();
               res = await settleQuote(quote);
             }
             lastTx = res.txHash;
