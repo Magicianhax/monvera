@@ -158,11 +158,14 @@ async function readEvent(event: AbiEvent, user?: `0x${string}`): Promise<EventRo
   // Blockscout's indexer can trail the chain head by thousands of blocks, so a
   // record written a few minutes ago is missing from its getLogs even though
   // it's on-chain. Supplement the tail straight from the RPC (which is at head)
-  // and merge, so Vera's volume includes the most recent plans.
-  try {
-    const head = await logsClient.getBlockNumber();
-    const bsMax = rows.reduce((m, r) => (r.blockNumber > m ? r.blockNumber : m), DEPLOY_BLOCK);
-    if (head > bsMax) {
+  // and merge, so Vera's volume includes the most recent plans. Retry once — the
+  // two parallel readEvent scans can briefly rate-limit the public RPC, and a
+  // silent fallback here is what made the "recent plans" list flip-flop.
+  const bsMax = rows.reduce((m, r) => (r.blockNumber > m ? r.blockNumber : m), DEPLOY_BLOCK);
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const head = await logsClient.getBlockNumber();
+      if (head <= bsMax) break;
       const from = bsMax + BigInt(1) > head - TAIL_WINDOW ? bsMax + BigInt(1) : head - TAIL_WINDOW;
       const tail = decodeChunked(await chunkedLogs(event, user, from, head));
       const seen = new Set(rows.map((r) => r.txHash.toLowerCase()));
@@ -172,9 +175,11 @@ async function readEvent(event: AbiEvent, user?: `0x${string}`): Promise<EventRo
           seen.add(r.txHash.toLowerCase());
         }
       }
+      break;
+    } catch {
+      if (attempt === 0) await new Promise((r) => setTimeout(r, 400));
+      // else: keep the Blockscout rows we already have
     }
-  } catch {
-    /* keep the Blockscout rows we already have */
   }
   return rows;
 }
