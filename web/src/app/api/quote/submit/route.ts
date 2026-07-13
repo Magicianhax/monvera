@@ -1,7 +1,9 @@
 import type { NextRequest } from "next/server";
+import { after } from "next/server";
 import type { Address, Hex } from "viem";
 import { z } from "zod";
 import { submitRfq } from "@/lib/server/arcus";
+import { recordSettledToken } from "@/lib/server/wrapperMap";
 import { verifyRequest } from "@/lib/server/privyAuth";
 import { rateLimit } from "@/lib/server/rateLimit";
 import { unauthorized, badRequest, tooManyRequests, serverError } from "@/lib/server/respond";
@@ -68,6 +70,9 @@ export async function POST(req: NextRequest) {
 
   try {
     const r = await submitRfq(body.taker as Address, body.typedData, body.signature as Hex);
+    // Learn this fill's wrapper token (behind the response) so the portfolio can
+    // count the wrapped balance as "settling" until it unwraps.
+    after(recordSettledToken(r.settledToken));
     return Response.json({ txHash: r.txHash, status: r.status, settledToken: r.settledToken, orderId: r.orderId });
   } catch (err) {
     // Sub-minimum orders quote cleanly and are rejected here, by the maker. Say so

@@ -11,6 +11,7 @@ import { MULTICALL3, USDG, ALL_ASSETS } from "@/lib/tokens";
 import { chain } from "@/lib/chain";
 import { ERC20_ABI } from "@/lib/abis";
 import { priceAllWithFallback } from "@/lib/server/pricing";
+import { getWrapperEntries } from "@/lib/server/wrapperMap";
 import { fromUnits } from "@/lib/format";
 import { getDaySummary } from "@/lib/server/marketData";
 import { rateLimit, clientIp } from "@/lib/server/rateLimit";
@@ -36,13 +37,17 @@ const publicClient = createPublicClient({
 
 interface PortfolioHolding {
   symbol: string;
-  /** Raw balance as a decimal string (bigint-safe for JSON). */
+  /** Raw balance as a decimal string (bigint-safe for JSON). Settled shares only. */
   raw: string;
   qty: number;
   priceUsd: number | null;
   valueUsd: number | null;
   dayChangePct: number | null;
   spark: number[] | null;
+  /** Wrapped shares from an RFQ fill still unwrapping (~1-15 min). Counted in the
+      totals so the money never looks gone, but not sellable until settled. */
+  settlingQty?: number;
+  settlingUsd?: number | null;
 }
 
 export async function GET(req: NextRequest) {
@@ -65,6 +70,17 @@ export async function GET(req: NextRequest) {
       new Promise<Awaited<ReturnType<typeof getDaySummary>>>((resolve) => setTimeout(() => resolve(empty), 3_500)),
     ]);
 
+    // Known RFQ wrapper tokens (wXLK, wSOXX, …): a fill sits at the wrapper's
+    // address for ~1-15 min before unwrapping, and must still count as the
+    // user's money. Map each wrapper to its asset index so its balance lands on
+    // the right holding as "settling".
+    const wrapperEntries = (await getWrapperEntries())
+      .map((w) => ({
+        wrapper: w.wrapper,
+        assetIdx: assets.findIndex((a) => a.address && a.address.toLowerCase() === w.underlying.toLowerCase()),
+      }))
+      .filter((w) => w.assetIdx >= 0);
+
     // 1. Balances first — one multicall, one RPC request. We need these to know
     //    which tokens to price (pricing the whole 95-token universe, with its
     //    2s Arcus sweep, was the portfolio's cold-load cost — a user only holds
@@ -78,6 +94,12 @@ export async function GET(req: NextRequest) {
           functionName: "balanceOf" as const,
           args: [address as `0x${string}`] as const,
         })),
+        ...wrapperEntries.map((w) => ({
+          address: w.wrapper,
+          abi: ERC20_ABI,
+          functionName: "balanceOf" as const,
+          args: [address as `0x${string}`] as const,
+        })),
       ],
     });
 
@@ -85,11 +107,23 @@ export async function GET(req: NextRequest) {
     const cashUsd =
       usdcRead.status === "success" ? fromUnits(usdcRead.result as bigint, USDG.decimals) : 0;
 
-    // 2. Held tokens only.
+    // Settling (wrapped) balance per asset index. Wrappers are 1:1 and share the
+    // underlying's decimals.
+    const settlingByAsset = new Map<number, bigint>();
+    for (let i = 0; i < wrapperEntries.length; i++) {
+      const r = results[1 + assets.length + i];
+      if (r.status === "success" && (r.result as bigint) !== BigInt(0)) {
+        const idx = wrapperEntries[i].assetIdx;
+        settlingByAsset.set(idx, (settlingByAsset.get(idx) ?? BigInt(0)) + (r.result as bigint));
+      }
+    }
+
+    // 2. Held tokens only — settled OR still settling (both are the user's money).
     const heldIdx: number[] = [];
     for (let i = 0; i < assets.length; i++) {
       const r = results[i + 1];
-      if (r.status === "success" && (r.result as bigint) !== BigInt(0)) heldIdx.push(i);
+      const held = r.status === "success" && (r.result as bigint) !== BigInt(0);
+      if (held || settlingByAsset.has(i)) heldIdx.push(i);
     }
     const heldAssets = heldIdx.map((i) => assets[i]);
 
@@ -105,10 +139,13 @@ export async function GET(req: NextRequest) {
 
     const holdings: PortfolioHolding[] = [];
     for (const i of heldIdx) {
-      const raw = results[i + 1].result as bigint;
+      const r = results[i + 1];
+      const raw = r.status === "success" ? (r.result as bigint) : BigInt(0);
       const asset = assets[i];
       const qty = fromUnits(raw, asset.decimals!);
       const priceUsd = prices[asset.symbol]?.priceUsd ?? null;
+      const settlingRaw = settlingByAsset.get(i);
+      const settlingQty = settlingRaw ? fromUnits(settlingRaw, asset.decimals!) : 0;
       holdings.push({
         symbol: asset.symbol,
         raw: raw.toString(),
@@ -117,12 +154,17 @@ export async function GET(req: NextRequest) {
         valueUsd: priceUsd !== null ? qty * priceUsd : null,
         dayChangePct: day[asset.symbol]?.dayChangePct ?? null,
         spark: day[asset.symbol]?.spark ?? null,
+        ...(settlingQty > 0
+          ? { settlingQty, settlingUsd: priceUsd !== null ? settlingQty * priceUsd : null }
+          : {}),
       });
     }
 
-    // Largest value first, unpriced last.
-    holdings.sort((a, b) => (b.valueUsd ?? 0) - (a.valueUsd ?? 0));
-    const investedUsd = holdings.reduce((s, h) => s + (h.valueUsd ?? 0), 0);
+    // Largest value first (settled + settling), unpriced last.
+    holdings.sort(
+      (a, b) => ((b.valueUsd ?? 0) + (b.settlingUsd ?? 0)) - ((a.valueUsd ?? 0) + (a.settlingUsd ?? 0)),
+    );
+    const investedUsd = holdings.reduce((s, h) => s + (h.valueUsd ?? 0) + (h.settlingUsd ?? 0), 0);
 
     return Response.json(
       {

@@ -46,6 +46,10 @@ export interface Holding {
   dayChangePct?: number;
   /** Real 1D sparkline for row charts. */
   spark?: number[];
+  /** Shares from an RFQ fill still unwrapping (~1-15 min). Counted in totals,
+      shown as "settling", NOT sellable (raw excludes them). */
+  settlingQty?: number;
+  settlingUsd?: number;
 }
 
 export interface Portfolio {
@@ -88,6 +92,8 @@ interface PortfolioApiHolding {
   valueUsd: number | null;
   dayChangePct: number | null;
   spark: number[] | null;
+  settlingQty?: number;
+  settlingUsd?: number | null;
 }
 
 interface PortfolioApiResponse {
@@ -124,6 +130,8 @@ export function usePortfolio(address?: string) {
           priceUsd: h.priceUsd ?? undefined,
           dayChangePct: h.dayChangePct ?? undefined,
           spark: h.spark ?? undefined,
+          settlingQty: h.settlingQty ?? undefined,
+          settlingUsd: h.settlingUsd ?? undefined,
         });
       }
       return {

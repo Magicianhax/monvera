@@ -401,10 +401,15 @@ export function PortfolioScreen({
                 right={
                   <div className="tnum" style={{ textAlign: "right" }}>
                     <div style={{ fontWeight: 600, fontSize: 16 }}>
-                      {h.valueUsd !== undefined
-                        ? usd(h.valueUsd)
+                      {h.valueUsd !== undefined || h.settlingUsd !== undefined
+                        ? usd((h.valueUsd ?? 0) + (h.settlingUsd ?? 0))
                         : tokenQty(h.raw, h.asset.decimals ?? 18)}
                     </div>
+                    {(h.settlingUsd ?? 0) > 0 && (
+                      <div style={{ fontSize: 11.5, fontWeight: 600, marginTop: 2, color: "var(--primary)" }}>
+                        {usd(h.settlingUsd!)} settling…
+                      </div>
+                    )}
                     {day !== undefined && (
                       <div
                         style={{
