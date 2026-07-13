@@ -43,6 +43,7 @@ export default defineConfig({
             'start/where-its-available',
             'start/what-you-need',
             'start/try-the-demo',
+            'start/the-monvera-token',
           ],
         },
         {
