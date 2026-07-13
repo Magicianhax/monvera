@@ -206,39 +206,20 @@ export function useInvest(): UseInvest {
           );
         }
 
-        // 2. One firm Arcus quote per leg (taker = the embedded EOA). The plan
-        // is pre-screened for liquidity, but a maker can pull between showing the
-        // plan and tapping invest: skip a leg that lost liquidity and buy the
-        // rest, rather than failing the whole basket. Other errors still throw.
-        setPhase("planning");
-        const quotes = [];
-        for (let i = 0; i < legs.length; i++) {
-          if (legAmounts[i] <= BigInt(0)) continue;
-          try {
-            const quote = await fetchArcusQuote({
-              side: "buy",
-              symbol: legs[i].symbol,
-              sellAmount: legAmounts[i],
-              taker: eoa,
-            });
-            // Keep BOTH venues now that we settle one leg per UserOp: "tx" legs
-            // relay [permit?, settle] through Pimlico; "rfq" legs are submitted to
-            // the router (which settles them, off Pimlico, minutes later). Only a
-            // genuinely illiquid leg is dropped. (Previously rfq legs were skipped
-            // for batching — which silently dropped most stocks from a plan.)
-            quotes.push({ leg: legs[i], amountMicro: legAmounts[i], quote });
-          } catch (e) {
-            if (e instanceof Error && /no liquidity/i.test(e.message)) continue;
-            throw e;
-          }
-        }
-        if (quotes.length === 0) throw new Error("No tradable holdings in this plan.");
+        // 2. The legs to buy. Quotes are NOT fetched upfront: quoting all legs
+        // first and settling later left the tail legs settling against minutes-
+        // old quotes (makers pull, quotes expire → legs silently failed). Each
+        // leg is quoted fresh and settled IMMEDIATELY, one at a time, below.
+        const active = legs
+          .map((leg, i) => ({ leg, amountMicro: legAmounts[i] }))
+          .filter((x) => x.amountMicro > BigInt(0));
+        if (active.length === 0) throw new Error("No tradable holdings in this plan.");
 
-        // 3. Settle ONE leg per UserOp (mirrors the manual buy path). Batching
-        //    multiple Arcus RFQ settles into a single UserOp reverts with the
-        //    router's InvalidAction() guard, so each leg gets its own sponsored
-        //    UserOp. Each leg is best-effort: a bad leg is skipped and the rest
-        //    still invest, rather than failing the whole plan.
+        // 3. Settle ONE leg per step (mirrors the manual buy path — batching
+        //    Arcus settles into one UserOp reverts with InvalidAction()). "tx"
+        //    legs relay through Pimlico; "rfq" legs submit to the router (which
+        //    settles them off-Pimlico, minutes later). Best-effort per leg: a
+        //    bad leg is skipped and the rest still invest.
         setPhase("approving");
         const provider = (await wallet.getEthereumProvider()) as Eip1193;
         // AUTO: sign silently (embedded-wallet default). MANUAL: route each
@@ -258,21 +239,27 @@ export function useInvest(): UseInvest {
           return r.receipt.transactionHash as `0x${string}`;
         };
 
-        // One-time USDG -> Permit2 allowance, its own UserOp.
-        const first = quotes[0].quote;
-        if (first.needsAllowance && first.permit2) {
-          await relay(await buildUsdgPermitCall(signTyped, eoa, first.permit2));
-        }
-
         setPhase("investing");
-        const filled: { leg: (typeof quotes)[number]["leg"]; amountMicro: bigint; txHash: `0x${string}`; settling: boolean }[] = [];
+        const filled: { leg: (typeof active)[number]["leg"]; amountMicro: bigint; txHash: `0x${string}`; settling: boolean }[] = [];
         const filledSyms: string[] = [];
         let lastTx: `0x${string}` | null = null;
-        const total = quotes.length;
+        let permitDone = false;
+        const total = active.length;
         const startedAt = Date.now();
         let spentMicroRunning = BigInt(0);
-        for (let idx = 0; idx < quotes.length; idx++) {
-          const q = quotes[idx];
+        // Settle by venue: "rfq" legs go to the router (settles off-Pimlico,
+        // minutes later); "tx" legs relay [settle] through Pimlico now.
+        const settleQuote = async (
+          quote: Awaited<ReturnType<typeof fetchArcusQuote>>,
+        ): Promise<{ txHash: `0x${string}`; settling: boolean }> => {
+          if (quote.kind === "rfq") {
+            const submitted = await submitRfqIntent(quote, eoa, signTyped);
+            return { txHash: submitted.txHash, settling: true };
+          }
+          return { txHash: await relay(await settleCallFor(quote, signTyped)), settling: false };
+        };
+        for (let idx = 0; idx < active.length; idx++) {
+          const q = active[idx];
           // Mark this leg as in-flight so the placing screen names it.
           setProgress({
             total,
@@ -284,31 +271,34 @@ export function useInvest(): UseInvest {
             mode,
             filledSymbols: [...filledSyms],
           });
-          // Settle by venue: "rfq" legs go to the router (settles off-Pimlico,
-          // minutes later); "tx" legs relay [settle] through Pimlico now.
-          const settleQuote = async (quote: typeof q.quote): Promise<{ txHash: `0x${string}`; settling: boolean }> => {
-            if (quote.kind === "rfq") {
-              const submitted = await submitRfqIntent(quote, eoa, signTyped);
-              return { txHash: submitted.txHash, settling: true };
-            }
-            return { txHash: await relay(await settleCallFor(quote, signTyped)), settling: false };
-          };
           try {
+            const freshQuote = () =>
+              fetchArcusQuote({ side: "buy", symbol: q.leg.symbol, sellAmount: q.amountMicro, taker: eoa });
+            // Quote fresh and settle IMMEDIATELY — no gap for the quote to go stale.
+            let quote = await freshQuote();
+            // One-time USDG -> Permit2 allowance, its own UserOp, before the first
+            // leg that needs it.
+            if (!permitDone && quote.needsAllowance && quote.permit2) {
+              await relay(await buildUsdgPermitCall(signTyped, eoa, quote.permit2));
+              permitDone = true;
+            }
             let res: { txHash: `0x${string}`; settling: boolean };
             try {
-              res = await settleQuote(q.quote);
+              res = await settleQuote(quote);
             } catch (firstErr) {
-              // The upfront quote can go stale if a maker pulls between showing
-              // the plan and settling. Re-quote once and retry before giving up.
+              // A maker can still pull in the seconds between quote and settle —
+              // re-quote once and retry before giving up on the leg.
               console.warn(`[invest] leg ${q.leg.symbol} retrying with a fresh quote:`, firstErr instanceof Error ? firstErr.message : firstErr);
-              const fresh = await fetchArcusQuote({ side: "buy", symbol: q.leg.symbol, sellAmount: q.amountMicro, taker: eoa });
-              res = await settleQuote(fresh);
+              quote = await freshQuote();
+              res = await settleQuote(quote);
             }
             lastTx = res.txHash;
             filled.push({ leg: q.leg, amountMicro: q.amountMicro, txHash: res.txHash, settling: res.settling });
             filledSyms.push(q.leg.symbol);
             spentMicroRunning += q.amountMicro;
           } catch (legErr) {
+            // "No liquidity" is an expected skip; anything else is logged loudly.
+            // Either way the leg is skipped and the rest of the plan still buys.
             console.error(`[invest] leg ${q.leg.symbol} failed (after retry):`, legErr instanceof Error ? legErr.message : legErr);
           }
           const doneCount = idx + 1;
@@ -316,7 +306,7 @@ export function useInvest(): UseInvest {
           setProgress({
             total,
             done: doneCount,
-            currentSymbol: doneCount < total ? quotes[doneCount].leg.symbol : null,
+            currentSymbol: doneCount < total ? active[doneCount].leg.symbol : null,
             spentUsd: Number(spentMicroRunning) / 1_000_000,
             totalUsd: amountUsd,
             etaSeconds: doneCount < total ? Math.ceil(perLeg * (total - doneCount)) : 0,

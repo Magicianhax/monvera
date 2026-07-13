@@ -128,23 +128,43 @@ export async function sendSponsoredCalls(provider: EIP1193Provider, calls: Call[
 // --- internals -------------------------------------------------------------
 
 // A minimal EIP-1193-shaped provider over an HTTP JSON-RPC endpoint, so we can
-// reuse viem's `custom()` transport for the same-origin Pimlico proxy.
+// reuse viem's `custom()` transport for the same-origin Pimlico proxy. Rate
+// limits (Pimlico per-IP 429s, or our own proxy's) are retried with backoff
+// instead of failing the leg — a multi-leg invest bursts enough calls to trip
+// them transiently.
+const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+
 function rpcProvider(url: string): EIP1193Provider {
   return {
     request: async ({ method, params }: { method: string; params?: unknown[] }) => {
-      const res = await fetch(url, {
-        method: "POST",
-        // Carry the Privy session token so the /api/pimlico proxy can authorize
-        // the caller (the proxy rejects anonymous/unknown-method requests).
-        headers: { "content-type": "application/json", ...(await authHeader()) },
-        body: JSON.stringify({ jsonrpc: "2.0", id: Date.now(), method, params: params ?? [] }),
-      });
-      const json = await res.json();
-      if (json.error) {
-        const e = json.error;
-        throw new Error(e?.message ? `${e.message}` : "Bundler RPC error");
+      const MAX_TRIES = 4;
+      for (let attempt = 1; ; attempt++) {
+        const res = await fetch(url, {
+          method: "POST",
+          // Carry the Privy session token so the /api/pimlico proxy can authorize
+          // the caller (the proxy rejects anonymous/unknown-method requests).
+          headers: { "content-type": "application/json", ...(await authHeader()) },
+          body: JSON.stringify({ jsonrpc: "2.0", id: Date.now(), method, params: params ?? [] }),
+        });
+        const json = await res.json().catch(() => ({}));
+        const rateLimited =
+          res.status === 429 ||
+          json?.statusCode === 429 ||
+          /rate limit|too many requests/i.test(
+            typeof json?.error === "string" ? json.error : (json?.error?.message ?? json?.message ?? ""),
+          );
+        if (rateLimited && attempt < MAX_TRIES) {
+          const retryAfter = Number(res.headers.get("retry-after"));
+          await sleep(Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter * 1000 : 1_200 * attempt);
+          continue;
+        }
+        if (json.error) {
+          const e = json.error;
+          const msg = typeof e === "string" ? e : e?.message;
+          throw new Error(msg ? `${msg}` : "Bundler RPC error");
+        }
+        return json.result;
       }
-      return json.result;
     },
   } as unknown as EIP1193Provider;
 }
