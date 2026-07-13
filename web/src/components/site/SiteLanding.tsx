@@ -25,6 +25,7 @@ import { MonveraIcon } from "@/components/design";
 const TOKEN_CA = "0x7541872e32Bb529d7FF11D6C59832269ce33a6FF";
 const TOKEN_BUY_URL = "https://app.virtuals.io/virtuals/105667";
 const TOKEN_EXPLORER_URL = `https://robinhoodchain.blockscout.com/token/${TOKEN_CA}`;
+const TOKEN_DEXSCREENER_URL = "https://dexscreener.com/robinhood/0x721d6F589364ea0361c497A6494Ccb3B30ec5635";
 import { DemoMount } from "@/components/demo/DemoMount";
 import type { DemoPlay } from "@/components/demo/DemoProvider";
 import { ROADMAP } from "@/lib/roadmap";
@@ -281,7 +282,11 @@ export function SiteLanding({
       // Section entrances, fitted per surface: lists stagger below; the CTA
       // card lands with a soft settle. The partner logos get no entrance at
       // all: gating trust marks behind a tween risks them sticking invisible.
-      gsap.from(".js-cta", { opacity: 0, y: 24, scale: 0.985, duration: 0.8, ease: "power3.out", scrollTrigger: { trigger: ".js-cta", start: "top 84%" } });
+      // Per-element trigger: there are two feature cards now (the $MONVERA card
+      // up top and the closing CTA), and a shared tween would fire both at once.
+      q(".js-cta").forEach((card) =>
+        gsap.from(card, { opacity: 0, y: 24, scale: 0.985, duration: 0.8, ease: "power3.out", scrollTrigger: { trigger: card, start: "top 84%" } }),
+      );
       q(".js-stagger").forEach((group) =>
         gsap.from((group as HTMLElement).children, {
           y: 28, opacity: 0, duration: 0.6, stagger: 0.09, ease: "power3.out",
@@ -430,6 +435,54 @@ export function SiteLanding({
           ))}
         </div>
       </header>
+
+      {/* $MONVERA — the token, right after the hero: badge, serif wordmark, buy /
+          chart / explorer, one-tap CA copy. Vera holds the right side. */}
+      <section className={s.tokenSection} id="token">
+        <div className={s.wrap}>
+          <div className={`${s.tokenCard} js-cta`}>
+            <div className={s.tokenGlow} aria-hidden />
+            <div className={s.tokenRings} aria-hidden />
+            <div className={s.tokenInfo}>
+              <span className={s.tokenBadge}>
+                <span className={s.tokenLive} aria-hidden />
+                Live on Robinhood Chain · launched on Virtuals
+              </span>
+              <h2 className={s.tokenTitle}>$MONVERA</h2>
+              <p className={s.tokenBlurb}>
+                The community&apos;s stake in Vera. One token, traded in the open — the app itself never
+                requires it, and it isn&apos;t an investment product.
+              </p>
+              <div className={s.tokenCtas}>
+                <a className={`${s.btn} ${s.btnLg} ${s.btnOnDark}`} href={TOKEN_BUY_URL} target="_blank" rel="noreferrer">
+                  Buy on Virtuals <ArrowUpRight size={18} strokeWidth={2.2} />
+                </a>
+                <a className={`${s.btn} ${s.btnLg} ${s.btnGhostOnDark}`} href={TOKEN_DEXSCREENER_URL} target="_blank" rel="noreferrer">
+                  Live chart <ArrowUpRight size={18} strokeWidth={2.2} />
+                </a>
+              </div>
+              <div className={s.tokenMetaRow}>
+                <button type="button" className={s.tokenCa} onClick={copyCa} aria-label="Copy the $MONVERA contract address">
+                  <span className={s.mono}>{TOKEN_CA.slice(0, 10)}…{TOKEN_CA.slice(-8)}</span>
+                  {caCopied ? <Check size={14} strokeWidth={2.6} aria-hidden /> : <Copy size={14} strokeWidth={2} aria-hidden />}
+                  <b>{caCopied ? "Copied" : "Copy CA"}</b>
+                </button>
+                <a className={s.tokenQuiet} href={TOKEN_EXPLORER_URL} target="_blank" rel="noreferrer">
+                  Verify on Blockscout <ArrowUpRight size={13} strokeWidth={2.2} />
+                </a>
+              </div>
+            </div>
+            <img
+              className={s.tokenMascot}
+              src={asset("/brand/vera-mascot.webp")}
+              alt=""
+              aria-hidden
+              decoding="async"
+              loading="lazy"
+            />
+          </div>
+        </div>
+      </section>
 
       {/* BEAT — a sentence becomes a plan */}
       <section className={`${s.section} ${s.beat} js-beat`}>
@@ -683,34 +736,6 @@ export function SiteLanding({
               It settles on <b>Robinhood Chain</b>, a fast, low-cost Ethereum L2, where <b>Arcus</b> prices and routes every trade at a
               live market quote, and <b>Vera</b> runs on <b>Virtuals</b>, which gives her a verifiable on-chain identity.
             </p>
-          </div>
-        </div>
-      </section>
-
-      {/* $MONVERA — the token, plainly: what it is, where it trades, the contract. */}
-      <section className={s.section} id="token">
-        <div className={s.wrap}>
-          <div className={`${s.ctaCard} js-cta`}>
-            <div className={s.ctaGlow} aria-hidden />
-            <h2>$MONVERA</h2>
-            <p>
-              Monvera&apos;s token, launched on Virtuals Protocol and live on Robinhood Chain — the same chain the app
-              settles on. It&apos;s how the community backs Vera — the app itself never requires it, and it isn&apos;t an
-              investment product.
-            </p>
-            <div className={s.ctaCtas}>
-              <a className={`${s.btn} ${s.btnLg} ${s.btnOnDark}`} href={TOKEN_BUY_URL} target="_blank" rel="noreferrer">
-                Buy on Virtuals <ArrowUpRight size={18} strokeWidth={2.2} />
-              </a>
-              <a className={`${s.btn} ${s.btnLg} ${s.btnGhostOnDark}`} href={TOKEN_EXPLORER_URL} target="_blank" rel="noreferrer">
-                View on Blockscout <ArrowUpRight size={18} strokeWidth={2.2} />
-              </a>
-            </div>
-            <button type="button" className={s.tokenCa} onClick={copyCa} aria-label="Copy the $MONVERA contract address">
-              <span className={s.mono}>{TOKEN_CA}</span>
-              {caCopied ? <Check size={15} strokeWidth={2.4} aria-hidden /> : <Copy size={15} strokeWidth={2} aria-hidden />}
-              <b>{caCopied ? "Copied" : "Copy"}</b>
-            </button>
           </div>
         </div>
       </section>
