@@ -32,6 +32,35 @@ import { iconBtn, boxHead, innerBox } from "./primitives";
 
 const DOTS = "••••••";
 
+// Decorative art for the Scan to Buy banner: a viewfinder framing a product
+// with a rising line inside, plus a sparkle. Pure currentColor/vars, so it
+// follows the theme in both modes.
+function ScanBannerArt() {
+  return (
+    <svg width="96" height="76" viewBox="0 0 96 76" fill="none" aria-hidden style={{ flex: "none", marginRight: 6 }}>
+      {/* soft glow behind the frame */}
+      <circle cx="52" cy="38" r="32" fill="var(--primary)" opacity=".10" />
+      <circle cx="52" cy="38" r="22" fill="var(--primary)" opacity=".08" />
+      {/* viewfinder corners */}
+      <g stroke="var(--primary)" strokeWidth="3" strokeLinecap="round" fill="none">
+        <path d="M30 16 h-8 a5 5 0 0 0 -5 5 v8" />
+        <path d="M74 16 h8 a5 5 0 0 1 5 5 v8" />
+        <path d="M30 60 h-8 a5 5 0 0 1 -5 -5 v-8" />
+        <path d="M74 60 h8 a5 5 0 0 0 5 -5 v-8" />
+      </g>
+      {/* the product — a little can */}
+      <rect x="40" y="24" width="24" height="30" rx="6" fill="var(--primary)" opacity=".9" />
+      <rect x="40" y="30" width="24" height="4.5" rx="2" fill="#fff" opacity=".5" />
+      {/* rising line inside the product */}
+      <path d="M45 48 l5.5 -5.5 l4 3 l6.5 -7" stroke="#fff" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+      {/* scan beam */}
+      <line x1="26" y1="38" x2="78" y2="38" stroke="var(--primary)" strokeWidth="1.6" opacity=".45" strokeDasharray="3 4" />
+      {/* sparkle */}
+      <path d="M76 8 l1.8 4.4 4.4 1.8 -4.4 1.8 -1.8 4.4 -1.8 -4.4 -4.4 -1.8 4.4 -1.8 z" fill="var(--primary)" opacity=".85" />
+    </svg>
+  );
+}
+
 // Ledger section header — strong sans in the 22px gutter.
 function LedgerHeader({ children, tight }: { children: ReactNode; tight?: boolean }) {
   return (
@@ -344,21 +373,54 @@ export function HomeScreen({
         {/* Market lives in the bottom nav already — this slot surfaces Autopilot,
             which is otherwise buried in Settings / the Vera screen. */}
         <QuickAction icon="clock" label="Autopilot" sub="Invest on repeat" onClick={() => go("autopilot")} />
-        {/* Scan to Buy — the 100k-$MONVERA holder feature. Visible to everyone
-            (the screen itself shows the unlock state for non-holders). */}
-        <QuickAction
-          icon="camera"
-          label="Scan"
-          sub={monveraGate.isHolder ? "Snap a product" : "Hold 100k to unlock"}
-          onClick={() => go("scan")}
-        />
       </div>
 
       {/* 3b · slim secondary actions — span the same width as the cards above. */}
-      <div style={{ display: "flex", gap: 10, padding: "0 22px 16px" }}>
+      <div style={{ display: "flex", gap: 10, padding: "0 22px 12px" }}>
         <SlimAction icon="receipt" label="Activity" onClick={() => go("activity")} />
         <SlimAction icon="star" label="Watchlist" onClick={() => go("market", { filter: "watchlist" })} />
         <SlimAction icon="grid" label="Discover" onClick={() => go("discover")} />
+      </div>
+
+      {/* 3c · Scan to Buy banner — the 100k-$MONVERA holder feature, promoted.
+          Visible to everyone; the scan screen itself shows the unlock state. */}
+      <div style={{ padding: "0 22px 16px" }}>
+        <button
+          onClick={() => go("scan")}
+          className="tap"
+          aria-label="Scan to Buy"
+          style={{
+            width: "100%",
+            display: "flex",
+            alignItems: "center",
+            gap: 14,
+            padding: "15px 4px 15px 18px",
+            borderRadius: "var(--rr)",
+            background:
+              "linear-gradient(120deg, color-mix(in srgb, var(--primary) 16%, var(--surface)), var(--surface) 72%)",
+            boxShadow: "var(--shadow)",
+            textAlign: "left",
+            position: "relative",
+            overflow: "hidden",
+          }}
+        >
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
+              <span style={{ fontSize: 15.5, fontWeight: 600, letterSpacing: "-.01em", color: "var(--ink)" }}>
+                Scan to Buy
+              </span>
+              {!monveraGate.isHolder && (
+                <Icon name="lock" size={13} style={{ color: "var(--ink-3)" }} />
+              )}
+            </div>
+            <div style={{ fontSize: 12.5, color: "var(--ink-2)", marginTop: 4, lineHeight: 1.5 }}>
+              {monveraGate.isHolder
+                ? "Photograph any product — Vera invests in the companies behind it."
+                : "Photograph any product, invest in what's behind it. Hold 100k $MONVERA to unlock."}
+            </div>
+          </div>
+          <ScanBannerArt />
+        </button>
       </div>
 
       {/* Today's movers — biggest market moves across the universe */}
