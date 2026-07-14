@@ -14,6 +14,7 @@ import { useQuery, useQueryClient, keepPreviousData } from "@tanstack/react-quer
 import { publicClient } from "@/lib/wagmi";
 import { ERC20_ABI } from "@/lib/abis";
 import { USDG, STOCKS, ALL_ASSETS, type Asset } from "@/lib/tokens";
+import { MONVERA } from "@/lib/monveraToken";
 import { fromUnits } from "@/lib/format";
 import { useDemo } from "@/components/demo/DemoProvider";
 
@@ -120,7 +121,7 @@ export function usePortfolio(address?: string) {
       const api = json as PortfolioApiResponse;
       const holdings: Holding[] = [];
       for (const h of api.holdings) {
-        const asset = ALL_ASSETS.find((a) => a.symbol === h.symbol);
+        const asset = h.symbol === "MONVERA" ? MONVERA_ASSET : ALL_ASSETS.find((a) => a.symbol === h.symbol);
         if (!asset) continue;
         holdings.push({
           asset,
@@ -144,6 +145,22 @@ export function usePortfolio(address?: string) {
   });
   if (demo) return { ...query, data: demo.portfolio, isLoading: false, isPending: false } as typeof query;
   return query;
+}
+
+// $MONVERA appears in the portfolio like any holding, but it is NOT an Arcus
+// asset: it trades only on the token screen (Uniswap route), never through the
+// stock sell/trade flows. Callers that route to Arcus must skip this symbol.
+const MONVERA_ASSET: Asset = {
+  symbol: "MONVERA",
+  name: "Monvera",
+  tier: "stock",
+  address: MONVERA.address,
+  decimals: MONVERA.decimals,
+};
+
+/** True for the project token — held money, but not tradable via Arcus. */
+export function isMonveraHolding(symbol: string): boolean {
+  return symbol === "MONVERA";
 }
 
 /** True if `symbol` is a buyable stock-tier xStock (the only tier the executor routes today). */

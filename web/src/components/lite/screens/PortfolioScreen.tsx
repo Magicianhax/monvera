@@ -397,7 +397,7 @@ export function PortfolioScreen({
                 asset={tile}
                 sub={`${tokenQty(h.raw, h.asset.decimals ?? 18)} ${h.asset.symbol}`}
                 showSpark
-                onClick={() => go("asset", { symbol: h.asset.symbol })}
+                onClick={() => go(h.asset.symbol === "MONVERA" ? "token" : "asset", { symbol: h.asset.symbol })}
                 right={
                   <div className="tnum" style={{ textAlign: "right" }}>
                     <div style={{ fontWeight: 600, fontSize: 16 }}>

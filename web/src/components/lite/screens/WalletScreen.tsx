@@ -224,7 +224,7 @@ export function WalletScreen({
                       asset={tile}
                       sub={catFor(h.asset.symbol, h.asset.name)}
                       showSpark
-                      onClick={() => go("asset", { symbol: h.asset.symbol })}
+                      onClick={() => go(h.asset.symbol === "MONVERA" ? "token" : "asset", { symbol: h.asset.symbol })}
                       right={
                         <div style={{ textAlign: "right" }}>
                           <div className="tnum" style={{ fontWeight: 500, fontSize: 16 }}>

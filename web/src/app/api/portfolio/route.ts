@@ -11,6 +11,8 @@ import { MULTICALL3, USDG, ALL_ASSETS } from "@/lib/tokens";
 import { chain } from "@/lib/chain";
 import { ERC20_ABI } from "@/lib/abis";
 import { priceAllWithFallback } from "@/lib/server/pricing";
+import { getMonveraSpot } from "@/lib/server/monveraPrice";
+import { MONVERA } from "@/lib/monveraToken";
 import { getWrapperEntries } from "@/lib/server/wrapperMap";
 import { fromUnits } from "@/lib/format";
 import { getDaySummary } from "@/lib/server/marketData";
@@ -100,6 +102,13 @@ export async function GET(req: NextRequest) {
           functionName: "balanceOf" as const,
           args: [address as `0x${string}`] as const,
         })),
+        // $MONVERA — the project token is real money too; last slot in the call.
+        {
+          address: MONVERA.address,
+          abi: ERC20_ABI,
+          functionName: "balanceOf" as const,
+          args: [address as `0x${string}`] as const,
+        },
       ],
     });
 
@@ -157,6 +166,24 @@ export async function GET(req: NextRequest) {
         ...(settlingQty > 0
           ? { settlingQty, settlingUsd: priceUsd !== null ? settlingQty * priceUsd : null }
           : {}),
+      });
+    }
+
+    // $MONVERA — priced off its DEX pool (DexScreener, cached), 1D move from
+    // the same source. No spark series exists for it; the row shows without one.
+    const monveraRead = results[results.length - 1];
+    const monveraRaw = monveraRead.status === "success" ? (monveraRead.result as bigint) : BigInt(0);
+    if (monveraRaw > BigInt(0)) {
+      const spot = await getMonveraSpot();
+      const qty = fromUnits(monveraRaw, MONVERA.decimals);
+      holdings.push({
+        symbol: "MONVERA",
+        raw: monveraRaw.toString(),
+        qty,
+        priceUsd: spot?.priceUsd ?? null,
+        valueUsd: spot ? qty * spot.priceUsd : null,
+        dayChangePct: spot?.change24h ?? null,
+        spark: null,
       });
     }
 

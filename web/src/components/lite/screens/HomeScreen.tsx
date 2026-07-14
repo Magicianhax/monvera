@@ -469,7 +469,7 @@ export function HomeScreen({
                 <button
                   key={h.asset.symbol}
                   className="tap"
-                  onClick={() => go("asset", { symbol: h.asset.symbol })}
+                  onClick={() => go(h.asset.symbol === "MONVERA" ? "token" : "asset", { symbol: h.asset.symbol })}
                   style={{ ...innerBox }}
                 >
                   <AssetTile asset={tile} size={38} radius={12} />

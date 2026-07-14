@@ -47,7 +47,9 @@ export function SendScreen({
       priceUsd: 1,
     };
     const held = (port?.holdings ?? [])
-      .filter((h) => h.asset.address && h.asset.decimals)
+      // $MONVERA is shown as a holding but can't ride the gasless send path
+      // (no EIP-2612 on the token) — keep it out rather than fail the send.
+      .filter((h) => h.asset.address && h.asset.decimals && h.asset.symbol !== "MONVERA")
       .map((h) => ({
         symbol: h.asset.symbol,
         name: h.asset.name,
