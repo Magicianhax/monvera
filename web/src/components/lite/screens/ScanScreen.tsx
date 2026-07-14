@@ -140,7 +140,7 @@ function LockState({
       {/* hero — art + headline */}
       <div className="anim-rise" style={{ textAlign: "center", paddingTop: 14 }}>
         <LockHeroArt />
-        <h2 className="serif" style={{ margin: "18px 0 0", fontSize: 30, letterSpacing: "-.01em", lineHeight: 1.15 }}>
+        <h2 style={{ margin: "18px 0 0", fontSize: 27, fontWeight: 800, letterSpacing: "-.02em", lineHeight: 1.15 }}>
           Point. Scan.
           <br />
           Own what's behind it.
@@ -255,8 +255,6 @@ function LockHeroArt() {
       {orbit("NVDA", { bottom: 0, left: 22 })}
       {orbit("TSLA", { top: 6, right: 22 })}
       <svg width="148" height="116" viewBox="0 0 96 76" fill="none" style={{ display: "block" }}>
-        <circle cx="52" cy="38" r="32" fill="var(--primary)" opacity=".10" />
-        <circle cx="52" cy="38" r="22" fill="var(--primary)" opacity=".08" />
         <g stroke="var(--primary)" strokeWidth="3" strokeLinecap="round" fill="none">
           <path d="M30 16 h-8 a5 5 0 0 0 -5 5 v8" />
           <path d="M74 16 h8 a5 5 0 0 1 5 5 v8" />
@@ -273,166 +271,148 @@ function LockHeroArt() {
   );
 }
 
-// ── B. Input — the scanner. A live-feeling viewfinder stage (sweeping beam,
-// floating stock logos) that IS the camera button, a gallery fallback, and a
-// trust strip. Keyframes are scoped here (a <style> tag), not in globals.css.
+// ── B. Input — capture, in the Ledger grammar ────────────────────────────────
+// No fake camera chrome. A strong sans headline, then the trust move: a worked
+// example rendered in the app's own row language (a photo resolving into real
+// holdings — exactly what the user gets), then two plain actions. The single
+// budgeted motion is the scan line sweeping the example photo.
+const EXAMPLE_ROWS = [
+  { symbol: "AAPL", role: "Maker", weight: 60 },
+  { symbol: "TSM", role: "Makes its chips", weight: 25 },
+  { symbol: "AVGO", role: "Parts inside", weight: 15 },
+] as const;
+
 function InputState({ onPick }: { onPick: (e: React.ChangeEvent<HTMLInputElement>) => void }) {
   return (
-    <div className="anim-rise" style={{ display: "flex", flexDirection: "column", flex: 1, padding: "14px 22px 0", minHeight: "calc(100dvh - 150px)" }}>
+    <div className="anim-rise">
       <style>{`
         @media (prefers-reduced-motion: no-preference) {
-          @keyframes scanBeam { 0% { top: 14%; opacity: 0 } 12% { opacity: 1 } 88% { opacity: 1 } 100% { top: 84%; opacity: 0 } }
-          @keyframes scanBob  { 0%, 100% { transform: translateY(0) } 50% { transform: translateY(-7px) } }
-          @keyframes scanPulse { 0%, 100% { opacity: .55 } 50% { opacity: 1 } }
+          @keyframes scanSweep { 0% { transform: translateY(0); opacity: 0 } 12% { opacity: 1 } 88% { opacity: 1 } 100% { transform: translateY(74px); opacity: 0 } }
         }
       `}</style>
 
-      <h1 className="serif" style={{ margin: 0, fontSize: 30, letterSpacing: "-.01em", lineHeight: 1.12, textAlign: "center" }}>
-        Point at any product
-      </h1>
-      <p style={{ margin: "8px auto 0", maxWidth: 320, fontSize: 14, lineHeight: 1.6, color: "var(--ink-2)", textAlign: "center" }}>
-        Vera finds the listed companies behind it — maker, suppliers, retailers — and invests in the real ones.
-      </p>
-      <p style={{ margin: "6px auto 0", fontSize: 12.5, color: "var(--ink-3)", textAlign: "center" }}>
-        Try a soda can, your sneakers, or the phone in your hand.
-      </p>
+      {/* headline — ledger voice: strong sans, left-anchored */}
+      <div style={{ padding: "22px 22px 0" }}>
+        <h2 style={{ margin: 0, fontSize: 27, fontWeight: 800, letterSpacing: "-.02em", lineHeight: 1.15 }}>
+          Point at any product
+        </h2>
+        <p style={{ margin: "8px 0 0", maxWidth: 340, fontSize: 14, lineHeight: 1.6, color: "var(--ink-2)" }}>
+          Vera reads the photo, finds the listed companies behind it, and invests at live quotes.
+        </p>
+      </div>
 
-      {/* the viewfinder stage — tapping it opens the camera */}
-      <label
-        className="tap"
-        aria-label="Take a photo"
+      {/* worked example — the exact rows a scan returns, in the app's own grammar */}
+      <div style={{ padding: "26px 22px 10px", fontSize: 13, fontWeight: 700, color: "var(--ink-2)" }}>
+        What a scan returns
+      </div>
+      <div
         style={{
-          position: "relative",
-          display: "block",
-          height: 264,
-          flex: "none",
-          marginTop: 16,
-          borderRadius: 24,
-          overflow: "hidden",
-          cursor: "pointer",
-          background:
-            "radial-gradient(120% 90% at 50% 0%, color-mix(in srgb, var(--primary) 22%, var(--surface)) 0%, var(--surface) 58%, color-mix(in srgb, var(--primary) 8%, var(--surface)) 100%)",
-          boxShadow: "var(--shadow)",
+          borderTop: "1px solid var(--line)",
+          borderBottom: "1px solid var(--line)",
+          background: "var(--surface)",
+          display: "flex",
+          alignItems: "stretch",
         }}
       >
-        <input type="file" accept="image/*" capture="environment" onChange={onPick} hidden />
-
-        {/* viewfinder corners */}
-        <svg viewBox="0 0 100 100" preserveAspectRatio="none" style={{ position: "absolute", inset: 14, width: "calc(100% - 28px)", height: "calc(100% - 28px)" }} aria-hidden>
-          <g stroke="var(--primary)" strokeWidth="1.6" strokeLinecap="round" fill="none" vectorEffect="non-scaling-stroke">
-            <path d="M14 2 H6 Q2 2 2 6 V14" vectorEffect="non-scaling-stroke" />
-            <path d="M86 2 H94 Q98 2 98 6 V14" vectorEffect="non-scaling-stroke" />
-            <path d="M14 98 H6 Q2 98 2 94 V86" vectorEffect="non-scaling-stroke" />
-            <path d="M86 98 H94 Q98 98 98 94 V86" vectorEffect="non-scaling-stroke" />
-          </g>
-        </svg>
-
-        {/* sweeping scan beam */}
-        <span
-          aria-hidden
+        {/* the photo being read */}
+        <div
           style={{
-            position: "absolute",
-            left: "10%",
-            right: "10%",
-            top: "14%",
-            height: 2,
-            borderRadius: 2,
-            background: "linear-gradient(90deg, transparent, var(--primary) 30%, var(--primary) 70%, transparent)",
-            boxShadow: "0 0 14px color-mix(in srgb, var(--primary) 70%, transparent)",
-            animation: "scanBeam 3.2s ease-in-out infinite",
-          }}
-        />
-
-        {/* floating stock logos — a tidy arc; the photo resolves into companies */}
-        {[
-          { s: "KO", t: "46%", l: "14%", d: ".4s", z: 26 },
-          { s: "AAPL", t: "30%", l: "31%", d: "0s", z: 30 },
-          { s: "NVDA", t: "24%", l: "50%", d: ".8s", z: 34 },
-          { s: "MSFT", t: "30%", l: "69%", d: ".3s", z: 30 },
-          { s: "TSLA", t: "46%", l: "86%", d: "1.1s", z: 26 },
-        ].map(({ s, t, l, d, z }) => (
-          <span
-            key={s}
-            aria-hidden
-            style={{ position: "absolute", top: t, left: l, transform: "translate(-50%, -50%)", lineHeight: 0 }}
-          >
-            {/* inner span carries the bob so it can't fight the centering transform */}
-            <span
-              style={{
-                display: "inline-block",
-                borderRadius: "50%",
-                lineHeight: 0,
-                boxShadow: "0 0 0 2px color-mix(in srgb, var(--surface) 80%, transparent), 0 6px 18px rgba(0,0,0,.25)",
-                animation: `scanBob 3.6s ease-in-out ${d} infinite`,
-              }}
-            >
-              <TokenLogo symbol={s} size={z} />
-            </span>
-          </span>
-        ))}
-
-        {/* center prompt */}
-        <span
-          style={{
-            position: "absolute",
-            left: 0,
-            right: 0,
-            bottom: 20,
+            flex: "none",
             display: "flex",
             flexDirection: "column",
             alignItems: "center",
+            justifyContent: "center",
             gap: 8,
+            padding: "16px 0 14px 22px",
           }}
         >
-          <span
-            style={{
-              width: 58,
-              height: 58,
-              borderRadius: "50%",
-              display: "grid",
-              placeItems: "center",
-              background: "var(--primary)",
-              color: "var(--primary-ink, #fff)",
-              boxShadow: "0 8px 24px color-mix(in srgb, var(--primary) 45%, transparent)",
-            }}
-          >
-            <Icon name="camera" size={27} weight="fill" />
-          </span>
-          <span style={{ fontSize: 13, fontWeight: 600, color: "var(--ink)", animation: "scanPulse 2.4s ease-in-out infinite" }}>
-            Tap to scan
-          </span>
-        </span>
-      </label>
-
-      {/* gallery fallback */}
-      <label className="btn btn-ghost btn-block tap" style={{ marginTop: 12, cursor: "pointer" }}>
-        Upload from gallery
-        <input type="file" accept="image/*" onChange={onPick} hidden />
-      </label>
-
-      {/* trust strip — why this can be believed */}
-      <div style={{ display: "flex", justifyContent: "center", gap: 18, margin: "14px 0 4px" }}>
-        {(
-          [
-            { icon: "signature", label: "Signed on-chain" },
-            { icon: "trend", label: "Live quotes" },
-            { icon: "shield", label: "Self-custody" },
-          ] as { icon: IconName; label: string }[]
-        ).map(({ icon, label }) => (
-          <span key={label} style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 11.5, fontWeight: 500, color: "var(--ink-3)" }}>
-            <Icon name={icon} size={14} style={{ color: "var(--primary)" }} />
-            {label}
-          </span>
-        ))}
+          <ExamplePhoneArt />
+          <span style={{ fontSize: 11, color: "var(--ink-3)" }}>Your photo</span>
+        </div>
+        <div style={{ flex: "none", display: "grid", placeItems: "center", padding: "0 8px 0 10px", color: "var(--ink-3)" }}>
+          <Icon name="chevR" size={16} />
+        </div>
+        {/* what comes back: honest connections for a phone */}
+        <div style={{ flex: 1, minWidth: 0, padding: "6px 22px 6px 0" }}>
+          {EXAMPLE_ROWS.map((r, i) => (
+            <div
+              key={r.symbol}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 10,
+                padding: "10px 0",
+                borderTop: i > 0 ? "1px solid var(--line-2)" : "none",
+              }}
+            >
+              <TokenLogo symbol={r.symbol} size={26} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 13.5, fontWeight: 700, letterSpacing: "-.01em", color: "var(--ink)" }}>
+                  {r.symbol}
+                </div>
+                <div style={{ fontSize: 11.5, color: "var(--ink-3)" }}>{r.role}</div>
+              </div>
+              <span className="tnum" style={{ fontSize: 13, fontWeight: 600, color: "var(--ink-2)" }}>
+                {r.weight}%
+              </span>
+            </div>
+          ))}
+        </div>
       </div>
 
-      <p style={{ margin: "6px 2px 0", textAlign: "center", fontSize: 12, lineHeight: 1.55, color: "var(--ink-3)" }}>
-        If nothing listed is behind it, Vera says so — no force-fits.
+      {/* actions — verb + object, primary first */}
+      <div style={{ padding: "18px 22px 0", display: "flex", flexDirection: "column", gap: 10 }}>
+        <label className="btn btn-primary btn-block btn-lg tap" style={{ cursor: "pointer" }}>
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 9 }}>
+            <Icon name="camera" size={19} />
+            Take a photo
+          </span>
+          <input type="file" accept="image/*" capture="environment" onChange={onPick} hidden />
+        </label>
+        <label className="btn btn-ghost btn-block tap" style={{ cursor: "pointer" }}>
+          Upload from gallery
+          <input type="file" accept="image/*" onChange={onPick} hidden />
+        </label>
+      </div>
+
+      {/* the honest fine print, ledger-quiet */}
+      <p style={{ margin: "14px 22px 0", fontSize: 12.5, lineHeight: 1.6, color: "var(--ink-3)" }}>
+        If nothing listed is behind your photo, Vera says so. Every scan invest is signed by her and
+        recorded on-chain, like any other plan.
       </p>
     </div>
   );
 }
 
+// Flat line-art of a phone mid-scan: hairline strokes, faint content hints, and
+// one primary scan line sweeping the screen (clipped to it).
+function ExamplePhoneArt() {
+  return (
+    <svg width="64" height="104" viewBox="0 0 64 104" fill="none" aria-hidden style={{ display: "block" }}>
+      <rect x="6" y="2" width="52" height="100" rx="10" stroke="var(--ink-3)" strokeWidth="1.5" />
+      <rect x="12" y="12" width="40" height="80" rx="4" fill="var(--surface-2)" />
+      <rect x="26" y="6" width="12" height="2.5" rx="1.25" fill="var(--ink-3)" opacity=".7" />
+      <rect x="17" y="20" width="30" height="5" rx="2" fill="var(--line)" />
+      <rect x="17" y="30" width="22" height="5" rx="2" fill="var(--line)" />
+      <rect x="17" y="44" width="30" height="16" rx="3" fill="var(--line-2)" />
+      <g clipPath="url(#scanClip)">
+        <rect
+          x="12"
+          y="14"
+          width="40"
+          height="2"
+          fill="var(--primary)"
+          style={{ animation: "scanSweep 2.8s ease-in-out infinite" }}
+        />
+      </g>
+      <defs>
+        <clipPath id="scanClip">
+          <rect x="12" y="12" width="40" height="80" rx="4" />
+        </clipPath>
+      </defs>
+    </svg>
+  );
+}
 // ── C. Analyzing — live preview + staged status ──────────────────────────────
 const ANALYZING_COPY = ["Vera is looking…", "Matching to listed companies…", "Checking the connections…"];
 
