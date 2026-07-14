@@ -46,6 +46,7 @@ import {
   Globe,
   Star,
   TrendDown,
+  Camera,
   type Icon as PhosphorIcon,
 } from "@phosphor-icons/react";
 
@@ -87,7 +88,8 @@ export type IconName =
   | "signature"
   | "globe"
   | "star"
-  | "trendDown";
+  | "trendDown"
+  | "camera";
 
 export type IconWeight = "thin" | "light" | "regular" | "bold" | "fill" | "duotone";
 
@@ -142,6 +144,7 @@ const MAP: Record<IconName, PhosphorIcon> = {
   globe: Globe,
   star: Star,
   trendDown: TrendDown,
+  camera: Camera,
 };
 
 // Line glyphs whose Phosphor "duotone" secondary is a faint rounded-square

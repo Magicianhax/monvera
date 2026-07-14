@@ -56,6 +56,7 @@ import { SellingScreen } from "./screens/SellingScreen";
 import { SoldScreen } from "./screens/SoldScreen";
 import { TokenScreen } from "./screens/TokenScreen";
 import { TokenSwapSuccessScreen } from "./screens/TokenSwapSuccessScreen";
+import { ScanScreen } from "./screens/ScanScreen";
 import type { MonveraSwapResult } from "@/hooks/useMonveraSwap";
 import { useSellAll, type SellSelection } from "@/hooks/useSellAll";
 
@@ -90,7 +91,8 @@ type Screen =
   | "activity"
   | "help"
   | "token"
-  | "tokendone";
+  | "tokendone"
+  | "scan";
 
 type Tone = "balanced" | "safer" | "bolder" | "simple";
 type Params = Record<string, unknown>;
@@ -392,6 +394,7 @@ export function LiteApp({ demoPlay = null }: { demoPlay?: "invest" | "vera" | nu
       help: "Help",
       token: "$MONVERA",
       tokendone: "$MONVERA",
+      scan: "Scan to Buy",
     };
     document.title = `${NAMES[screen] ?? "Monvera"} · Monvera`;
   }, [screen]);
@@ -651,6 +654,9 @@ export function LiteApp({ demoPlay = null }: { demoPlay?: "invest" | "vera" | nu
       break;
     case "tokendone":
       view = <TokenSwapSuccessScreen go={go} result={params.result as MonveraSwapResult | undefined} />;
+      break;
+    case "scan":
+      view = <ScanScreen go={go} />;
       break;
     case "home":
     default:

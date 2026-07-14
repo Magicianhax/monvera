@@ -27,7 +27,7 @@ import { usd, tokenQty, fmtAmt } from "@/lib/format";
 import { toWalletEvents, eventLabel } from "@/lib/walletActivity";
 import { ActivityGlyph } from "@/components/lite/ActivityGlyph";
 import { useNotifications } from "@/hooks/useNotifications";
-import { useMonveraPrice } from "@/hooks/useMonveraToken";
+import { useMonveraPrice, useMonveraGate } from "@/hooks/useMonveraToken";
 import { iconBtn, boxHead, innerBox } from "./primitives";
 
 const DOTS = "••••••";
@@ -190,6 +190,7 @@ export function HomeScreen({
   const unread = useNotifications().data?.unread ?? 0;
   const { data: tok } = useMonveraPrice();
   const { address } = useSmartAccount();
+  const monveraGate = useMonveraGate(address ?? undefined);
   // Cash, invested, and total all arrive pre-computed from /api/portfolio —
   // this screen renders them verbatim (no client-side money math).
   const { data: port, isLoading: portLoading } = usePortfolio(address ?? undefined);
@@ -343,6 +344,14 @@ export function HomeScreen({
         {/* Market lives in the bottom nav already — this slot surfaces Autopilot,
             which is otherwise buried in Settings / the Vera screen. */}
         <QuickAction icon="clock" label="Autopilot" sub="Invest on repeat" onClick={() => go("autopilot")} />
+        {/* Scan to Buy — the 100k-$MONVERA holder feature. Visible to everyone
+            (the screen itself shows the unlock state for non-holders). */}
+        <QuickAction
+          icon="camera"
+          label="Scan"
+          sub={monveraGate.isHolder ? "Snap a product" : "Hold 100k to unlock"}
+          onClick={() => go("scan")}
+        />
       </div>
 
       {/* 3b · slim secondary actions — span the same width as the cards above. */}
