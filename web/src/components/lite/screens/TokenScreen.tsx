@@ -150,8 +150,8 @@ export function TokenScreen({
         <StatCell label="24h volume" value={fmtCompactUsd(tok?.volume24h)} />
       </div>
 
-      {/* holder gate — progress toward Scan to Buy */}
-      <HolderCard gate={gate} />
+      {/* holder gate — progress toward Scan to Buy (+ the wallet's holding in USDG) */}
+      <HolderCard gate={gate} priceUsd={tok?.priceUsd} />
 
       {/* buy / sell */}
       <SwapPanel
@@ -192,45 +192,126 @@ export function TokenScreen({
         ))}
       </div>
 
-      <div className="anim-rise" style={{ padding: "16px 22px 0" }}>
-        {activeTab.id === "qa"
-          ? activeTab.paragraphs.map((p, i) => {
-              const isQ = p.startsWith("Q: ");
-              return (
-                <p
-                  key={i}
+      {/* One card per content section: heading, body, bullet rows, link pills, mono CA. */}
+      <div
+        key={activeTab.id}
+        className="anim-rise"
+        style={{ padding: "16px 22px 0", display: "flex", flexDirection: "column", gap: 10 }}
+      >
+        {activeTab.sections.map((s, i) => (
+          <div
+            key={i}
+            style={{
+              background: "var(--surface)",
+              borderRadius: "var(--rr)",
+              boxShadow: "var(--shadow)",
+              padding: "14px 16px",
+            }}
+          >
+            {s.heading &&
+              (activeTab.id === "qa" ? (
+                <div style={{ fontSize: 14.5, fontWeight: 600, color: "var(--ink)", lineHeight: 1.4 }}>
+                  {s.heading}
+                </div>
+              ) : (
+                <div
                   style={{
-                    margin: isQ ? "16px 0 0" : "4px 0 0",
-                    fontSize: 14.5,
-                    lineHeight: 1.6,
-                    fontWeight: isQ ? 600 : 400,
-                    color: isQ ? "var(--ink)" : "var(--ink-2)",
+                    fontSize: 11,
+                    fontWeight: 700,
+                    letterSpacing: ".08em",
+                    textTransform: "uppercase",
+                    color: "var(--ink-3)",
                   }}
                 >
-                  {p.replace(/^[QA]: /, "")}
-                </p>
-              );
-            })
-          : activeTab.paragraphs.map((p, i) => (
+                  {s.heading}
+                </div>
+              ))}
+            {s.body && (
               <p
-                key={i}
-                style={{ margin: i === 0 ? 0 : "12px 0 0", fontSize: 14.5, lineHeight: 1.6, color: "var(--ink-2)" }}
+                style={{
+                  margin: s.heading ? "7px 0 0" : 0,
+                  fontSize: 14,
+                  lineHeight: 1.62,
+                  color: "var(--ink-2)",
+                }}
               >
-                {p}
+                {s.body}
               </p>
-            ))}
-        {activeTab.bullets && activeTab.bullets.length > 0 && (
-          <ul style={{ margin: "14px 0 0", padding: "0 0 0 20px" }}>
-            {activeTab.bullets.map((b, i) => (
-              <li
-                key={i}
-                style={{ margin: i === 0 ? 0 : "8px 0 0", fontSize: 14.5, lineHeight: 1.55, color: "var(--ink-2)" }}
+            )}
+            {s.bullets && s.bullets.length > 0 && (
+              <div style={{ marginTop: s.heading || s.body ? 10 : 0 }}>
+                {s.bullets.map((b, j) => (
+                  <div
+                    key={j}
+                    style={{
+                      display: "flex",
+                      gap: 10,
+                      padding: "9px 0",
+                      borderTop: j > 0 ? "1px solid var(--line-2)" : "none",
+                    }}
+                  >
+                    <span
+                      style={{
+                        flex: "none",
+                        width: 5,
+                        height: 5,
+                        borderRadius: 999,
+                        background: "var(--primary)",
+                        marginTop: 8,
+                      }}
+                    />
+                    <span style={{ fontSize: 13.5, lineHeight: 1.55, color: "var(--ink-2)" }}>{b}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+            {s.links && s.links.length > 0 && (
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: s.heading || s.body ? 12 : 0 }}>
+                {s.links.map((l) => (
+                  <a
+                    key={l.href}
+                    href={l.href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="tap"
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 5,
+                      padding: "7px 12px",
+                      borderRadius: 999,
+                      background: "var(--surface-2)",
+                      fontSize: 12.5,
+                      fontWeight: 600,
+                      color: "var(--ink)",
+                      textDecoration: "none",
+                    }}
+                  >
+                    {l.label}
+                    <Icon name="arrowUR" size={12} style={{ color: "var(--ink-3)" }} />
+                  </a>
+                ))}
+              </div>
+            )}
+            {s.mono && (
+              <div
+                className="mono tnum"
+                style={{
+                  marginTop: 10,
+                  padding: "9px 12px",
+                  borderRadius: 12,
+                  background: "var(--surface-2)",
+                  fontSize: 11.5,
+                  color: "var(--ink-2)",
+                  wordBreak: "break-all",
+                  lineHeight: 1.5,
+                }}
               >
-                {b}
-              </li>
-            ))}
-          </ul>
-        )}
+                {s.mono}
+              </div>
+            )}
+          </div>
+        ))}
       </div>
 
       {/* footer disclaimer */}
@@ -271,9 +352,11 @@ function StatCell({ label, value }: { label: string; value: string }) {
   );
 }
 
-// Holder gate — a met badge, or a progress bar toward the 100k unlock.
-function HolderCard({ gate }: { gate: ReturnType<typeof useMonveraGate> }) {
+// Holder gate — a met badge, or a progress bar toward the 100k unlock. Also the
+// home of "what my $MONVERA is worth": tokens held valued live in USDG.
+function HolderCard({ gate, priceUsd }: { gate: ReturnType<typeof useMonveraGate>; priceUsd?: number }) {
   const held = Number(gate.balance / BigInt(10) ** BigInt(18));
+  const heldUsd = priceUsd ? Number(formatUnits(gate.balance, 18)) * priceUsd : null;
   return (
     <div
       style={{
@@ -284,6 +367,29 @@ function HolderCard({ gate }: { gate: ReturnType<typeof useMonveraGate> }) {
         padding: "16px",
       }}
     >
+      {held > 0 && (
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "baseline",
+            paddingBottom: 12,
+            marginBottom: 12,
+            borderBottom: "1px solid var(--line-2)",
+          }}
+        >
+          <span style={{ fontSize: 13, color: "var(--ink-3)" }}>You hold</span>
+          <span className="tnum" style={{ fontSize: 14, fontWeight: 600, color: "var(--ink)" }}>
+            {held.toLocaleString("en-US")} $MONVERA
+            {heldUsd != null && (
+              <span style={{ fontWeight: 500, color: "var(--ink-2)" }}>
+                {" "}
+                ≈ {heldUsd.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDG
+              </span>
+            )}
+          </span>
+        </div>
+      )}
       {gate.isHolder ? (
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <span
@@ -637,26 +743,37 @@ function SwapPanel({ swap, balance }: { swap: SwapApi; balance: bigint }) {
             />
             <span style={{ fontSize: 15, fontWeight: 600, color: "var(--ink-3)" }}>MONVERA</span>
           </div>
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "center",
-              alignItems: "center",
-              gap: 10,
-              marginTop: 8,
-              fontSize: 12.5,
-              color: "var(--ink-3)",
-            }}
-          >
+          <div style={{ textAlign: "center", marginTop: 8, fontSize: 12.5, color: "var(--ink-3)" }}>
             <span className="tnum">You hold {fmtTokenAmount(balance)}</span>
+          </div>
+          {/* quick-size chips — 25/50/75% round down to whole tokens; Max sells the exact raw balance */}
+          <div style={{ display: "flex", justifyContent: "center", gap: 8, marginTop: 10 }}>
+            {([25, 50, 75] as const).map((pct) => (
+              <button
+                key={pct}
+                className="chip tap"
+                onClick={() => {
+                  haptic.select();
+                  setSellIsMax(false);
+                  setSellAmt(formatUnits((balance * BigInt(pct)) / BigInt(100), 18));
+                  if (error) reset();
+                }}
+                style={{ height: 28, fontSize: 12, fontWeight: 600 }}
+                disabled={balance <= BigInt(0)}
+              >
+                {pct}%
+              </button>
+            ))}
             <button
               className="chip tap"
               onClick={() => {
+                haptic.select();
                 setSellIsMax(true);
                 setSellAmt(formatUnits(balance, 18));
                 if (error) reset();
               }}
-              style={{ height: 26, fontSize: 12, fontWeight: 600 }}
+              style={{ height: 28, fontSize: 12, fontWeight: 600 }}
+              disabled={balance <= BigInt(0)}
             >
               Max
             </button>

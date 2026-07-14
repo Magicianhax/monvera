@@ -235,24 +235,27 @@ export function HomeScreen({
           {tok && (
             <button
               onClick={() => go("token")}
-              className="tap"
+              className="tap tnum"
               aria-label="$MONVERA price"
               style={{
-                display: "flex",
+                display: "inline-flex",
                 alignItems: "center",
-                gap: 5,
-                padding: "6px 10px",
+                gap: 4,
+                height: 26,
+                padding: "0 9px",
                 borderRadius: 999,
                 background: "var(--surface-2)",
-                fontSize: 12.5,
+                fontSize: 10.5,
                 fontWeight: 600,
-                letterSpacing: "-.01em",
+                lineHeight: 1,
+                whiteSpace: "nowrap",
                 color: "var(--ink)",
               }}
             >
               <span>$MONVERA</span>
               <span style={{ color: tok.change24h >= 0 ? "var(--pos)" : "var(--neg)" }}>
-                {tok.change24h >= 0 ? "▲" : "▼"} {Math.abs(tok.change24h).toFixed(1)}%
+                {tok.change24h >= 0 ? "▲" : "▼"}
+                {Math.abs(tok.change24h).toFixed(1)}%
               </span>
             </button>
           )}
