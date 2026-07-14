@@ -52,7 +52,7 @@ function ScanBannerArt() {
   );
   return (
     <span aria-hidden style={{ position: "relative", flex: "none", marginRight: 6, display: "inline-block", width: 96, height: 76 }}>
-      {orbit("KO", { top: -2, left: 6 })}
+      {orbit("COST", { top: -2, left: 6 })}
       {orbit("AAPL", { top: 26, right: -4 })}
       {orbit("NVDA", { bottom: -2, left: 18 })}
       <ScanBannerSvg />

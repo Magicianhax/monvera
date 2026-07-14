@@ -253,7 +253,7 @@ function LockHeroArt() {
   );
   return (
     <span aria-hidden style={{ position: "relative", display: "inline-block", width: 148, height: 116 }}>
-      {orbit("KO", { top: 0, left: 4 })}
+      {orbit("AMZN", { top: 0, left: 4 })}
       {orbit("AAPL", { top: 44, right: -8 })}
       {orbit("NVDA", { bottom: 0, left: 22 })}
       {orbit("TSLA", { top: 6, right: 22 })}
@@ -346,7 +346,7 @@ function InputState({ onPick }: { onPick: (e: React.ChangeEvent<HTMLInputElement
 
         {/* floating stock logos — a tidy arc; the photo resolves into companies */}
         {[
-          { s: "KO", t: "46%", l: "14%", d: ".4s", z: 26 },
+          { s: "AMZN", t: "46%", l: "14%", d: ".4s", z: 26 },
           { s: "AAPL", t: "30%", l: "31%", d: "0s", z: 30 },
           { s: "NVDA", t: "24%", l: "50%", d: ".8s", z: 34 },
           { s: "MSFT", t: "30%", l: "69%", d: ".3s", z: 30 },
@@ -438,7 +438,7 @@ function InputState({ onPick }: { onPick: (e: React.ChangeEvent<HTMLInputElement
 // The user's photo becomes the viewfinder stage: corner brackets, a sweeping
 // beam over the actual image, a staged checklist ticking off Vera's work, and a
 // live ticker of the listed universe she's matching against.
-const MATCH_TICKER = ["AAPL", "NVDA", "KO", "TSLA", "MSFT", "AMD", "SPY", "GOOGL", "TSM", "AVGO", "QQQ", "NFLX"];
+const MATCH_TICKER = ["AAPL", "NVDA", "META", "TSLA", "MSFT", "AMD", "SPY", "GOOGL", "TSM", "AVGO", "QQQ", "NFLX"];
 
 function AnalyzingState({ preview, phase }: { preview: string | null; phase: "reading" | "analyzing" }) {
   // Seconds since this state mounted — drives the staged checklist.
