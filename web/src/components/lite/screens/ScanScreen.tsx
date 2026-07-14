@@ -287,11 +287,14 @@ function InputState({ onPick }: { onPick: (e: React.ChangeEvent<HTMLInputElement
         }
       `}</style>
 
-      <h1 className="serif" style={{ margin: 0, fontSize: 30, letterSpacing: "-.01em", lineHeight: 1.12 }}>
+      <h1 className="serif" style={{ margin: 0, fontSize: 30, letterSpacing: "-.01em", lineHeight: 1.12, textAlign: "center" }}>
         Point at any product
       </h1>
-      <p style={{ margin: "8px 0 0", maxWidth: 320, fontSize: 14, lineHeight: 1.6, color: "var(--ink-2)" }}>
+      <p style={{ margin: "8px auto 0", maxWidth: 320, fontSize: 14, lineHeight: 1.6, color: "var(--ink-2)", textAlign: "center" }}>
         Vera finds the listed companies behind it — maker, suppliers, retailers — and invests in the real ones.
+      </p>
+      <p style={{ margin: "6px auto 0", fontSize: 12.5, color: "var(--ink-3)", textAlign: "center" }}>
+        Try a soda can, your sneakers, or the phone in your hand.
       </p>
 
       {/* the viewfinder stage — tapping it opens the camera */}
@@ -301,9 +304,9 @@ function InputState({ onPick }: { onPick: (e: React.ChangeEvent<HTMLInputElement
         style={{
           position: "relative",
           display: "block",
-          flex: 1,
-          minHeight: 300,
-          marginTop: 18,
+          height: 264,
+          flex: "none",
+          marginTop: 16,
           borderRadius: 24,
           overflow: "hidden",
           cursor: "pointer",
@@ -340,28 +343,31 @@ function InputState({ onPick }: { onPick: (e: React.ChangeEvent<HTMLInputElement
           }}
         />
 
-        {/* floating stock logos — the photo resolves into companies */}
+        {/* floating stock logos — a tidy arc; the photo resolves into companies */}
         {[
-          { s: "KO", t: "22%", l: "16%", d: "0s" },
-          { s: "AAPL", t: "18%", l: "68%", d: ".7s" },
-          { s: "NVDA", t: "58%", l: "74%", d: "1.3s" },
-          { s: "TSLA", t: "62%", l: "14%", d: ".4s" },
-          { s: "MSFT", t: "38%", l: "44%", d: "1s" },
-        ].map(({ s, t, l, d }) => (
+          { s: "KO", t: "46%", l: "14%", d: ".4s", z: 26 },
+          { s: "AAPL", t: "30%", l: "31%", d: "0s", z: 30 },
+          { s: "NVDA", t: "24%", l: "50%", d: ".8s", z: 34 },
+          { s: "MSFT", t: "30%", l: "69%", d: ".3s", z: 30 },
+          { s: "TSLA", t: "46%", l: "86%", d: "1.1s", z: 26 },
+        ].map(({ s, t, l, d, z }) => (
           <span
             key={s}
             aria-hidden
-            style={{
-              position: "absolute",
-              top: t,
-              left: l,
-              borderRadius: "50%",
-              lineHeight: 0,
-              boxShadow: "0 0 0 2px color-mix(in srgb, var(--surface) 80%, transparent), 0 6px 18px rgba(0,0,0,.25)",
-              animation: `scanBob 3.6s ease-in-out ${d} infinite`,
-            }}
+            style={{ position: "absolute", top: t, left: l, transform: "translate(-50%, -50%)", lineHeight: 0 }}
           >
-            <TokenLogo symbol={s} size={30} />
+            {/* inner span carries the bob so it can't fight the centering transform */}
+            <span
+              style={{
+                display: "inline-block",
+                borderRadius: "50%",
+                lineHeight: 0,
+                boxShadow: "0 0 0 2px color-mix(in srgb, var(--surface) 80%, transparent), 0 6px 18px rgba(0,0,0,.25)",
+                animation: `scanBob 3.6s ease-in-out ${d} infinite`,
+              }}
+            >
+              <TokenLogo symbol={s} size={z} />
+            </span>
           </span>
         ))}
 
