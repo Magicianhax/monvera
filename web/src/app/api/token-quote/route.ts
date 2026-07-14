@@ -19,6 +19,14 @@ export const dynamic = "force-dynamic"; // quotes must be fresh — never cache
 const LIFI_QUOTE_URL = "https://li.quest/v1/quote";
 const client = createPublicClient({ chain, transport: http(SERVER_RPC_URL) });
 
+// LiFi's ONLY contract on Robinhood Chain (its LiFiDiamond — verified via
+// li.quest/v1/chains, and it is both the approval spender and the tx target for
+// every route). The client grants an exact-amount approval to approvalAddress
+// then calls tx.to, so both MUST be this address — otherwise a manipulated
+// quote could name an attacker contract that pulls the just-approved funds.
+// Anything off-list falls back to the direct router path.
+const LIFI_DIAMOND_4663 = "0xb477751b76cf82d00a686a1232f5fcd772414af3";
+
 interface QuoteBody {
   toAmount: string;
   toAmountMin: string;
@@ -60,6 +68,15 @@ async function lifiQuote(
   const est = json.estimate;
   const tx = json.transactionRequest;
   if (!est?.toAmount || !est.toAmountMin || !est.approvalAddress || !tx?.to || !tx.data) return null;
+  // Both the approval spender AND the call target must be LiFi's own diamond —
+  // reject (→ router fallback) if either points elsewhere, so a manipulated
+  // quote can't redirect the exact-amount approval to a draining contract.
+  if (
+    est.approvalAddress.toLowerCase() !== LIFI_DIAMOND_4663 ||
+    tx.to.toLowerCase() !== LIFI_DIAMOND_4663
+  ) {
+    return null;
+  }
   return {
     toAmount: String(BigInt(est.toAmount)),
     toAmountMin: String(BigInt(est.toAmountMin)),

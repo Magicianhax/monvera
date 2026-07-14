@@ -130,6 +130,17 @@ export function useMonveraSwap() {
           { to: q.tx.to, data: q.tx.data, value: BigInt(q.tx.value || 0) },
         ];
 
+        // Balance backstop: a UserOp that "succeeds" only proves it didn't
+        // revert — not that MONVERA actually arrived. Snapshot before, and after
+        // require the delta to clear the quote's min-out, so a manipulated quote
+        // that pulls the approved USDG without delivering can't report success.
+        const monveraBefore = (await publicClient.readContract({
+          address: MONVERA.address,
+          abi: ERC20_MINI_ABI,
+          functionName: "balanceOf",
+          args: [eoa],
+        })) as bigint;
+
         const q = await fetchQuote("buy", amountIn, smartAccount, eoa);
         setPhase("swapping");
         let receipt, executed;
@@ -146,6 +157,17 @@ export function useMonveraSwap() {
           receipt = await sendSponsoredCalls(provider, buildCalls(rq));
           executed = rq;
         }
+
+        const monveraAfter = (await publicClient.readContract({
+          address: MONVERA.address,
+          abi: ERC20_MINI_ABI,
+          functionName: "balanceOf",
+          args: [eoa],
+        })) as bigint;
+        if (monveraAfter - monveraBefore < BigInt(executed.toAmountMin)) {
+          throw new Error("The swap didn't deliver the expected $MONVERA. No funds were lost — please try again.");
+        }
+
         setResult({
           txHash: receipt.receipt.transactionHash as `0x${string}`,
           side: "buy",
@@ -219,6 +241,14 @@ export function useMonveraSwap() {
           { to: quote.tx.to, data: quote.tx.data, value: BigInt(quote.tx.value || 0) },
         ];
 
+        // USDG-received backstop (same rationale as the buy path).
+        const usdgBefore = (await publicClient.readContract({
+          address: USDG.address as `0x${string}`,
+          abi: ERC20_MINI_ABI,
+          functionName: "balanceOf",
+          args: [eoa],
+        })) as bigint;
+
         setPhase("swapping");
         let receipt, executed;
         try {
@@ -233,6 +263,17 @@ export function useMonveraSwap() {
           receipt = await sendSponsoredCalls(provider, buildCalls(rq));
           executed = rq;
         }
+
+        const usdgAfter = (await publicClient.readContract({
+          address: USDG.address as `0x${string}`,
+          abi: ERC20_MINI_ABI,
+          functionName: "balanceOf",
+          args: [eoa],
+        })) as bigint;
+        if (usdgAfter - usdgBefore < BigInt(executed.toAmountMin)) {
+          throw new Error("The swap didn't deliver the expected USDG. No funds were lost — please try again.");
+        }
+
         setResult({
           txHash: receipt.receipt.transactionHash as `0x${string}`,
           side: "sell",
