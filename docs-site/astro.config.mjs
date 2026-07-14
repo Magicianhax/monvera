@@ -63,6 +63,7 @@ export default defineConfig({
             'use/set-a-price-alert',
             'use/autopilot',
             'use/set-and-revoke-autopilot-limits',
+            'use/scan-to-buy',
             'use/withdraw-your-money',
           ],
         },

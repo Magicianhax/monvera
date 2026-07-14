@@ -43,6 +43,8 @@ export const ROADMAP: RoadmapPhase[] = [
       { name: "Portfolio review", note: "One tap and Vera reads what you own: concentration, overlap, and how the mix has actually behaved." },
       { name: "Agent card", note: "A machine-readable ERC-8004 endpoint so other agents can find and verify Vera." },
       { name: "Theme baskets", note: "One honest basket per theme, from AI to space: open weights, an open rule, and a walk-forward backtest anyone can pull as JSON." },
+      { name: "$MONVERA in the app", note: "Live price, chart, and gasless buy/sell of the project token, next to your stocks in the same self-custody wallet." },
+      { name: "Scan to Buy", note: "Photograph any product and Vera maps it to the listed companies behind it — then invests, signed and recorded on-chain. Unlocked by holding 100,000 $MONVERA." },
       { name: "Documentation", note: "Plain-language guides and a full developer reference at docs.monvera.best." },
     ],
   },
