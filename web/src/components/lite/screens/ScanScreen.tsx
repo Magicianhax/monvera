@@ -2,9 +2,11 @@
 
 // Scan to Buy — the 100k-$MONVERA holder feature. Photograph (or upload) any
 // product; Vera identifies it and maps it to the LISTED companies behind it with
-// honest reasoning; the user picks an amount and hands off to the EXISTING invest
-// pipeline (go("thinking", { goal, amt }) → plan → confirm → per-leg settle →
-// VeraRecord). No execution lives here — this screen only produces the goal.
+// honest reasoning; the user picks an amount and the connections are ADOPTED as
+// the plan directly (go("scanbuy", { allocation, amt }) → confirm → placing →
+// success; Vera's signed risk inference + VeraRecord happen at invest time, as
+// with any plan). No execution lives here — this screen only builds the
+// allocation.
 //
 // One file, an internal state machine driven by the holder gate + useScan phase:
 //   non-holder → lock explainer · idle → capture/upload · reading|analyzing →
