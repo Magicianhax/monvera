@@ -106,6 +106,9 @@ export async function GET(req: NextRequest) {
   const amountStr = url.searchParams.get("amount");
   const address = url.searchParams.get("address");
   const to = url.searchParams.get("to");
+  // prefer=router skips LiFi — the client's retry path after a LiFi route
+  // reverted in UserOp simulation.
+  const preferRouter = url.searchParams.get("prefer") === "router";
 
   if (side !== "buy" && side !== "sell") return badRequest("side must be buy or sell.");
   if (!address || !isAddress(address)) return badRequest("Invalid address.");
@@ -120,10 +123,12 @@ export async function GET(req: NextRequest) {
 
   try {
     let body: QuoteBody | null = null;
-    try {
-      body = await lifiQuote(side, String(amount), address, to);
-    } catch {
-      body = null; // any LiFi error -> router fallback
+    if (!preferRouter) {
+      try {
+        body = await lifiQuote(side, String(amount), address, to);
+      } catch {
+        body = null; // any LiFi error -> router fallback
+      }
     }
     if (!body) body = await routerQuote(side, amount, to);
     return Response.json(body, { headers: { "Cache-Control": "no-store" } });

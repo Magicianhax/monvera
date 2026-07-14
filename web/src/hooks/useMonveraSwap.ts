@@ -42,8 +42,15 @@ interface TokenQuote {
 }
 
 /** `address` = the smart account that executes; `to` = the EOA that receives. */
-async function fetchQuote(side: "buy" | "sell", amountRaw: bigint, address: string, to: string): Promise<TokenQuote> {
-  const res = await fetch(`/api/token-quote?side=${side}&amount=${amountRaw}&address=${address}&to=${to}`);
+async function fetchQuote(
+  side: "buy" | "sell",
+  amountRaw: bigint,
+  address: string,
+  to: string,
+  prefer?: "router",
+): Promise<TokenQuote> {
+  const preferQ = prefer ? `&prefer=${prefer}` : "";
+  const res = await fetch(`/api/token-quote?side=${side}&amount=${amountRaw}&address=${address}&to=${to}${preferQ}`);
   const json = await res.json();
   if (!res.ok) throw new Error(typeof json?.error === "string" ? json.error : "Couldn't get a quote.");
   return json as TokenQuote;
@@ -82,7 +89,7 @@ export function useMonveraSwap() {
       setResult(null);
       try {
         const wallet = activeWallet;
-        if (!wallet) throw new Error("No account found. Please sign in again.");
+        if (!wallet) throw new Error("Sign in to trade $MONVERA.");
         const eoa = wallet.address as `0x${string}`;
         const amountIn = BigInt(Math.round(usdAmount * 1_000_000)); // USDG 6dp
         if (amountIn <= BigInt(0)) throw new Error("Enter an amount first.");
@@ -91,32 +98,49 @@ export function useMonveraSwap() {
         const rawProvider = (await wallet.getEthereumProvider()) as Eip1193;
         const provider = asViemProvider(rawProvider);
         const { owner: smartAccount } = await getSmartAccountClient(provider);
-        const q = await fetchQuote("buy", amountIn, smartAccount, eoa);
 
-        const calls: Call[] = [];
         const allowance = (await publicClient.readContract({
           address: USDG.address as `0x${string}`,
           abi: ERC20_MINI_ABI,
           functionName: "allowance",
           args: [eoa, smartAccount],
         })) as bigint;
-        if (allowance < amountIn) {
-          // Gasless EIP-2612: the EOA authorizes the smart account to pull USDG.
-          calls.push(await buildPermitCall(typedDataSigner(rawProvider, eoa), eoa, smartAccount, USDG.address as `0x${string}`));
-        }
-        calls.push({
-          to: USDG.address as `0x${string}`,
-          data: encodeFunctionData({ abi: ERC20_MINI_ABI, functionName: "transferFrom", args: [eoa, smartAccount, amountIn] }),
-        });
-        calls.push({
-          to: USDG.address as `0x${string}`,
-          data: encodeFunctionData({ abi: ERC20_MINI_ABI, functionName: "approve", args: [q.approvalAddress, amountIn] }),
-        });
-        calls.push({ to: q.tx.to, data: q.tx.data, value: BigInt(q.tx.value || 0) });
+        // Gasless EIP-2612: the EOA authorizes the smart account to pull USDG.
+        const permitCall =
+          allowance < amountIn
+            ? await buildPermitCall(typedDataSigner(rawProvider, eoa), eoa, smartAccount, USDG.address as `0x${string}`)
+            : null;
 
+        const buildCalls = (q: TokenQuote): Call[] => [
+          ...(permitCall ? [permitCall] : []),
+          {
+            to: USDG.address as `0x${string}`,
+            data: encodeFunctionData({ abi: ERC20_MINI_ABI, functionName: "transferFrom", args: [eoa, smartAccount, amountIn] }),
+          },
+          {
+            to: USDG.address as `0x${string}`,
+            data: encodeFunctionData({ abi: ERC20_MINI_ABI, functionName: "approve", args: [q.approvalAddress, amountIn] }),
+          },
+          { to: q.tx.to, data: q.tx.data, value: BigInt(q.tx.value || 0) },
+        ];
+
+        const q = await fetchQuote("buy", amountIn, smartAccount, eoa);
         setPhase("swapping");
-        const receipt = await sendSponsoredCalls(provider, calls);
-        setResult({ txHash: receipt.receipt.transactionHash as `0x${string}`, side: "buy", minOut: BigInt(q.toAmountMin) });
+        let receipt, minOut;
+        try {
+          receipt = await sendSponsoredCalls(provider, buildCalls(q));
+          minOut = BigInt(q.toAmountMin);
+        } catch (err) {
+          // LiFi routes occasionally revert in simulation (executor quirks on
+          // this young chain). The direct v2 router path is the designed
+          // fallback — re-quote and retry once before surfacing anything.
+          if (q.source !== "lifi") throw err;
+          console.warn("[monvera-swap] LiFi buy route reverted, retrying via router:", err instanceof Error ? err.message : err);
+          const rq = await fetchQuote("buy", amountIn, smartAccount, eoa, "router");
+          receipt = await sendSponsoredCalls(provider, buildCalls(rq));
+          minOut = BigInt(rq.toAmountMin);
+        }
+        setResult({ txHash: receipt.receipt.transactionHash as `0x${string}`, side: "buy", minOut });
         setPhase("done");
         refreshBalances();
       } catch (e) {
@@ -134,7 +158,7 @@ export function useMonveraSwap() {
       setResult(null);
       try {
         const wallet = activeWallet;
-        if (!wallet) throw new Error("No account found. Please sign in again.");
+        if (!wallet) throw new Error("Sign in to trade $MONVERA.");
         const eoa = wallet.address as `0x${string}`;
         if (amountRaw <= BigInt(0)) throw new Error("Nothing to sell.");
 
@@ -170,21 +194,33 @@ export function useMonveraSwap() {
           await publicClient.waitForTransactionReceipt({ hash: approveHash });
         }
 
-        const calls: Call[] = [
+        const buildCalls = (quote: TokenQuote): Call[] => [
           {
             to: MONVERA.address,
             data: encodeFunctionData({ abi: ERC20_MINI_ABI, functionName: "transferFrom", args: [eoa, smartAccount, amountRaw] }),
           },
           {
             to: MONVERA.address,
-            data: encodeFunctionData({ abi: ERC20_MINI_ABI, functionName: "approve", args: [q.approvalAddress, amountRaw] }),
+            data: encodeFunctionData({ abi: ERC20_MINI_ABI, functionName: "approve", args: [quote.approvalAddress, amountRaw] }),
           },
-          { to: q.tx.to, data: q.tx.data, value: BigInt(q.tx.value || 0) },
+          { to: quote.tx.to, data: quote.tx.data, value: BigInt(quote.tx.value || 0) },
         ];
 
         setPhase("swapping");
-        const receipt = await sendSponsoredCalls(provider, calls);
-        setResult({ txHash: receipt.receipt.transactionHash as `0x${string}`, side: "sell", minOut: BigInt(q.toAmountMin) });
+        let receipt, minOut;
+        try {
+          receipt = await sendSponsoredCalls(provider, buildCalls(q));
+          minOut = BigInt(q.toAmountMin);
+        } catch (err) {
+          // Same LiFi-revert fallback as the buy path: re-quote via the direct
+          // v2 router and retry once.
+          if (q.source !== "lifi") throw err;
+          console.warn("[monvera-swap] LiFi sell route reverted, retrying via router:", err instanceof Error ? err.message : err);
+          const rq = await fetchQuote("sell", amountRaw, smartAccount, eoa, "router");
+          receipt = await sendSponsoredCalls(provider, buildCalls(rq));
+          minOut = BigInt(rq.toAmountMin);
+        }
+        setResult({ txHash: receipt.receipt.transactionHash as `0x${string}`, side: "sell", minOut });
         setPhase("done");
         refreshBalances();
       } catch (e) {
