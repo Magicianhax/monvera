@@ -263,7 +263,9 @@ export function HomeScreen({
   const balLen = usd(total).length;
   const balSize = balLen <= 9 ? 48 : balLen <= 11 ? 40 : 34;
 
-  const shownHoldings = holdings.slice(0, 5);
+  // Home shows stock/ETF holdings only — $MONVERA lives on its own token
+  // screen (the price pill above is its home-surface entry point).
+  const shownHoldings = holdings.filter((h) => h.asset.symbol !== "MONVERA").slice(0, 5);
   const events = toWalletEvents(txs ?? []);
   const shownActivity = events.slice(0, 4);
   const moreActivity = events.length > 4;

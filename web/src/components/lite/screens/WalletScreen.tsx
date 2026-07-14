@@ -85,7 +85,10 @@ export function WalletScreen({
   const [txPage, setTxPage] = useState(0);
 
   const cash = bal?.value ?? 0;
-  const holdings: Holding[] = port?.holdings ?? [];
+  const allHoldings: Holding[] = port?.holdings ?? [];
+  // $MONVERA gets its own section (it's the project token, not a stock).
+  const monvera = allHoldings.find((h) => h.asset.symbol === "MONVERA");
+  const holdings = allHoldings.filter((h) => h.asset.symbol !== "MONVERA");
   const invested = port?.investedUsd ?? 0;
   const total = cash + invested;
 
@@ -207,6 +210,52 @@ export function WalletScreen({
           <div className="tnum" style={{ fontWeight: 600, fontSize: 16 }}>{hide ? DOTS : usd(cash)}</div>
         )}
       </button>
+
+      {/* $MONVERA — its own card, mirroring the cash row: the project token,
+          not a stock. Tap opens the token screen (chart + buy/sell). */}
+      {monvera && !(walletPending || (portLoading && !port)) && (
+        <section style={{ padding: "22px 22px 0" }}>
+          <div className="card" style={{ padding: 12 }}>
+            <div style={{ ...boxHead }}>$MONVERA</div>
+            <button
+              className="tap"
+              onClick={() => go("token")}
+              style={{
+                width: "100%",
+                padding: "12px 10px",
+                display: "flex",
+                alignItems: "center",
+                gap: 13,
+                textAlign: "left",
+                background: "var(--glass-bg-2)",
+                borderRadius: "var(--r-lg)",
+              }}
+            >
+              <TokenLogo symbol="MONVERA" size={38} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontWeight: 500, fontSize: 15.5, letterSpacing: "-.01em" }}>Monvera</div>
+                <div style={{ fontSize: 13, color: "var(--ink-2)", marginTop: 2 }}>
+                  {monvera.dayChangePct != null ? (
+                    <span className="tnum" style={{ color: monvera.dayChangePct >= 0 ? "var(--pos)" : "var(--neg)" }}>
+                      {monvera.dayChangePct >= 0 ? "▲" : "▼"} {Math.abs(monvera.dayChangePct).toFixed(1)}% today
+                    </span>
+                  ) : (
+                    "project token"
+                  )}
+                </div>
+              </div>
+              <div style={{ textAlign: "right" }}>
+                <div className="tnum" style={{ fontWeight: 600, fontSize: 16 }}>
+                  {hide ? DOTS : monvera.valueUsd !== undefined ? usd(monvera.valueUsd) : "—"}
+                </div>
+                <div className="tnum" style={{ fontSize: 12, color: "var(--ink-2)", marginTop: 2 }}>
+                  {hide ? DOTS : `${tokenQty(monvera.raw, 18)} MONVERA`}
+                </div>
+              </div>
+            </button>
+          </div>
+        </section>
+      )}
 
       {/* holdings — one outer box, rows as mini boxes inside */}
       {holdings.length > 0 && !(walletPending || (portLoading && !port)) && (

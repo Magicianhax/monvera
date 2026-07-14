@@ -19,6 +19,28 @@ export function TokenLogo({
   const [failed, setFailed] = useState(false);
   const showImg = d.logo && !failed;
 
+  // $MONVERA — the brand's white mark on the user's chosen brand color, so it
+  // reads on both themes (the raw white PNG would vanish on light surfaces).
+  if (symbol === "MONVERA") {
+    return (
+      <span
+        aria-hidden
+        style={{
+          width: size,
+          height: size,
+          borderRadius: "50%",
+          flex: "none",
+          display: "grid",
+          placeItems: "center",
+          background: "var(--primary)",
+        }}
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element -- local brand asset */}
+        <img src="/brand/monvera-icon-white.png" alt="" style={{ width: "60%", height: "60%", objectFit: "contain" }} />
+      </span>
+    );
+  }
+
   if (showImg) {
     return (
       // eslint-disable-next-line @next/next/no-img-element -- remote/SVG token logos, no Image loader

@@ -52,8 +52,14 @@ export function PortfolioScreen({
   const { data: port, isLoading: portLoading } = usePortfolio(address ?? undefined);
 
   const cash = port?.cashUsd ?? 0;
-  const holdings: Holding[] = port?.holdings ?? [];
-  const invested = port?.investedUsd ?? 0;
+  const allHoldings: Holding[] = port?.holdings ?? [];
+  // Stocks/ETFs only here — $MONVERA is the project token, shown in its own
+  // section on the Wallet screen and on the token screen itself.
+  const holdings = allHoldings.filter((h) => h.asset.symbol !== "MONVERA");
+  const monveraValue = allHoldings.find((h) => h.asset.symbol === "MONVERA")?.valueUsd ?? 0;
+  // This screen's "invested" matches the stocks it lists — the token's value
+  // stays out here (it still counts in the wallet/home total).
+  const invested = Math.max(0, (port?.investedUsd ?? 0) - monveraValue);
   // Only holdings we could price contribute to the allocation bar/legend share;
   // largest first so segments and legend read big → small ("+N more" hides the tail).
   const priced = holdings
