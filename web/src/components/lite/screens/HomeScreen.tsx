@@ -26,6 +26,7 @@ import { toTile, catFor } from "@/lib/displayAssets";
 import { usd, tokenQty, fmtAmt } from "@/lib/format";
 import { toWalletEvents, eventLabel } from "@/lib/walletActivity";
 import { ActivityGlyph } from "@/components/lite/ActivityGlyph";
+import { TokenLogo } from "@/components/lite/TokenLogo";
 import { useNotifications } from "@/hooks/useNotifications";
 import { useMonveraPrice, useMonveraGate } from "@/hooks/useMonveraToken";
 import { iconBtn, boxHead, innerBox } from "./primitives";
@@ -33,11 +34,35 @@ import { iconBtn, boxHead, innerBox } from "./primitives";
 const DOTS = "••••••";
 
 // Decorative art for the Scan to Buy banner: a viewfinder framing a product
-// with a rising line inside, plus a sparkle. Pure currentColor/vars, so it
-// follows the theme in both modes.
+// with a rising line inside, plus a sparkle — and real stock logos orbiting the
+// frame (the product resolves into companies). Theme vars throughout.
 function ScanBannerArt() {
+  const orbit = (symbol: string, style: CSSProperties) => (
+    <span
+      style={{
+        position: "absolute",
+        borderRadius: "50%",
+        boxShadow: "0 0 0 2px var(--surface), var(--shadow)",
+        lineHeight: 0,
+        ...style,
+      }}
+    >
+      <TokenLogo symbol={symbol} size={20} />
+    </span>
+  );
   return (
-    <svg width="96" height="76" viewBox="0 0 96 76" fill="none" aria-hidden style={{ flex: "none", marginRight: 6 }}>
+    <span aria-hidden style={{ position: "relative", flex: "none", marginRight: 6, display: "inline-block", width: 96, height: 76 }}>
+      {orbit("KO", { top: -2, left: 6 })}
+      {orbit("AAPL", { top: 26, right: -4 })}
+      {orbit("NVDA", { bottom: -2, left: 18 })}
+      <ScanBannerSvg />
+    </span>
+  );
+}
+
+function ScanBannerSvg() {
+  return (
+    <svg width="96" height="76" viewBox="0 0 96 76" fill="none" aria-hidden style={{ display: "block" }}>
       {/* soft glow behind the frame */}
       <circle cx="52" cy="38" r="32" fill="var(--primary)" opacity=".10" />
       <circle cx="52" cy="38" r="22" fill="var(--primary)" opacity=".08" />
