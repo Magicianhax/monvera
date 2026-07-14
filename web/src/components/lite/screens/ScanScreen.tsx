@@ -15,7 +15,7 @@ import { useScan, type ScanConnection } from "@/hooks/useScan";
 import { useMonveraGate } from "@/hooks/useMonveraToken";
 import { useSmartAccount } from "@/hooks/useSmartAccount";
 import { HOLDER_THRESHOLD } from "@/lib/monveraToken";
-import { Icon } from "@/components/design";
+import { Icon, type IconName } from "@/components/design";
 import { haptic } from "@/lib/haptics";
 import { TokenLogo } from "../TokenLogo";
 import { iconBtn, Spinner } from "./primitives";
@@ -124,7 +124,9 @@ function CenterState({ children }: { children: React.ReactNode }) {
   );
 }
 
-// ── A. Non-holder / deep-link lock ────────────────────────────────────────────
+// ── A. Non-holder / deep-link lock — the feature's own landing page ──────────
+// Full-height hero: the scan art with real stock logos, a serif headline, the
+// three-beat "what is it", then the unlock card pinned at the bottom.
 function LockState({
   gate,
   go,
@@ -134,48 +136,42 @@ function LockState({
 }) {
   const held = Number(gate.balance / BigInt(10) ** BigInt(18));
   return (
-    <div className="anim-rise" style={{ padding: "28px 22px 0" }}>
-      <div
-        style={{
-          background: "var(--surface)",
-          borderRadius: "var(--rr)",
-          boxShadow: "var(--shadow)",
-          padding: "22px 20px",
-          textAlign: "center",
-        }}
-      >
-        <span
+    <div style={{ display: "flex", flexDirection: "column", minHeight: "calc(100dvh - 140px)", padding: "10px 22px 0" }}>
+      {/* hero — art + headline */}
+      <div className="anim-rise" style={{ textAlign: "center", paddingTop: 14 }}>
+        <LockHeroArt />
+        <h2 className="serif" style={{ margin: "18px 0 0", fontSize: 30, letterSpacing: "-.01em", lineHeight: 1.15 }}>
+          Point. Scan.
+          <br />
+          Own what's behind it.
+        </h2>
+        <p style={{ margin: "10px auto 0", maxWidth: 300, fontSize: 14, lineHeight: 1.6, color: "var(--ink-2)" }}>
+          Photograph any product and Vera finds the listed companies behind it — then invests, signed on-chain.
+        </p>
+      </div>
+
+      {/* what is it — three honest beats */}
+      <div className="anim-rise" style={{ marginTop: 26, display: "flex", flexDirection: "column", gap: 4, animationDelay: ".08s" }}>
+        <LockStep icon="camera" title="Snap any product" note="A can, a sneaker, a laptop — anything with a brand on it." />
+        <LockStep icon="spark" title="Vera finds the companies" note="Maker, suppliers, retailers — real connections, each with an honest reason." />
+        <LockStep icon="signature" title="Invest in one tap, signed" note="Runs through the same on-chain pipeline as every Vera plan — public and re-checkable." />
+      </div>
+
+      {/* unlock card — pinned toward the bottom */}
+      <div className="anim-rise" style={{ marginTop: "auto", paddingTop: 26, animationDelay: ".16s" }}>
+        <div
           style={{
-            width: 52,
-            height: 52,
-            borderRadius: "50%",
-            margin: "0 auto",
-            display: "grid",
-            placeItems: "center",
-            background: "var(--primary-soft)",
-            color: "var(--primary)",
+            background: "var(--surface)",
+            borderRadius: "var(--rr)",
+            boxShadow: "var(--shadow)",
+            padding: "18px 18px 16px",
           }}
         >
-          <Icon name="lock" size={24} />
-        </span>
-        <h2 style={{ margin: "16px 0 0", fontSize: 20, fontWeight: 600, letterSpacing: "-.02em" }}>
-          Scan to Buy
-        </h2>
-        <p style={{ margin: "8px auto 0", maxWidth: 300, fontSize: 14, lineHeight: 1.6, color: "var(--ink-2)" }}>
-          Photograph any product and Vera invests in the listed companies behind it.
-        </p>
-
-        {/* progress toward the 100k unlock */}
-        <div style={{ marginTop: 22, textAlign: "left" }}>
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "baseline",
-              marginBottom: 8,
-            }}
-          >
-            <span style={{ fontSize: 13, color: "var(--ink-3)" }}>Unlock progress</span>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 8 }}>
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 13, fontWeight: 500, color: "var(--ink)" }}>
+              <Icon name="lock" size={14} style={{ color: "var(--ink-3)" }} />
+              Holder feature
+            </span>
             <span className="tnum" style={{ fontSize: 12.5, color: "var(--ink-2)" }}>
               {held.toLocaleString("en-US")} / {HOLDER_WHOLE.toLocaleString("en-US")} $MONVERA
             </span>
@@ -191,23 +187,89 @@ function LockState({
               }}
             />
           </div>
+          <button
+            className="btn btn-primary btn-block btn-lg tap"
+            style={{ marginTop: 16 }}
+            onClick={() => {
+              haptic.medium();
+              go("token");
+            }}
+          >
+            Get $MONVERA
+          </button>
+          <p style={{ margin: "10px 0 0", textAlign: "center", fontSize: 11.5, lineHeight: 1.5, color: "var(--ink-3)" }}>
+            Hold 100,000 $MONVERA (~$100) to unlock. The rest of Monvera stays free.
+          </p>
         </div>
-
-        <button
-          className="btn btn-primary btn-block btn-lg tap"
-          style={{ marginTop: 22 }}
-          onClick={() => {
-            haptic.medium();
-            go("token");
-          }}
-        >
-          Get $MONVERA
-        </button>
       </div>
-      <p style={{ margin: "16px 22px 0", textAlign: "center", fontSize: 12, lineHeight: 1.55, color: "var(--ink-3)" }}>
-        Hold 100,000 $MONVERA to unlock Scan to Buy.
-      </p>
     </div>
+  );
+}
+
+// One "what is it" row: icon chip + title + one honest line.
+function LockStep({ icon, title, note }: { icon: IconName; title: string; note: string }) {
+  return (
+    <div style={{ display: "flex", gap: 13, alignItems: "flex-start", padding: "10px 2px" }}>
+      <span
+        style={{
+          width: 38,
+          height: 38,
+          borderRadius: 12,
+          flex: "none",
+          display: "grid",
+          placeItems: "center",
+          background: "var(--primary-soft)",
+          color: "var(--primary)",
+        }}
+      >
+        <Icon name={icon} size={19} />
+      </span>
+      <div style={{ minWidth: 0 }}>
+        <div style={{ fontSize: 14.5, fontWeight: 600, letterSpacing: "-.01em", color: "var(--ink)" }}>{title}</div>
+        <div style={{ fontSize: 12.5, lineHeight: 1.5, color: "var(--ink-2)", marginTop: 2 }}>{note}</div>
+      </div>
+    </div>
+  );
+}
+
+// Hero art: the viewfinder + product from the Home banner, scaled up, with real
+// stock logos orbiting it (the photo resolves into companies).
+function LockHeroArt() {
+  const orbit = (symbol: string, style: React.CSSProperties) => (
+    <span
+      style={{
+        position: "absolute",
+        borderRadius: "50%",
+        boxShadow: "0 0 0 2.5px var(--surface), var(--shadow)",
+        lineHeight: 0,
+        ...style,
+      }}
+    >
+      <TokenLogo symbol={symbol} size={26} />
+    </span>
+  );
+  return (
+    <span aria-hidden style={{ position: "relative", display: "inline-block", width: 148, height: 116 }}>
+      {orbit("KO", { top: 0, left: 4 })}
+      {orbit("AAPL", { top: 44, right: -8 })}
+      {orbit("NVDA", { bottom: 0, left: 22 })}
+      {orbit("TSLA", { top: 6, right: 22 })}
+      <svg width="148" height="116" viewBox="0 0 96 76" fill="none" style={{ display: "block" }}>
+        <circle cx="52" cy="38" r="32" fill="var(--primary)" opacity=".10" />
+        <circle cx="52" cy="38" r="22" fill="var(--primary)" opacity=".08" />
+        <g stroke="var(--primary)" strokeWidth="3" strokeLinecap="round" fill="none">
+          <path d="M30 16 h-8 a5 5 0 0 0 -5 5 v8" />
+          <path d="M74 16 h8 a5 5 0 0 1 5 5 v8" />
+          <path d="M30 60 h-8 a5 5 0 0 1 -5 -5 v-8" />
+          <path d="M74 60 h8 a5 5 0 0 0 5 -5 v-8" />
+        </g>
+        <rect x="40" y="24" width="24" height="30" rx="6" fill="var(--primary)" opacity=".9" />
+        <rect x="40" y="30" width="24" height="4.5" rx="2" fill="#fff" opacity=".5" />
+        <path d="M45 48 l5.5 -5.5 l4 3 l6.5 -7" stroke="#fff" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+        <line x1="26" y1="38" x2="78" y2="38" stroke="var(--primary)" strokeWidth="1.6" opacity=".45" strokeDasharray="3 4" />
+        <path d="M76 8 l1.8 4.4 4.4 1.8 -4.4 1.8 -1.8 4.4 -1.8 -4.4 -4.4 -1.8 4.4 -1.8 z" fill="var(--primary)" opacity=".85" />
+      </svg>
+    </span>
   );
 }
 
