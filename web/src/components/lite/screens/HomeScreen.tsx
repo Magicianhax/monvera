@@ -232,33 +232,6 @@ export function HomeScreen({
           </div>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          {tok && (
-            <button
-              onClick={() => go("token")}
-              className="tap tnum"
-              aria-label="$MONVERA price"
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 4,
-                height: 26,
-                padding: "0 9px",
-                borderRadius: 999,
-                background: "var(--surface-2)",
-                fontSize: 10.5,
-                fontWeight: 600,
-                lineHeight: 1,
-                whiteSpace: "nowrap",
-                color: "var(--ink)",
-              }}
-            >
-              <span>$MONVERA</span>
-              <span style={{ color: tok.change24h >= 0 ? "var(--pos)" : "var(--neg)" }}>
-                {tok.change24h >= 0 ? "▲" : "▼"}
-                {Math.abs(tok.change24h).toFixed(1)}%
-              </span>
-            </button>
-          )}
           <button onClick={() => go("wallet")} style={iconBtn} className="tap" aria-label="Wallet">
             <Icon name="wallet" size={21} />
           </button>
@@ -278,8 +251,38 @@ export function HomeScreen({
         </div>
       </div>
 
-      {/* 2 · balance block — centered focal hero, flat */}
-      <div className="anim-rise" style={{ padding: "18px 22px 16px", textAlign: "center" }}>
+      {/* 2 · balance block — centered focal hero, flat. The $MONVERA ticker pill
+          sits right above the total, quiet until tapped (opens the token screen). */}
+      <div className="anim-rise" style={{ padding: "12px 22px 16px", textAlign: "center" }}>
+        {tok && (
+          <div style={{ display: "flex", justifyContent: "center", marginBottom: 10 }}>
+            <button
+              onClick={() => go("token")}
+              className="tap tnum"
+              aria-label="$MONVERA price"
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 4,
+                height: 26,
+                padding: "0 10px",
+                borderRadius: 999,
+                background: "var(--surface-2)",
+                fontSize: 10.5,
+                fontWeight: 600,
+                lineHeight: 1,
+                whiteSpace: "nowrap",
+                color: "var(--ink)",
+              }}
+            >
+              <span>$MONVERA</span>
+              <span style={{ color: tok.change24h >= 0 ? "var(--pos)" : "var(--neg)" }}>
+                {tok.change24h >= 0 ? "▲" : "▼"}
+                {Math.abs(tok.change24h).toFixed(1)}%
+              </span>
+            </button>
+          </div>
+        )}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
           <div className="label-eyebrow">Total balance</div>
           <button

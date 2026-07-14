@@ -14,6 +14,7 @@ import { formatUnits, parseUnits } from "viem";
 import { useMonveraPrice, useMonveraGate } from "@/hooks/useMonveraToken";
 import { useMonveraSwap } from "@/hooks/useMonveraSwap";
 import { useSmartAccount } from "@/hooks/useSmartAccount";
+import { useUsdcBalance } from "@/hooks/useBalances";
 import { TOKEN_TABS } from "@/lib/tokenContent";
 import { MONVERA, MONVERA_LINKS, HOLDER_THRESHOLD } from "@/lib/monveraToken";
 import { EXPLORER_URL } from "@/lib/chain";
@@ -61,6 +62,7 @@ export function TokenScreen({
   const { address } = useSmartAccount();
   const { data: tok } = useMonveraPrice();
   const gate = useMonveraGate(address ?? undefined);
+  const { data: cash } = useUsdcBalance(address ?? undefined);
   const swap = useMonveraSwap();
   const { quoteOut, buy, sell, reset, phase, error, result, busy } = swap;
 
@@ -156,6 +158,7 @@ export function TokenScreen({
       {/* buy / sell */}
       <SwapPanel
         swap={{ quoteOut, buy, sell, reset, phase, error, result, busy }}
+        usdgBalance={cash?.value ?? 0}
         balance={gate.balance}
       />
 
@@ -484,7 +487,16 @@ type SwapApi = Pick<
 // Buy (dollars in) / Sell (MONVERA in) with a debounced live preview. Buys are
 // fully gasless; the first sell shows a brief "Preparing your wallet…" while the
 // one-time approve is bootstrapped by the gas drip (see useMonveraSwap).
-function SwapPanel({ swap, balance }: { swap: SwapApi; balance: bigint }) {
+function SwapPanel({
+  swap,
+  balance,
+  usdgBalance,
+}: {
+  swap: SwapApi;
+  balance: bigint;
+  /** Spendable USDG in the wallet (dollars) — sizes the buy chips. */
+  usdgBalance: number;
+}) {
   const { quoteOut, buy, sell, reset, phase, error, result, busy } = swap;
   const [side, setSide] = useState<"buy" | "sell">("buy");
 
@@ -704,7 +716,43 @@ function SwapPanel({ swap, balance }: { swap: SwapApi; balance: bigint }) {
               }}
             />
           </div>
-          <div style={{ textAlign: "center", marginTop: 6, fontSize: 13.5, color: "var(--ink-2)", minHeight: 18 }}>
+          <div style={{ textAlign: "center", marginTop: 8, fontSize: 12.5, color: "var(--ink-3)" }}>
+            <span className="tnum">
+              {usdgBalance.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDG
+              available
+            </span>
+          </div>
+          {/* quick-size chips — fractions of the spendable USDG balance */}
+          <div style={{ display: "flex", justifyContent: "center", gap: 8, marginTop: 10 }}>
+            {([25, 50, 75] as const).map((pct) => (
+              <button
+                key={pct}
+                className="chip tap"
+                onClick={() => {
+                  haptic.select();
+                  setBuyAmt(((usdgBalance * pct) / 100).toFixed(2));
+                  if (error) reset();
+                }}
+                style={{ height: 28, fontSize: 12, fontWeight: 600 }}
+                disabled={usdgBalance <= 0}
+              >
+                {pct}%
+              </button>
+            ))}
+            <button
+              className="chip tap"
+              onClick={() => {
+                haptic.select();
+                setBuyAmt(usdgBalance.toFixed(2));
+                if (error) reset();
+              }}
+              style={{ height: 28, fontSize: 12, fontWeight: 600 }}
+              disabled={usdgBalance <= 0}
+            >
+              Max
+            </button>
+          </div>
+          <div style={{ textAlign: "center", marginTop: 8, fontSize: 13.5, color: "var(--ink-2)", minHeight: 18 }}>
             {previewing && !buyOut
               ? "Getting a price…"
               : buyOut
