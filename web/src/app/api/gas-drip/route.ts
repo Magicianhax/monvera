@@ -31,6 +31,7 @@ const client = createPublicClient({ chain, transport: http(SERVER_RPC_URL) });
 interface KvNamespace {
   get(key: string): Promise<string | null>;
   put(key: string, value: string, opts?: { expirationTtl?: number }): Promise<void>;
+  delete(key: string): Promise<void>;
 }
 function kv(): KvNamespace | null {
   try {
@@ -61,6 +62,17 @@ async function setFlag(key: string): Promise<void> {
       await store.put(key, "1");
     } catch {
       /* memory still holds it */
+    }
+  }
+}
+async function clearFlag(key: string): Promise<void> {
+  memoryFlags.delete(key);
+  const store = kv();
+  if (store) {
+    try {
+      await store.delete(key);
+    } catch {
+      /* best effort */
     }
   }
 }
@@ -130,13 +142,20 @@ export async function POST(req: NextRequest) {
     })) as bigint;
     if (monvera <= BigInt(0)) return jsonError(403, "No $MONVERA to sell.");
 
-    // Send the dust, wait for it, then flag so this can never run twice.
-    const account = privateKeyToAccount(dripKey as `0x${string}`);
-    const wallet = createWalletClient({ account, chain, transport: http(SERVER_RPC_URL) });
-    const txHash = await wallet.sendTransaction({ to: address, value: DRIP_AMOUNT });
-    await client.waitForTransactionReceipt({ hash: txHash });
+    // Claim the flag BEFORE sending — two concurrent requests would otherwise
+    // both pass the (b) check and both drip. Roll it back only if the send
+    // itself fails, so a genuine failure can be retried.
     await setFlag(flagKey);
-    return Response.json({ dripped: true, txHash });
+    try {
+      const account = privateKeyToAccount(dripKey as `0x${string}`);
+      const wallet = createWalletClient({ account, chain, transport: http(SERVER_RPC_URL) });
+      const txHash = await wallet.sendTransaction({ to: address, value: DRIP_AMOUNT });
+      await client.waitForTransactionReceipt({ hash: txHash });
+      return Response.json({ dripped: true, txHash });
+    } catch (sendErr) {
+      await clearFlag(flagKey); // let the user retry a failed drip
+      throw sendErr;
+    }
   } catch (err) {
     return serverError("gas-drip", err);
   }

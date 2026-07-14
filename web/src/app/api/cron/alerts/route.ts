@@ -2,6 +2,7 @@
 // hits into notifications. Fired by the Cloudflare Cron Trigger (worker.ts).
 // Auth: same bearer-secret scheme as the autopilot cron.
 import type { NextRequest } from "next/server";
+import { timingSafeEqual } from "node:crypto";
 import { createPublicClient, http } from "viem";
 import { activeAlerts, claimTriggered, addNotification } from "@/lib/server/notifyStore";
 import { priceAllWithFallback } from "@/lib/server/pricing";
@@ -14,11 +15,15 @@ import { usd } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
+// Constant-time compare — the secret is shared with /api/cron/autopilot (which
+// moves money), so a timing oracle here would leak the key for that route too.
 function authed(req: NextRequest): boolean {
   const secret = process.env.AUTOPILOT_CRON_SECRET || process.env.CRON_SECRET;
   if (!secret) return false;
   const bearer = req.headers.get("authorization")?.replace(/^Bearer\s+/i, "") ?? "";
-  return bearer === secret;
+  const a = Buffer.from(bearer);
+  const b = Buffer.from(secret);
+  return a.length === b.length && timingSafeEqual(a, b);
 }
 
 export async function GET(req: NextRequest) {
