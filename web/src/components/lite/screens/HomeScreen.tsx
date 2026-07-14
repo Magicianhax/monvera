@@ -255,7 +255,7 @@ export function HomeScreen({
           sits right above the total, quiet until tapped (opens the token screen). */}
       <div className="anim-rise" style={{ padding: "12px 22px 16px", textAlign: "center" }}>
         {tok && (
-          <div style={{ display: "flex", justifyContent: "center", marginBottom: 10 }}>
+          <div style={{ display: "flex", justifyContent: "center", marginBottom: 6 }}>
             <button
               onClick={() => go("token")}
               className="tap tnum"
