@@ -27,6 +27,7 @@ import { usd, tokenQty, fmtAmt } from "@/lib/format";
 import { toWalletEvents, eventLabel } from "@/lib/walletActivity";
 import { ActivityGlyph } from "@/components/lite/ActivityGlyph";
 import { useNotifications } from "@/hooks/useNotifications";
+import { useMonveraPrice } from "@/hooks/useMonveraToken";
 import { iconBtn, boxHead, innerBox } from "./primitives";
 
 const DOTS = "••••••";
@@ -187,6 +188,7 @@ export function HomeScreen({
   go: (screen: string, params?: Record<string, unknown>) => void;
 }) {
   const unread = useNotifications().data?.unread ?? 0;
+  const { data: tok } = useMonveraPrice();
   const { address } = useSmartAccount();
   // Cash, invested, and total all arrive pre-computed from /api/portfolio —
   // this screen renders them verbatim (no client-side money math).
@@ -230,6 +232,30 @@ export function HomeScreen({
           </div>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          {tok && (
+            <button
+              onClick={() => go("token")}
+              className="tap"
+              aria-label="$MONVERA price"
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 5,
+                padding: "6px 10px",
+                borderRadius: 999,
+                background: "var(--surface-2)",
+                fontSize: 12.5,
+                fontWeight: 600,
+                letterSpacing: "-.01em",
+                color: "var(--ink)",
+              }}
+            >
+              <span>$MONVERA</span>
+              <span style={{ color: tok.change24h >= 0 ? "var(--pos)" : "var(--neg)" }}>
+                {tok.change24h >= 0 ? "▲" : "▼"} {Math.abs(tok.change24h).toFixed(1)}%
+              </span>
+            </button>
+          )}
           <button onClick={() => go("wallet")} style={iconBtn} className="tap" aria-label="Wallet">
             <Icon name="wallet" size={21} />
           </button>

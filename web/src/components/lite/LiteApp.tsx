@@ -54,6 +54,7 @@ import { AutopilotScreen } from "./screens/AutopilotScreen";
 import { SellScreen } from "./screens/SellScreen";
 import { SellingScreen } from "./screens/SellingScreen";
 import { SoldScreen } from "./screens/SoldScreen";
+import { TokenScreen } from "./screens/TokenScreen";
 import { useSellAll, type SellSelection } from "@/hooks/useSellAll";
 
 gsap.registerPlugin(useGSAP);
@@ -85,7 +86,8 @@ type Screen =
   | "vera"
   | "settings"
   | "activity"
-  | "help";
+  | "help"
+  | "token";
 
 type Tone = "balanced" | "safer" | "bolder" | "simple";
 type Params = Record<string, unknown>;
@@ -385,6 +387,7 @@ export function LiteApp({ demoPlay = null }: { demoPlay?: "invest" | "vera" | nu
       settings: "Settings",
       activity: "Activity",
       help: "Help",
+      token: "$MONVERA",
     };
     document.title = `${NAMES[screen] ?? "Monvera"} · Monvera`;
   }, [screen]);
@@ -638,6 +641,9 @@ export function LiteApp({ demoPlay = null }: { demoPlay?: "invest" | "vera" | nu
       break;
     case "help":
       view = <HelpScreen go={go} />;
+      break;
+    case "token":
+      view = <TokenScreen go={go} />;
       break;
     case "home":
     default:
