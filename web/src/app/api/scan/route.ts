@@ -54,7 +54,9 @@ RULES:
 - "about": 1-2 plain, honest sentences about what this product IS and who makes it (e.g. "Lay's is the world's biggest potato-chip brand, made by PepsiCo's Frito-Lay division."). No hype.
 - "makerName": the company that actually makes the product (the brand owner / parent), whether or not it is listed. null only if you genuinely can't tell.
 - Map to a company only through a real, explainable relationship, using one of these connection types: maker (the company makes this product), parent (owns the maker), supplier (supplies parts/materials), component (its chips/parts are inside), retailer (sells the product), competitor (a direct rival in the same market).
-- Return 2 to 6 connections. Do NOT force-fit: only include a company when the relationship is genuine and you can explain it in one honest sentence.
+- STRICT HIERARCHY: maker/parent first, then genuine suppliers/components with parts IN THIS SPECIFIC PRODUCT. Retailers only when they are a meaningful channel for it. "competitor" is a LAST RESORT: include competitors ONLY when neither the maker/parent nor any real supplier/component/retailer is listed. If the maker or parent IS among the listed companies, NEVER include competitors.
+- Prefer FEWER, STRONGER connections: 2-4 is ideal, 6 is the hard cap. Never add a company just to fill the list — a 2-company answer beats a padded 5.
+- When the maker/parent is listed, it carries the majority of the weight (60 or more).
 - If the brand's own company is NOT among the listed companies and there is no honest supplier/component/competitor link either, return "connections": [] but STILL fill "recognized".
 - Weights are positive integers that sum to exactly 100, reflecting how central each company is to this product.
 - "reasoning" is ONE plain, honest sentence per connection. No hype.
@@ -300,9 +302,15 @@ function parseConnections(raw: unknown): Connection[] {
     })
     .filter((c): c is Connection => c !== null);
 
+  // Enforce the hierarchy server-side too: when the maker/parent made the list,
+  // "competitor" padding is dropped no matter what the model returned — a plan
+  // that owns the actual maker never hedges into rivals.
+  const hasCore = cleaned.some((c) => c.connectionType === "maker" || c.connectionType === "parent");
+  const kept = hasCore ? cleaned.filter((c) => c.connectionType !== "competitor") : cleaned;
+
   // Dedupe by symbol (keep the higher weight), then cap at the 6 heaviest.
   const bySymbol = new Map<string, Connection>();
-  for (const c of cleaned) {
+  for (const c of kept) {
     const prev = bySymbol.get(c.symbol);
     if (!prev || c.weight > prev.weight) bySymbol.set(c.symbol, c);
   }
