@@ -41,16 +41,19 @@ const PERMIT_ABI = [
 
 /**
  * Build a gasless EIP-2612 `permit` call for `token`, authorizing `spender`
- * (Permit2) to pull an unlimited amount. The owner signs off-chain via
- * `signTypedData`; the returned Call is submitted by the gas-sponsored relayer.
- * The domain name is read from the token's own name() (version "1"), so this
- * works for USDG (buys) and any Robinhood stock token (sells) alike.
+ * (Permit2) to pull `value` (unlimited by default). The owner signs off-chain
+ * via `signTypedData`; the returned Call is submitted by the gas-sponsored
+ * relayer. The domain name is read from the token's own name() (version "1"),
+ * so this works for USDG (buys) and any Robinhood stock token (sells) alike.
+ * Pass an exact `value` when each spend should require a fresh signature
+ * (e.g. the $MONVERA buy flow prompts the user per purchase).
  */
 export async function buildPermitCall(
   signTypedData: (typedDataJson: string) => Promise<Hex>,
   owner: Address,
   spender: Address,
   token: Address,
+  value: bigint = MAX_UINT256,
 ): Promise<Call> {
   const [nonce, name] = await Promise.all([
     client.readContract({ address: token, abi: NONCES_ABI, functionName: "nonces", args: [owner] }) as Promise<bigint>,
@@ -76,7 +79,7 @@ export async function buildPermitCall(
       ],
     },
     primaryType: "Permit",
-    message: { owner, spender, value: MAX_UINT256.toString(), nonce: nonce.toString(), deadline: deadline.toString() },
+    message: { owner, spender, value: value.toString(), nonce: nonce.toString(), deadline: deadline.toString() },
   });
 
   const sig = await signTypedData(typedData);
@@ -86,7 +89,7 @@ export async function buildPermitCall(
 
   return {
     to: token,
-    data: encodeFunctionData({ abi: PERMIT_ABI, functionName: "permit", args: [owner, spender, MAX_UINT256, deadline, v, r, s] }),
+    data: encodeFunctionData({ abi: PERMIT_ABI, functionName: "permit", args: [owner, spender, value, deadline, v, r, s] }),
   };
 }
 

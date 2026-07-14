@@ -5,18 +5,21 @@
 // the Arcus RWA flows — no 7702, no delegation).
 //
 // BUY (fully gasless, same pattern as every stock buy): one sponsored UserOp —
-//   [ USDG.permit(EOA->SA, if allowance short), USDG.transferFrom(EOA->SA),
+//   [ USDG.permit(EOA->SA, EXACT amount — user signs it in Privy's wallet UI,
+//     so every purchase is explicitly approved), USDG.transferFrom(EOA->SA),
 //     USDG.approve(quote.approvalAddress), quote.tx (toAddress = EOA) ]
 // SELL (gasless-feeling): MONVERA has no EIP-2612, so the FIRST sell bootstraps
-// a one-time EOA approve(smartAccount, max) paid by /api/gas-drip dust; every
-// sell then relays [ transferFrom(EOA->SA), approve(spender), quote.tx ] as one
-// sponsored UserOp. Routing = /api/token-quote (LiFi best-rate, v2 fallback).
+// a one-time EOA approve(smartAccount, max) paid by /api/gas-drip dust — shown
+// in Privy's confirm UI, never silent; every sell then relays
+// [ transferFrom(EOA->SA), approve(spender), quote.tx ] as one sponsored
+// UserOp. Routing = /api/token-quote (LiFi best-rate, v2 fallback).
 import { useCallback, useState } from "react";
 import { encodeFunctionData, maxUint256 } from "viem";
+import { useSignTypedData, useSendTransaction } from "@privy-io/react-auth";
 import { useActiveWallet } from "@/hooks/useActiveWallet";
 import { getSmartAccountClient, sendSponsoredCalls, type Call } from "@/lib/aa";
 import { buildPermitCall } from "@/lib/permit";
-import { typedDataSigner, type Eip1193 } from "@/lib/arcusTrade";
+import { type Eip1193 } from "@/lib/arcusTrade";
 import { asViemProvider } from "@/lib/provider";
 import { publicClient } from "@/lib/wagmi";
 import { useRefreshBalances } from "@/hooks/useBalances";
@@ -58,6 +61,8 @@ async function fetchQuote(
 
 export function useMonveraSwap() {
   const activeWallet = useActiveWallet();
+  const { signTypedData } = useSignTypedData();
+  const { sendTransaction } = useSendTransaction();
   const refreshBalances = useRefreshBalances();
   const [phase, setPhase] = useState<Phase>("idle");
   const [error, setError] = useState<string | null>(null);
@@ -99,20 +104,17 @@ export function useMonveraSwap() {
         const provider = asViemProvider(rawProvider);
         const { owner: smartAccount } = await getSmartAccountClient(provider);
 
-        const allowance = (await publicClient.readContract({
-          address: USDG.address as `0x${string}`,
-          abi: ERC20_MINI_ABI,
-          functionName: "allowance",
-          args: [eoa, smartAccount],
-        })) as bigint;
-        // Gasless EIP-2612: the EOA authorizes the smart account to pull USDG.
-        const permitCall =
-          allowance < amountIn
-            ? await buildPermitCall(typedDataSigner(rawProvider, eoa), eoa, smartAccount, USDG.address as `0x${string}`)
-            : null;
+        // EXACT-amount EIP-2612 permit, signed through Privy's wallet UI: the
+        // user sees and approves precisely this purchase's USDG — no silent,
+        // no unlimited allowance. Every buy prompts.
+        const promptSigner = (json: string) =>
+          signTypedData(JSON.parse(json), { uiOptions: { showWalletUIs: true }, address: eoa }).then(
+            (r) => r.signature as `0x${string}`,
+          );
+        const permitCall = await buildPermitCall(promptSigner, eoa, smartAccount, USDG.address as `0x${string}`, amountIn);
 
         const buildCalls = (q: TokenQuote): Call[] => [
-          ...(permitCall ? [permitCall] : []),
+          permitCall,
           {
             to: USDG.address as `0x${string}`,
             data: encodeFunctionData({ abi: ERC20_MINI_ABI, functionName: "transferFrom", args: [eoa, smartAccount, amountIn] }),
@@ -183,15 +185,16 @@ export function useMonveraSwap() {
             const j = await drip.json().catch(() => null);
             throw new Error(typeof j?.error === "string" ? j.error : "Couldn't prepare your wallet to sell. Try again.");
           }
-          const approveHash = (await rawProvider.request({
-            method: "eth_sendTransaction",
-            params: [{
-              from: eoa,
+          // The approve is shown in Privy's confirm UI (never silent) — the one
+          // on-chain tx the EOA ever pays itself, funded by the drip above.
+          const approveTx = await sendTransaction(
+            {
               to: MONVERA.address,
               data: encodeFunctionData({ abi: ERC20_MINI_ABI, functionName: "approve", args: [smartAccount, maxUint256] }),
-            }],
-          })) as `0x${string}`;
-          await publicClient.waitForTransactionReceipt({ hash: approveHash });
+            },
+            { uiOptions: { showWalletUIs: true }, address: eoa },
+          );
+          await publicClient.waitForTransactionReceipt({ hash: approveTx.hash as `0x${string}` });
         }
 
         const buildCalls = (quote: TokenQuote): Call[] => [

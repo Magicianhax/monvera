@@ -145,8 +145,15 @@ export function TokenScreen({
         />
       </div>
 
+      {/* buy / sell — trading first; stats + the holder gate sit below it */}
+      <SwapPanel
+        swap={{ quoteOut, buy, sell, reset, phase, error, result, busy }}
+        usdgBalance={cash?.value ?? 0}
+        balance={gate.balance}
+      />
+
       {/* stats — market cap · liquidity · 24h volume */}
-      <div style={{ display: "flex", gap: 10, padding: "16px 22px 0" }}>
+      <div style={{ display: "flex", gap: 10, padding: "22px 22px 0" }}>
         <StatCell label="Market cap" value={fmtCompactUsd(tok?.marketCap)} />
         <StatCell label="Liquidity" value={fmtCompactUsd(tok?.liquidityUsd)} />
         <StatCell label="24h volume" value={fmtCompactUsd(tok?.volume24h)} />
@@ -154,13 +161,6 @@ export function TokenScreen({
 
       {/* holder gate — progress toward Scan to Buy (+ the wallet's holding in USDG) */}
       <HolderCard gate={gate} priceUsd={tok?.priceUsd} />
-
-      {/* buy / sell */}
-      <SwapPanel
-        swap={{ quoteOut, buy, sell, reset, phase, error, result, busy }}
-        usdgBalance={cash?.value ?? 0}
-        balance={gate.balance}
-      />
 
       {/* links */}
       <div style={{ display: "flex", gap: 10, padding: "22px 22px 0" }}>
