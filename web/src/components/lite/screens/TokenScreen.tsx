@@ -19,6 +19,7 @@ import { TOKEN_TABS } from "@/lib/tokenContent";
 import { MONVERA, MONVERA_LINKS, HOLDER_THRESHOLD } from "@/lib/monveraToken";
 import { EXPLORER_URL } from "@/lib/chain";
 import { Icon, useToast } from "@/components/design";
+import { TokenLogo } from "../TokenLogo";
 import { haptic } from "@/lib/haptics";
 import { shortAddress } from "@/lib/format";
 import { iconBtn, Spinner } from "./primitives";
@@ -572,37 +573,101 @@ function SwapPanel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [side, sellKey, quoteOut]);
 
-  // Success state — replaces the panel until the user acknowledges.
+  // Success state — a proper swap receipt: what was paid, what arrived, with
+  // token logos and the on-chain proof link. Replaces the panel until closed.
   if (phase === "done" && result) {
     const sold = result.side === "sell";
+    const paid = sold
+      ? { symbol: "MONVERA", amount: `${fmtTokenAmount(result.amountIn)} MONVERA` }
+      : {
+          symbol: "USDG",
+          amount: `$${Number(formatUnits(result.amountIn, 6)).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDG`,
+        };
+    const received = sold
+      ? {
+          symbol: "USDG",
+          amount: `≈ $${Number(formatUnits(result.amountOut, 6)).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDG`,
+        }
+      : { symbol: "MONVERA", amount: `≈ ${fmtTokenAmount(result.amountOut)} MONVERA` };
+    const legRow = (label: string, leg: { symbol: string; amount: string }) => (
+      <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 14px" }}>
+        <TokenLogo symbol={leg.symbol} size={34} />
+        <div style={{ flex: 1, minWidth: 0, textAlign: "left" }}>
+          <div style={{ fontSize: 11.5, color: "var(--ink-3)" }}>{label}</div>
+          <div className="tnum" style={{ fontSize: 15.5, fontWeight: 600, color: "var(--ink)" }}>
+            {leg.amount}
+          </div>
+        </div>
+      </div>
+    );
     return (
-      <div style={{ padding: "18px 22px 0" }}>
+      <div className="anim-rise" style={{ padding: "18px 22px 0" }}>
         <div
           style={{
             background: "var(--surface)",
             borderRadius: "var(--rr)",
             boxShadow: "var(--shadow)",
-            padding: "18px 16px",
+            padding: "20px 16px 16px",
             textAlign: "center",
           }}
         >
           <span
             style={{
-              width: 44,
-              height: 44,
+              width: 48,
+              height: 48,
               borderRadius: "50%",
               display: "grid",
               placeItems: "center",
-              margin: "0 auto 12px",
+              margin: "0 auto 10px",
               background: "var(--primary-soft)",
               color: "var(--primary)",
             }}
           >
-            <Icon name="check" size={22} />
+            <Icon name="check" size={24} />
           </span>
-          <div style={{ fontSize: 16, fontWeight: 600, color: "var(--ink)" }}>
+          <div style={{ fontSize: 17, fontWeight: 600, color: "var(--ink)" }}>
             {sold ? "Sold $MONVERA" : "Bought $MONVERA"}
           </div>
+          <div style={{ fontSize: 12.5, color: "var(--ink-3)", marginTop: 3 }}>
+            Swapped on Robinhood Chain · gasless
+          </div>
+
+          {/* paid -> received, logos and all */}
+          <div
+            style={{
+              margin: "16px 0 0",
+              background: "var(--surface-2)",
+              borderRadius: 16,
+              overflow: "hidden",
+              position: "relative",
+            }}
+          >
+            {legRow("You paid", paid)}
+            <div style={{ height: 1, background: "var(--line-2)", margin: "0 14px" }} />
+            {legRow("You received", received)}
+            {/* the little swap-direction badge on the seam */}
+            <span
+              aria-hidden
+              style={{
+                position: "absolute",
+                top: "50%",
+                right: 16,
+                transform: "translateY(-50%)",
+                width: 26,
+                height: 26,
+                borderRadius: "50%",
+                display: "grid",
+                placeItems: "center",
+                background: "var(--surface)",
+                color: "var(--ink-3)",
+                boxShadow: "var(--shadow)",
+                fontSize: 13,
+              }}
+            >
+              ↓
+            </span>
+          </div>
+
           <a
             href={`${EXPLORER_URL}/tx/${result.txHash}`}
             target="_blank"
@@ -612,14 +677,14 @@ function SwapPanel({
               display: "inline-flex",
               alignItems: "center",
               gap: 6,
-              marginTop: 8,
+              marginTop: 14,
               fontSize: 13,
               fontWeight: 500,
               color: "var(--primary)",
               textDecoration: "none",
             }}
           >
-            View on Blockscout
+            View transaction on Blockscout
             <Icon name="arrowUR" size={13} />
           </a>
         </div>
@@ -635,7 +700,7 @@ function SwapPanel({
             setSellOut(null);
           }}
         >
-          Done
+          Close
         </button>
       </div>
     );

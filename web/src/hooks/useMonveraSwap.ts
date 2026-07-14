@@ -32,6 +32,10 @@ type Phase = "idle" | "quoting" | "preparing" | "swapping" | "done" | "error";
 export interface MonveraSwapResult {
   txHash: `0x${string}`;
   side: "buy" | "sell";
+  /** What was paid (raw: USDG 6dp on buy, MONVERA 18dp on sell). */
+  amountIn: bigint;
+  /** Expected received per the executed quote (raw; actual fill within slippage). */
+  amountOut: bigint;
   /** Guaranteed-minimum received (raw MONVERA on buy, raw USDG on sell). */
   minOut: bigint;
 }
@@ -128,10 +132,10 @@ export function useMonveraSwap() {
 
         const q = await fetchQuote("buy", amountIn, smartAccount, eoa);
         setPhase("swapping");
-        let receipt, minOut;
+        let receipt, executed;
         try {
           receipt = await sendSponsoredCalls(provider, buildCalls(q));
-          minOut = BigInt(q.toAmountMin);
+          executed = q;
         } catch (err) {
           // LiFi routes occasionally revert in simulation (executor quirks on
           // this young chain). The direct v2 router path is the designed
@@ -140,9 +144,15 @@ export function useMonveraSwap() {
           console.warn("[monvera-swap] LiFi buy route reverted, retrying via router:", err instanceof Error ? err.message : err);
           const rq = await fetchQuote("buy", amountIn, smartAccount, eoa, "router");
           receipt = await sendSponsoredCalls(provider, buildCalls(rq));
-          minOut = BigInt(rq.toAmountMin);
+          executed = rq;
         }
-        setResult({ txHash: receipt.receipt.transactionHash as `0x${string}`, side: "buy", minOut });
+        setResult({
+          txHash: receipt.receipt.transactionHash as `0x${string}`,
+          side: "buy",
+          amountIn,
+          amountOut: BigInt(executed.toAmount),
+          minOut: BigInt(executed.toAmountMin),
+        });
         setPhase("done");
         refreshBalances();
       } catch (e) {
@@ -210,10 +220,10 @@ export function useMonveraSwap() {
         ];
 
         setPhase("swapping");
-        let receipt, minOut;
+        let receipt, executed;
         try {
           receipt = await sendSponsoredCalls(provider, buildCalls(q));
-          minOut = BigInt(q.toAmountMin);
+          executed = q;
         } catch (err) {
           // Same LiFi-revert fallback as the buy path: re-quote via the direct
           // v2 router and retry once.
@@ -221,9 +231,15 @@ export function useMonveraSwap() {
           console.warn("[monvera-swap] LiFi sell route reverted, retrying via router:", err instanceof Error ? err.message : err);
           const rq = await fetchQuote("sell", amountRaw, smartAccount, eoa, "router");
           receipt = await sendSponsoredCalls(provider, buildCalls(rq));
-          minOut = BigInt(rq.toAmountMin);
+          executed = rq;
         }
-        setResult({ txHash: receipt.receipt.transactionHash as `0x${string}`, side: "sell", minOut });
+        setResult({
+          txHash: receipt.receipt.transactionHash as `0x${string}`,
+          side: "sell",
+          amountIn: amountRaw,
+          amountOut: BigInt(executed.toAmount),
+          minOut: BigInt(executed.toAmountMin),
+        });
         setPhase("done");
         refreshBalances();
       } catch (e) {

@@ -50,6 +50,9 @@ const DISPLAY: Record<string, AssetDisplay> = {
   // Cash — the spendable dollar (USDG, Global Dollar) on Robinhood Chain.
   USDG: { name: "US Dollar", ticker: "USDG", logo: asset("/icons/usdg.png"), color: "#2c9c6a", kind: "safe", cat: "Cash", desc: "USDG (Global Dollar) is a digital dollar that always aims to be worth $1. It's your spendable cash: add it, invest it, or send it.", price: 1, day: 0, spark: FLAT },
 
+  // The project token — logo is the app's own mark (served from public/, not R2).
+  MONVERA: { name: "Monvera", ticker: "MONVERA", logo: "/icon-192.png", color: "#1f6f4e", glyph: "M", kind: "safe", cat: "Token", desc: "$MONVERA is the project token behind Vera — the community's stake in the agent, not the product. Holding 100,000 unlocks Scan to Buy.", day: 0, spark: FLAT },
+
   // ── Tech ──────────────────────────────────────────────────────────────────
   AAPL: { name: "Apple", ticker: "AAPL", color: "#3b3f44", kind: "stock", cat: "Tech", desc: "Apple makes the iPhone, Mac, and iPad, and earns a steady, growing income from services like the App Store and iCloud. One of the most valuable companies in the world.", price: 230, day: 0.82, spark: UP },
   NVDA: { name: "Nvidia", ticker: "NVDA", color: "#4a7d2c", glyph: "N", kind: "stock", cat: "Tech", desc: "Nvidia designs the chips that train and run most of today's AI. The same hardware powers gaming and data centers, which made it central to the AI boom.", price: 176, day: 2.41, spark: UP },
@@ -137,7 +140,7 @@ function fallback(symbol: string, name?: string): AssetDisplay {
  *  brand mark for every stock/fund; the cash tile keeps its local dollar mark. */
 export function displayFor(symbol: string, name?: string): AssetDisplay {
   const base = DISPLAY[symbol] ?? fallback(symbol, name);
-  const logo = symbol === "USDG" ? base.logo : arcusLogo(symbol);
+  const logo = symbol === "USDG" || symbol === "MONVERA" ? base.logo : arcusLogo(symbol);
   // Assets the router won't quote can't be bought at any size, so the buy CTA
   // must be off from the start rather than failing at the review sheet.
   const coming = base.coming || UNSUPPORTED_SYMBOLS.has(symbol);
