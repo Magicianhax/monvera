@@ -457,7 +457,15 @@ function AnalyzingState({ preview, phase }: { preview: string | null; phase: "re
   const STEPS = ["Reading your photo", "Identifying the product", "Matching against 95 listed stocks"];
 
   return (
-    <div className="anim-rise" style={{ padding: "18px 22px 0", flex: 1 }}>
+    <div
+      className="anim-rise"
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        minHeight: "calc(100dvh - 150px)",
+        padding: "18px 22px 20px",
+      }}
+    >
       <style>{`
         @media (prefers-reduced-motion: no-preference) {
           @keyframes scanBeamPhoto { 0% { top: 6% } 50% { top: 90% } 100% { top: 6% } }
@@ -466,16 +474,18 @@ function AnalyzingState({ preview, phase }: { preview: string | null; phase: "re
         }
       `}</style>
 
-      {/* the photo, being scanned */}
+      {/* the photo, being scanned — grows to fill the screen */}
       {preview && (
-        <div style={{ position: "relative", borderRadius: 16, overflow: "hidden" }}>
+        <div style={{ position: "relative", borderRadius: 16, overflow: "hidden", flex: 1, minHeight: 300 }}>
           {/* eslint-disable-next-line @next/next/no-img-element -- local object URL, no loader */}
           <img
             src={preview}
             alt=""
             style={{
+              position: "absolute",
+              inset: 0,
               width: "100%",
-              height: 250,
+              height: "100%",
               objectFit: "cover",
               display: "block",
               opacity: 0.8,
@@ -511,12 +521,14 @@ function AnalyzingState({ preview, phase }: { preview: string | null; phase: "re
         </div>
       )}
 
-      {/* staged checklist — Vera's work, ticking off */}
-      <div style={{ marginTop: 18, display: "flex", flexDirection: "column", gap: 2 }}>
+      {/* staged checklist — Vera's work, ticking off. The block centers on the
+          screen; rows share a left edge inside it so the checks line up. */}
+      <div style={{ marginTop: 20, display: "flex", justifyContent: "center" }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
         {STEPS.map((label, i) => {
           const s = stepState(i);
           return (
-            <div key={label} style={{ display: "flex", alignItems: "center", gap: 12, padding: "8px 2px", opacity: s === "pending" ? 0.45 : 1, transition: "opacity .3s var(--ease-out)" }}>
+            <div key={label} style={{ display: "flex", alignItems: "center", gap: 12, padding: "7px 2px", opacity: s === "pending" ? 0.45 : 1, transition: "opacity .3s var(--ease-out)" }}>
               <span style={{ width: 26, height: 26, flex: "none", display: "grid", placeItems: "center" }}>
                 {s === "done" ? (
                   <span
@@ -545,10 +557,11 @@ function AnalyzingState({ preview, phase }: { preview: string | null; phase: "re
             </div>
           );
         })}
+        </div>
       </div>
 
-      {/* the universe ticker — what she's matching against, scrolling by */}
-      <div style={{ marginTop: 16, overflow: "hidden", maskImage: "linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent)", WebkitMaskImage: "linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent)" }}>
+      {/* the universe ticker — pinned to the bottom of the screen */}
+      <div style={{ marginTop: "auto", paddingTop: 18, overflow: "hidden", maskImage: "linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent)", WebkitMaskImage: "linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent)" }}>
         <div style={{ display: "flex", gap: 18, width: "max-content", animation: "scanTicker 16s linear infinite" }}>
           {[...MATCH_TICKER, ...MATCH_TICKER].map((s, i) => (
             <span key={`${s}-${i}`} style={{ display: "inline-flex", alignItems: "center", gap: 6, opacity: 0.75 }}>
