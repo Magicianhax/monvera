@@ -74,6 +74,8 @@ export interface UseInvest {
   progress: InvestProgress | null;
   busy: boolean;
   allocate: (goal: string, amountUsd: number, riskTolerance?: string) => Promise<AllocateResult | null>;
+  /** Adopt a ready-made allocation (Scan to Buy) without an allocate model call. */
+  adopt: (result: AllocateResult) => void;
   invest: (allocation: Allocation, amountUsd: number, address: string, mode?: InvestMode) => Promise<void>;
   reset: () => void;
   clearError: () => void;
@@ -162,6 +164,19 @@ export function useInvest(): UseInvest {
     },
     [demo],
   );
+
+  /**
+   * Adopt a ready-made allocation (e.g. Scan to Buy: the connections ARE the
+   * plan) — no model call. The invest step still fetches Vera's signed risk
+   * inference via /api/commit-plan and records it on-chain like any plan.
+   */
+  const adopt = useCallback((result: AllocateResult) => {
+    setError(null);
+    setSuccess(null);
+    setProgress(null);
+    setAllocation(result);
+    setPhase("idle");
+  }, []);
 
   const invest = useCallback(
     async (alloc: Allocation, amountUsd: number, _address: string, mode: InvestMode = "auto") => {
@@ -420,6 +435,7 @@ export function useInvest(): UseInvest {
     progress,
     busy: phase === "thinking" || phase === "planning" || phase === "approving" || phase === "investing",
     allocate,
+    adopt,
     invest,
     reset,
     clearError,

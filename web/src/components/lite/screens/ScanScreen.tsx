@@ -613,13 +613,28 @@ function ResultState({
     Boolean(recognized?.makerName) &&
     !connections.some((c) => c.connectionType === "maker" || c.connectionType === "parent");
 
+  // The scan result IS the plan: adopt it directly (no re-derivation by the
+  // allocate model) and hand off to confirm → placing → success. Vera still
+  // signs the risk inference at invest time (/api/commit-plan) so the plan is
+  // recorded on-chain like any other.
   const buildPlan = () => {
     haptic.medium();
-    const legs = connections.map((c) => `${c.symbol} (${c.connectionType}, ${c.weight}%)`).join(", ");
-    const goal =
-      `Invest in the real companies behind ${brand} ${product}: ${legs}` +
-      ` — keep to exactly these companies and weights.`;
-    go("thinking", { goal, amt: amount });
+    // Simple honest heuristic: single-stock baskets are risky; a couple more
+    // real connections diversifies a little. Clamped to the stock band.
+    const riskScore = Math.max(4000, Math.min(6500, 5800 - connections.length * 200));
+    const allocation = {
+      summary: `The companies behind ${brand} ${product}`.slice(0, 90),
+      rationale: `${recognized?.about ? `${recognized.about} ` : ""}Vera mapped your photo to these listed companies and sized each by how central it is to the product.`,
+      riskScore,
+      allocations: connections.map((c) => ({
+        symbol: c.symbol,
+        weightPct: c.weight,
+        reason: c.reasoning || `${c.connectionType} behind ${brand}`,
+      })),
+      amountUsd: amount,
+      model: "vera-scan-vision",
+    };
+    go("scanbuy", { allocation, amt: amount });
   };
 
   return (
@@ -760,7 +775,7 @@ function ResultState({
         disabled={!ready}
         onClick={buildPlan}
       >
-        Build this plan
+        Invest in these companies
       </button>
       <button className="btn btn-ghost btn-block tap" style={{ marginTop: 10 }} onClick={onRestart}>
         Scan something else

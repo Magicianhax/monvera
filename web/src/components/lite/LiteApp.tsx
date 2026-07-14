@@ -58,6 +58,7 @@ import { TokenScreen } from "./screens/TokenScreen";
 import { TokenSwapSuccessScreen } from "./screens/TokenSwapSuccessScreen";
 import { ScanScreen } from "./screens/ScanScreen";
 import type { MonveraSwapResult } from "@/hooks/useMonveraSwap";
+import type { AllocateResult } from "@/lib/invest-types";
 import { useSellAll, type SellSelection } from "@/hooks/useSellAll";
 
 gsap.registerPlugin(useGSAP);
@@ -190,6 +191,22 @@ export function LiteApp({ demoPlay = null }: { demoPlay?: "invest" | "vera" | nu
         return;
       }
       const next = target as Screen;
+
+      // Scan to Buy: the scanned connections ARE the plan — adopt them directly
+      // (no allocate model call) and drop into the normal confirm → placing →
+      // success pipeline, signed recommendation and all.
+      if (target === "scanbuy") {
+        const alloc = p.allocation as AllocateResult | undefined;
+        const a = Number(p.amt ?? 0);
+        if (!alloc || !(a > 0)) return;
+        invest.adopt(alloc);
+        setGoal(alloc.summary);
+        setAmount(a);
+        setTone("balanced");
+        setDir("push");
+        setStack((s) => [...s, { screen: "confirm", params: {} }]);
+        return;
+      }
 
       if (next === "thinking") {
         setDir("push");
