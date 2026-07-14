@@ -58,7 +58,7 @@ RULES:
 - Prefer FEWER, STRONGER connections: 2-4 is ideal, 6 is the hard cap. Never add a company just to fill the list — a 2-company answer beats a padded 5.
 - When the maker/parent is listed, it carries the majority of the weight (60 or more).
 - If the brand's own company is NOT among the listed companies and there is no honest supplier/component/competitor link either, return "connections": [] but STILL fill "recognized".
-- Weights are positive integers that sum to exactly 100, reflecting how central each company is to this product.
+- Weights are positive integers that sum to exactly 100, reflecting how central each company is to this product. No connection below 10 — fold trivial exposures into the bigger ones instead of listing slivers.
 - "reasoning" is ONE plain, honest sentence per connection. No hype.
 - Output ONLY the JSON object, no markdown code fences, no prose before or after.
 
@@ -317,8 +317,17 @@ function parseConnections(raw: unknown): Connection[] {
   const top = [...bySymbol.values()].sort((a, b) => b.weight - a.weight).slice(0, 6);
   if (top.length === 0) return [];
 
-  const normalized = renormalizeWeights(top.map((c) => c.weight));
-  return top.map((c, i) => ({ ...c, weight: normalized[i] }));
+  // Sliver guard: sub-8% legs force absurd plan minimums (every slice must
+  // clear the ~$11 venue floor, so a 6% leg demands a $184 plan). Drop the
+  // smallest until nothing is a sliver, then renormalize.
+  let picked = top;
+  let normalized = renormalizeWeights(picked.map((c) => c.weight));
+  while (picked.length > 1 && Math.min(...normalized) < 8) {
+    const dropIdx = normalized.indexOf(Math.min(...normalized));
+    picked = picked.filter((_, i) => i !== dropIdx);
+    normalized = renormalizeWeights(picked.map((c) => c.weight));
+  }
+  return picked.map((c, i) => ({ ...c, weight: normalized[i] }));
 }
 
 export async function POST(req: NextRequest) {

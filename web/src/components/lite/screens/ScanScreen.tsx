@@ -594,12 +594,21 @@ function ResultState({
   const { recognized, connections } = result;
   const brand = recognized?.brand ?? "it";
   const product = recognized?.product ?? "this product";
-  // Legs split by WEIGHT, and every slice must clear the ~$11 venue floor — so
-  // the minimum is set by the SMALLEST weight, not the leg count (55/45 at $22
-  // gives the small leg $9.90 and the invest refuses).
-  const minWeight = Math.min(...connections.map((c) => c.weight));
-  const min = Math.ceil((MIN_PER_LEG * 100) / Math.max(1, minWeight));
+  // The amount decides how many companies fit. Legs are strongest-first, and
+  // tier k (the top k legs, weights renormalized) is affordable when every
+  // slice clears the ~$11 venue floor: amount >= 11 * sum(topK) / min(topK).
+  // Small amounts buy the core connections; tail legs join as the amount grows.
+  const sorted = [...connections].sort((a, b) => b.weight - a.weight);
+  const tierNeeds = sorted.map((_, k) => {
+    const top = sorted.slice(0, k + 1);
+    const sum = top.reduce((s, c) => s + c.weight, 0);
+    return Math.ceil((MIN_PER_LEG * sum) / top[top.length - 1].weight);
+  });
+  const min = tierNeeds[0]; // just the strongest connection: ~$11
   const amount = parseFloat(amt) || 0;
+  const includedCount = amount > 0 ? Math.max(0, tierNeeds.filter((n) => n <= amount).length) : 0;
+  const included = sorted.slice(0, includedCount);
+  const allNeed = tierNeeds[tierNeeds.length - 1];
 
   // Live context for the suggestion cards + the amount panel: spendable cash,
   // spot prices, and 1D move/sparkline per symbol (same sources as Market rows).
@@ -624,17 +633,29 @@ function ResultState({
   // signs the risk inference at invest time (/api/commit-plan) so the plan is
   // recorded on-chain like any other.
   const buildPlan = () => {
+    if (included.length === 0) return;
     haptic.medium();
+    // Only the legs the amount can afford, weights renormalized to 100.
+    const sum = included.reduce((s, c) => s + c.weight, 0);
+    const ws = included.map((c) => Math.max(1, Math.floor((c.weight * 100) / sum)));
+    let drift = 100 - ws.reduce((a, b) => a + b, 0);
+    for (let i = 0; drift > 0; i = (i + 1) % ws.length, drift--) ws[i] += 1;
+    for (let i = 0; drift < 0; i = (i + 1) % ws.length) {
+      if (ws[i] > 1) {
+        ws[i] -= 1;
+        drift += 1;
+      }
+    }
     // Simple honest heuristic: single-stock baskets are risky; a couple more
     // real connections diversifies a little. Clamped to the stock band.
-    const riskScore = Math.max(4000, Math.min(6500, 5800 - connections.length * 200));
+    const riskScore = Math.max(4000, Math.min(6500, 5800 - included.length * 200));
     const allocation = {
       summary: `The companies behind ${brand} ${product}`.slice(0, 90),
       rationale: `${recognized?.about ? `${recognized.about} ` : ""}Vera mapped your photo to these listed companies and sized each by how central it is to the product.`,
       riskScore,
-      allocations: connections.map((c) => ({
+      allocations: included.map((c, i) => ({
         symbol: c.symbol,
-        weightPct: c.weight,
+        weightPct: ws[i],
         reason: c.reasoning || `${c.connectionType} behind ${brand}`,
       })),
       amountUsd: amount,
@@ -689,15 +710,19 @@ function ResultState({
         )}
       </div>
 
-      {/* connection cards — with the same live stats Market rows carry */}
+      {/* connection cards — strongest first, with the same live stats Market
+          rows carry. Legs the current amount can't afford dim with their
+          join-at price instead of blocking the whole plan. */}
       <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 14 }}>
-        {connections.map((c, i) => (
+        {sorted.map((c, i) => (
           <ConnectionCard
             key={c.symbol + i}
             c={c}
             index={i}
             priceUsd={prices?.prices[c.symbol]?.priceUsd ?? undefined}
             day={market?.summary?.[c.symbol]}
+            excluded={amount > 0 && i >= includedCount}
+            joinsAt={tierNeeds[i]}
           />
         ))}
       </div>
@@ -766,11 +791,19 @@ function ResultState({
         <div style={{ marginTop: 8, fontSize: 12.5, color: under || overCash ? "var(--neg)" : "var(--ink-3)" }}>
           {overCash
             ? `That's more than your ${cashUsd.toLocaleString("en-US", { maximumFractionDigits: 2 })} USDG — add cash or lower the amount.`
-            : `Min $${min} — so every company's slice clears the venue's ~$${MIN_PER_LEG} floor.`}
+            : under
+              ? `From $${min} — that starts with ${sorted[0].symbol}, the strongest connection.`
+              : includedCount > 0 && includedCount < sorted.length
+                ? `Covers the top ${includedCount} of ${sorted.length} companies at this amount — $${allNeed} includes all of them.`
+                : `From $${min} — every company's slice clears the venue's ~$${MIN_PER_LEG} floor.`}
         </div>
-        {ready && (
+        {ready && included.length > 0 && (
           <div className="tnum" style={{ marginTop: 8, fontSize: 12, lineHeight: 1.6, color: "var(--ink-3)" }}>
-            ≈ {connections.map((c) => `$${((amount * c.weight) / 100).toFixed(0)} ${c.symbol}`).join(" · ")}
+            ≈{" "}
+            {(() => {
+              const sum = included.reduce((s, c) => s + c.weight, 0);
+              return included.map((c) => `$${((amount * c.weight) / sum).toFixed(0)} ${c.symbol}`).join(" · ");
+            })()}
           </div>
         )}
       </div>
@@ -797,11 +830,17 @@ function ConnectionCard({
   index,
   priceUsd,
   day,
+  excluded,
+  joinsAt,
 }: {
   c: ScanConnection;
   index: number;
   priceUsd?: number;
   day?: { dayChangePct: number; spark: number[] };
+  /** True when the current amount can't afford this leg's ~$11 slice. */
+  excluded?: boolean;
+  /** The amount at which this leg (and everything above it) is included. */
+  joinsAt?: number;
 }) {
   const up = (day?.dayChangePct ?? 0) >= 0;
   return (
@@ -813,6 +852,8 @@ function ConnectionCard({
         borderRadius: "var(--rr)",
         boxShadow: "var(--shadow)",
         padding: "14px 16px",
+        opacity: excluded ? 0.5 : 1,
+        transition: "opacity .25s var(--ease-out)",
       }}
     >
       <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
@@ -848,9 +889,14 @@ function ConnectionCard({
             {c.name}
           </div>
         </div>
-        <span className="tnum" style={{ flex: "none", fontSize: 15, fontWeight: 600, color: "var(--ink)" }}>
-          {c.weight}%
-        </span>
+        <div style={{ flex: "none", textAlign: "right" }}>
+          <div className="tnum" style={{ fontSize: 15, fontWeight: 600, color: "var(--ink)" }}>{c.weight}%</div>
+          {excluded && joinsAt !== undefined && (
+            <div className="tnum" style={{ fontSize: 10.5, color: "var(--ink-3)", marginTop: 2 }}>
+              joins at ${joinsAt}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* live market line — real price, real 1D move, real sparkline */}
