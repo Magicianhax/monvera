@@ -273,87 +273,157 @@ function LockHeroArt() {
   );
 }
 
-// ── B. Input — capture or upload ─────────────────────────────────────────────
+// ── B. Input — the scanner. A live-feeling viewfinder stage (sweeping beam,
+// floating stock logos) that IS the camera button, a gallery fallback, and a
+// trust strip. Keyframes are scoped here (a <style> tag), not in globals.css.
 function InputState({ onPick }: { onPick: (e: React.ChangeEvent<HTMLInputElement>) => void }) {
   return (
-    <div className="anim-rise" style={{ padding: "26px 22px 0", flex: 1 }}>
-      <h1 className="display" style={{ margin: 0 }}>
-        Point at any
-        <br />
-        product
+    <div className="anim-rise" style={{ display: "flex", flexDirection: "column", flex: 1, padding: "14px 22px 0", minHeight: "calc(100dvh - 150px)" }}>
+      <style>{`
+        @media (prefers-reduced-motion: no-preference) {
+          @keyframes scanBeam { 0% { top: 14%; opacity: 0 } 12% { opacity: 1 } 88% { opacity: 1 } 100% { top: 84%; opacity: 0 } }
+          @keyframes scanBob  { 0%, 100% { transform: translateY(0) } 50% { transform: translateY(-7px) } }
+          @keyframes scanPulse { 0%, 100% { opacity: .55 } 50% { opacity: 1 } }
+        }
+      `}</style>
+
+      <h1 className="serif" style={{ margin: 0, fontSize: 30, letterSpacing: "-.01em", lineHeight: 1.12 }}>
+        Point at any product
       </h1>
-      <p className="body" style={{ marginTop: 12, maxWidth: 300 }}>
-        Vera finds the listed companies behind it — the maker, its parent, suppliers — and invests
-        in the real ones.
+      <p style={{ margin: "8px 0 0", maxWidth: 320, fontSize: 14, lineHeight: 1.6, color: "var(--ink-2)" }}>
+        Vera finds the listed companies behind it — maker, suppliers, retailers — and invests in the real ones.
       </p>
 
-      <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 28 }}>
-        <PickTarget icon="eye" title="Take a photo" sub="Use your camera" capture onPick={onPick} />
-        <PickTarget icon="grid" title="Upload from gallery" sub="Pick an existing photo" onPick={onPick} />
+      {/* the viewfinder stage — tapping it opens the camera */}
+      <label
+        className="tap"
+        aria-label="Take a photo"
+        style={{
+          position: "relative",
+          display: "block",
+          flex: 1,
+          minHeight: 300,
+          marginTop: 18,
+          borderRadius: 24,
+          overflow: "hidden",
+          cursor: "pointer",
+          background:
+            "radial-gradient(120% 90% at 50% 0%, color-mix(in srgb, var(--primary) 22%, var(--surface)) 0%, var(--surface) 58%, color-mix(in srgb, var(--primary) 8%, var(--surface)) 100%)",
+          boxShadow: "var(--shadow)",
+        }}
+      >
+        <input type="file" accept="image/*" capture="environment" onChange={onPick} hidden />
+
+        {/* viewfinder corners */}
+        <svg viewBox="0 0 100 100" preserveAspectRatio="none" style={{ position: "absolute", inset: 14, width: "calc(100% - 28px)", height: "calc(100% - 28px)" }} aria-hidden>
+          <g stroke="var(--primary)" strokeWidth="1.6" strokeLinecap="round" fill="none" vectorEffect="non-scaling-stroke">
+            <path d="M14 2 H6 Q2 2 2 6 V14" vectorEffect="non-scaling-stroke" />
+            <path d="M86 2 H94 Q98 2 98 6 V14" vectorEffect="non-scaling-stroke" />
+            <path d="M14 98 H6 Q2 98 2 94 V86" vectorEffect="non-scaling-stroke" />
+            <path d="M86 98 H94 Q98 98 98 94 V86" vectorEffect="non-scaling-stroke" />
+          </g>
+        </svg>
+
+        {/* sweeping scan beam */}
+        <span
+          aria-hidden
+          style={{
+            position: "absolute",
+            left: "10%",
+            right: "10%",
+            top: "14%",
+            height: 2,
+            borderRadius: 2,
+            background: "linear-gradient(90deg, transparent, var(--primary) 30%, var(--primary) 70%, transparent)",
+            boxShadow: "0 0 14px color-mix(in srgb, var(--primary) 70%, transparent)",
+            animation: "scanBeam 3.2s ease-in-out infinite",
+          }}
+        />
+
+        {/* floating stock logos — the photo resolves into companies */}
+        {[
+          { s: "KO", t: "22%", l: "16%", d: "0s" },
+          { s: "AAPL", t: "18%", l: "68%", d: ".7s" },
+          { s: "NVDA", t: "58%", l: "74%", d: "1.3s" },
+          { s: "TSLA", t: "62%", l: "14%", d: ".4s" },
+          { s: "MSFT", t: "38%", l: "44%", d: "1s" },
+        ].map(({ s, t, l, d }) => (
+          <span
+            key={s}
+            aria-hidden
+            style={{
+              position: "absolute",
+              top: t,
+              left: l,
+              borderRadius: "50%",
+              lineHeight: 0,
+              boxShadow: "0 0 0 2px color-mix(in srgb, var(--surface) 80%, transparent), 0 6px 18px rgba(0,0,0,.25)",
+              animation: `scanBob 3.6s ease-in-out ${d} infinite`,
+            }}
+          >
+            <TokenLogo symbol={s} size={30} />
+          </span>
+        ))}
+
+        {/* center prompt */}
+        <span
+          style={{
+            position: "absolute",
+            left: 0,
+            right: 0,
+            bottom: 20,
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            gap: 8,
+          }}
+        >
+          <span
+            style={{
+              width: 58,
+              height: 58,
+              borderRadius: "50%",
+              display: "grid",
+              placeItems: "center",
+              background: "var(--primary)",
+              color: "var(--primary-ink, #fff)",
+              boxShadow: "0 8px 24px color-mix(in srgb, var(--primary) 45%, transparent)",
+            }}
+          >
+            <Icon name="camera" size={27} weight="fill" />
+          </span>
+          <span style={{ fontSize: 13, fontWeight: 600, color: "var(--ink)", animation: "scanPulse 2.4s ease-in-out infinite" }}>
+            Tap to scan
+          </span>
+        </span>
+      </label>
+
+      {/* gallery fallback */}
+      <label className="btn btn-ghost btn-block tap" style={{ marginTop: 12, cursor: "pointer" }}>
+        Upload from gallery
+        <input type="file" accept="image/*" onChange={onPick} hidden />
+      </label>
+
+      {/* trust strip — why this can be believed */}
+      <div style={{ display: "flex", justifyContent: "center", gap: 18, margin: "14px 0 4px" }}>
+        {(
+          [
+            { icon: "signature", label: "Signed on-chain" },
+            { icon: "trend", label: "Live quotes" },
+            { icon: "shield", label: "Self-custody" },
+          ] as { icon: IconName; label: string }[]
+        ).map(({ icon, label }) => (
+          <span key={label} style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 11.5, fontWeight: 500, color: "var(--ink-3)" }}>
+            <Icon name={icon} size={14} style={{ color: "var(--primary)" }} />
+            {label}
+          </span>
+        ))}
       </div>
 
-      <p style={{ margin: "22px 2px 0", fontSize: 12.5, lineHeight: 1.55, color: "var(--ink-3)" }}>
+      <p style={{ margin: "6px 2px 0", textAlign: "center", fontSize: 12, lineHeight: 1.55, color: "var(--ink-3)" }}>
         If nothing listed is behind it, Vera says so — no force-fits.
       </p>
     </div>
-  );
-}
-
-// A big tappable label wrapping a hidden file input (camera or gallery).
-function PickTarget({
-  icon,
-  title,
-  sub,
-  capture,
-  onPick,
-}: {
-  icon: "eye" | "grid";
-  title: string;
-  sub: string;
-  capture?: boolean;
-  onPick: (e: React.ChangeEvent<HTMLInputElement>) => void;
-}) {
-  return (
-    <label
-      className="tap"
-      style={{
-        display: "flex",
-        alignItems: "center",
-        gap: 14,
-        padding: "18px 18px",
-        background: "var(--surface)",
-        borderRadius: "var(--rr)",
-        boxShadow: "var(--shadow)",
-        cursor: "pointer",
-      }}
-    >
-      <span
-        style={{
-          width: 44,
-          height: 44,
-          flex: "none",
-          borderRadius: 14,
-          display: "grid",
-          placeItems: "center",
-          background: "var(--primary-soft)",
-          color: "var(--primary)",
-        }}
-      >
-        <Icon name={icon} size={22} />
-      </span>
-      <span style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-        <span style={{ fontSize: 16, fontWeight: 600, color: "var(--ink)" }}>{title}</span>
-        <span style={{ fontSize: 13, color: "var(--ink-3)" }}>{sub}</span>
-      </span>
-      <Icon name="chevR" size={18} style={{ marginLeft: "auto", color: "var(--ink-3)" }} />
-      <input
-        type="file"
-        accept="image/*"
-        capture={capture ? "environment" : undefined}
-        onChange={onPick}
-        hidden
-      />
-    </label>
   );
 }
 
