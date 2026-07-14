@@ -594,7 +594,11 @@ function ResultState({
   const { recognized, connections } = result;
   const brand = recognized?.brand ?? "it";
   const product = recognized?.product ?? "this product";
-  const min = connections.length * MIN_PER_LEG;
+  // Legs split by WEIGHT, and every slice must clear the ~$11 venue floor — so
+  // the minimum is set by the SMALLEST weight, not the leg count (55/45 at $22
+  // gives the small leg $9.90 and the invest refuses).
+  const minWeight = Math.min(...connections.map((c) => c.weight));
+  const min = Math.ceil((MIN_PER_LEG * 100) / Math.max(1, minWeight));
   const amount = parseFloat(amt) || 0;
 
   // Live context for the suggestion cards + the amount panel: spendable cash,
@@ -762,7 +766,7 @@ function ResultState({
         <div style={{ marginTop: 8, fontSize: 12.5, color: under || overCash ? "var(--neg)" : "var(--ink-3)" }}>
           {overCash
             ? `That's more than your ${cashUsd.toLocaleString("en-US", { maximumFractionDigits: 2 })} USDG — add cash or lower the amount.`
-            : `Min $${min} — about $${MIN_PER_LEG} per company so every leg fills.`}
+            : `Min $${min} — so every company's slice clears the venue's ~$${MIN_PER_LEG} floor.`}
         </div>
         {ready && (
           <div className="tnum" style={{ marginTop: 8, fontSize: 12, lineHeight: 1.6, color: "var(--ink-3)" }}>

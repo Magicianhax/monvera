@@ -216,8 +216,11 @@ export function useInvest(): UseInvest {
         const legs = alloc.allocations.filter((a) => a.weightPct > 0);
         const legAmounts = splitByWeights(grossMicro, legs.map((a) => a.weightPct));
         if (legAmounts.some((v) => v > BigInt(0) && v < MIN_LEG_MICRO)) {
+          // The real floor is set by the SMALLEST weighted slice clearing $11.
+          const minWeight = Math.min(...legs.map((l) => l.weightPct));
+          const needed = Math.ceil((11 * 100) / Math.max(1, minWeight));
           throw new Error(
-            `That amount is too small to split across ${legs.length} holdings — try at least $${(legs.length * 0.5).toFixed(0) || 1}, or a simpler plan.`,
+            `That amount is too small to split across ${legs.length} holdings — every slice needs ~$11 to fill. Try at least $${needed}, or a simpler plan.`,
           );
         }
 

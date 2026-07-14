@@ -728,8 +728,9 @@ export function LiteApp({ demoPlay = null }: { demoPlay?: "invest" | "vera" | nu
           onTouchEnd={endDrag}
           onTouchCancel={endDrag}
         >
-          {/* Inline error from the invest flow — surfaced on the plan/goal screens. */}
-        {invest.error && (screen === "plan" || screen === "goal") && (
+          {/* Inline error from the invest flow — surfaced on the plan/goal screens,
+              and on scan (a scan-buy that errors pops back there). */}
+        {invest.error && (screen === "plan" || screen === "goal" || screen === "scan") && (
           <div
             role="button"
             aria-label="Dismiss error"
