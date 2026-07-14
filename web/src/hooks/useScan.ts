@@ -20,7 +20,14 @@ export interface ScanConnection {
 
 /** What /api/scan returns: what Vera saw + how it maps to the tradable universe. */
 export interface ScanResult {
-  recognized: { product: string; brand: string } | null;
+  recognized: {
+    product: string;
+    brand: string;
+    /** 1-2 plain sentences: what the product is and who makes it. */
+    about?: string;
+    /** The actual making company (brand owner/parent), listed or not. */
+    makerName?: string | null;
+  } | null;
   connections: ScanConnection[];
 }
 

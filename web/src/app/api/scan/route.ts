@@ -51,6 +51,8 @@ ${UNIVERSE_LINES}
 
 RULES:
 - Identify the product and brand you see. If you can recognize a product or brand at all, ALWAYS fill "recognized".
+- "about": 1-2 plain, honest sentences about what this product IS and who makes it (e.g. "Lay's is the world's biggest potato-chip brand, made by PepsiCo's Frito-Lay division."). No hype.
+- "makerName": the company that actually makes the product (the brand owner / parent), whether or not it is listed. null only if you genuinely can't tell.
 - Map to a company only through a real, explainable relationship, using one of these connection types: maker (the company makes this product), parent (owns the maker), supplier (supplies parts/materials), component (its chips/parts are inside), retailer (sells the product), competitor (a direct rival in the same market).
 - Return 2 to 6 connections. Do NOT force-fit: only include a company when the relationship is genuine and you can explain it in one honest sentence.
 - If the brand's own company is NOT among the listed companies and there is no honest supplier/component/competitor link either, return "connections": [] but STILL fill "recognized".
@@ -59,7 +61,7 @@ RULES:
 - Output ONLY the JSON object, no markdown code fences, no prose before or after.
 
 OUTPUT SHAPE:
-{"recognized": {"product": "string", "brand": "string"} | null, "connections": [{"symbol": "TICKER", "name": "Company", "connectionType": "maker", "reasoning": "one sentence", "weight": 60}]}`;
+{"recognized": {"product": "string", "brand": "string", "about": "1-2 sentences", "makerName": "string" | null} | null, "connections": [{"symbol": "TICKER", "name": "Company", "connectionType": "maker", "reasoning": "one sentence", "weight": 60}]}`;
 
 const client = createPublicClient({ chain, transport: http(SERVER_RPC_URL) });
 
@@ -194,6 +196,10 @@ async function callVision(provider: VisionProvider, image: string): Promise<stri
 interface Recognized {
   product: string;
   brand: string;
+  /** 1-2 plain sentences: what the product is and who makes it. */
+  about: string;
+  /** The actual making company (brand owner/parent), listed or not. */
+  makerName: string | null;
 }
 interface Connection {
   symbol: string;
@@ -228,7 +234,8 @@ function parseRecognized(raw: unknown): Recognized | null {
   const product = str(r.product);
   const brand = str(r.brand);
   if (!product && !brand) return null;
-  return { product, brand };
+  const makerName = str(r.makerName);
+  return { product, brand, about: str(r.about), makerName: makerName || null };
 }
 
 /**

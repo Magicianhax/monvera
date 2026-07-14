@@ -594,6 +594,12 @@ function ResultState({
   const overCash = amount > cashUsd && cashUsd > 0;
   const ready = amount >= min && !overCash;
 
+  // The maker itself isn't purchasable when no connection is a maker/parent —
+  // say so plainly instead of letting retailers masquerade as the source.
+  const makerUnlisted =
+    Boolean(recognized?.makerName) &&
+    !connections.some((c) => c.connectionType === "maker" || c.connectionType === "parent");
+
   const buildPlan = () => {
     haptic.medium();
     const legs = connections.map((c) => `${c.symbol} (${c.connectionType}, ${c.weight}%)`).join(", ");
@@ -605,7 +611,8 @@ function ResultState({
 
   return (
     <div className="anim-rise" style={{ padding: "22px 22px 0" }}>
-      {/* "Vera sees" headline card */}
+      {/* "Vera sees" headline card — what it is, who makes it, and the honest
+          note when the maker itself isn't listed */}
       <div
         style={{
           background: "var(--surface)",
@@ -618,9 +625,34 @@ function ResultState({
         <div style={{ marginTop: 6, fontSize: 18, fontWeight: 600, letterSpacing: "-.01em", color: "var(--ink)" }}>
           {recognized ? `${brand} ${product}` : "A product"}
         </div>
-        <p style={{ margin: "6px 0 0", fontSize: 13.5, lineHeight: 1.5, color: "var(--ink-3)" }}>
-          The listed companies behind it, weighted by how real the link is.
-        </p>
+        {recognized?.about ? (
+          <p style={{ margin: "7px 0 0", fontSize: 13.5, lineHeight: 1.6, color: "var(--ink-2)" }}>
+            {recognized.about}
+          </p>
+        ) : (
+          <p style={{ margin: "6px 0 0", fontSize: 13.5, lineHeight: 1.5, color: "var(--ink-3)" }}>
+            The listed companies behind it, weighted by how real the link is.
+          </p>
+        )}
+        {makerUnlisted && (
+          <div
+            style={{
+              display: "flex",
+              gap: 9,
+              alignItems: "flex-start",
+              marginTop: 12,
+              padding: "10px 12px",
+              borderRadius: "var(--rr)",
+              background: "var(--surface-2)",
+            }}
+          >
+            <Icon name="info" size={15} style={{ flex: "none", marginTop: 1, color: "var(--ink-3)" }} />
+            <span style={{ fontSize: 12.5, lineHeight: 1.55, color: "var(--ink-2)" }}>
+              {recognized?.makerName} makes it, but isn't among the 95 listed stocks — below are the
+              listed companies that still profit from it.
+            </span>
+          </div>
+        )}
       </div>
 
       {/* connection cards — with the same live stats Market rows carry */}
@@ -827,13 +859,14 @@ function EmptyState({
   onRestart,
   go,
 }: {
-  recognized: { product: string; brand: string } | null;
+  recognized: NonNullable<ReturnType<typeof useScan>["result"]>["recognized"];
   onRestart: () => void;
   go: (t: string | number, p?: Record<string, unknown>) => void;
 }) {
   const identified = recognized !== null;
   const brand = recognized?.brand ?? "it";
   const product = recognized?.product ?? "";
+  const maker = recognized?.makerName;
 
   return (
     <div className="anim-rise" style={{ padding: "28px 22px 0" }}>
@@ -862,9 +895,14 @@ function EmptyState({
         </span>
         <p style={{ margin: "16px auto 0", maxWidth: 320, fontSize: 15, lineHeight: 1.6, color: "var(--ink)" }}>
           {identified
-            ? `That's a ${brand} ${product} — ${brand} isn't among the 95 listed stocks, so there's nothing honest to buy here.`
+            ? `That's a ${brand} ${product} — ${maker || brand} isn't among the 95 listed stocks, so there's nothing honest to buy here.`
             : "Vera couldn't identify a product in that photo. Try a clearer shot of the label or logo."}
         </p>
+        {identified && recognized?.about && (
+          <p style={{ margin: "10px auto 0", maxWidth: 320, fontSize: 13, lineHeight: 1.55, color: "var(--ink-2)" }}>
+            {recognized.about}
+          </p>
+        )}
       </div>
 
       {identified ? (
