@@ -14,8 +14,11 @@ import { useEffect, useState } from "react";
 import { useScan, type ScanConnection } from "@/hooks/useScan";
 import { useMonveraGate } from "@/hooks/useMonveraToken";
 import { useSmartAccount } from "@/hooks/useSmartAccount";
+import { useUsdcBalance } from "@/hooks/useBalances";
+import { usePrices } from "@/hooks/usePrices";
+import { useMarketSummary } from "@/hooks/useMarket";
 import { HOLDER_THRESHOLD } from "@/lib/monveraToken";
-import { Icon, type IconName } from "@/components/design";
+import { Icon, Sparkline, type IconName } from "@/components/design";
 import { haptic } from "@/lib/haptics";
 import { TokenLogo } from "../TokenLogo";
 import { iconBtn, Spinner } from "./primitives";
@@ -431,50 +434,129 @@ function InputState({ onPick }: { onPick: (e: React.ChangeEvent<HTMLInputElement
   );
 }
 
-// ── C. Analyzing — live preview + staged status ──────────────────────────────
-const ANALYZING_COPY = ["Vera is looking…", "Matching to listed companies…", "Checking the connections…"];
+// ── C. Analyzing — the photo under the scanner ────────────────────────────────
+// The user's photo becomes the viewfinder stage: corner brackets, a sweeping
+// beam over the actual image, a staged checklist ticking off Vera's work, and a
+// live ticker of the listed universe she's matching against.
+const MATCH_TICKER = ["AAPL", "NVDA", "KO", "TSLA", "MSFT", "AMD", "SPY", "GOOGL", "TSM", "AVGO", "QQQ", "NFLX"];
 
 function AnalyzingState({ preview, phase }: { preview: string | null; phase: "reading" | "analyzing" }) {
-  const [step, setStep] = useState(0);
+  // Seconds since this state mounted — drives the staged checklist.
+  const [elapsed, setElapsed] = useState(0);
   useEffect(() => {
-    if (phase !== "analyzing") return;
-    const t = setInterval(() => setStep((p) => Math.min(p + 1, ANALYZING_COPY.length - 1)), 2200);
+    const t = setInterval(() => setElapsed((e) => e + 1), 1000);
     return () => clearInterval(t);
-  }, [phase]);
+  }, []);
 
-  const line = phase === "reading" ? "Reading your photo…" : ANALYZING_COPY[step];
+  // Step status: 0 done once we're past "reading"; 1 done a few seconds into
+  // the model call; 2 keeps working until the result lands (state unmounts).
+  const stepState = (i: number): "done" | "active" | "pending" => {
+    const activeIdx = phase === "reading" ? 0 : elapsed < 5 ? 1 : 2;
+    return i < activeIdx ? "done" : i === activeIdx ? "active" : "pending";
+  };
+  const STEPS = ["Reading your photo", "Identifying the product", "Matching against 95 listed stocks"];
 
   return (
-    <div className="anim-rise" style={{ padding: "24px 22px 0", flex: 1 }}>
+    <div className="anim-rise" style={{ padding: "18px 22px 0", flex: 1 }}>
+      <style>{`
+        @media (prefers-reduced-motion: no-preference) {
+          @keyframes scanBeamPhoto { 0% { top: 6% } 50% { top: 90% } 100% { top: 6% } }
+          @keyframes scanKenburns { 0%, 100% { transform: scale(1) } 50% { transform: scale(1.06) } }
+          @keyframes scanTicker { 0% { transform: translateX(0) } 100% { transform: translateX(-50%) } }
+        }
+      `}</style>
+
+      {/* the photo, being scanned */}
       {preview && (
-        // eslint-disable-next-line @next/next/no-img-element -- local object URL, no loader
-        <img
-          src={preview}
-          alt=""
-          style={{
-            width: "100%",
-            maxHeight: 260,
-            objectFit: "cover",
-            borderRadius: 16,
-            display: "block",
-            opacity: 0.72,
-          }}
-        />
+        <div style={{ position: "relative", borderRadius: 16, overflow: "hidden" }}>
+          {/* eslint-disable-next-line @next/next/no-img-element -- local object URL, no loader */}
+          <img
+            src={preview}
+            alt=""
+            style={{
+              width: "100%",
+              height: 250,
+              objectFit: "cover",
+              display: "block",
+              opacity: 0.8,
+              animation: "scanKenburns 9s ease-in-out infinite",
+            }}
+          />
+          {/* dim wash so the brackets/beam read on any photo */}
+          <span aria-hidden style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,.18)" }} />
+          {/* corner brackets */}
+          <svg viewBox="0 0 100 100" preserveAspectRatio="none" style={{ position: "absolute", inset: 12, width: "calc(100% - 24px)", height: "calc(100% - 24px)" }} aria-hidden>
+            <g stroke="var(--primary)" strokeWidth="1.8" strokeLinecap="round" fill="none">
+              <path d="M14 2 H6 Q2 2 2 6 V14" vectorEffect="non-scaling-stroke" />
+              <path d="M86 2 H94 Q98 2 98 6 V14" vectorEffect="non-scaling-stroke" />
+              <path d="M14 98 H6 Q2 98 2 94 V86" vectorEffect="non-scaling-stroke" />
+              <path d="M86 98 H94 Q98 98 98 94 V86" vectorEffect="non-scaling-stroke" />
+            </g>
+          </svg>
+          {/* the beam, sweeping the actual photo */}
+          <span
+            aria-hidden
+            style={{
+              position: "absolute",
+              left: "6%",
+              right: "6%",
+              top: "6%",
+              height: 2,
+              borderRadius: 2,
+              background: "linear-gradient(90deg, transparent, var(--primary) 25%, var(--primary) 75%, transparent)",
+              boxShadow: "0 0 16px color-mix(in srgb, var(--primary) 75%, transparent)",
+              animation: "scanBeamPhoto 2.6s ease-in-out infinite",
+            }}
+          />
+        </div>
       )}
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          gap: 10,
-          marginTop: 24,
-          fontSize: 15.5,
-          fontWeight: 500,
-          color: "var(--ink-2)",
-        }}
-      >
-        <Spinner small />
-        {line}
+
+      {/* staged checklist — Vera's work, ticking off */}
+      <div style={{ marginTop: 18, display: "flex", flexDirection: "column", gap: 2 }}>
+        {STEPS.map((label, i) => {
+          const s = stepState(i);
+          return (
+            <div key={label} style={{ display: "flex", alignItems: "center", gap: 12, padding: "8px 2px", opacity: s === "pending" ? 0.45 : 1, transition: "opacity .3s var(--ease-out)" }}>
+              <span style={{ width: 26, height: 26, flex: "none", display: "grid", placeItems: "center" }}>
+                {s === "done" ? (
+                  <span
+                    style={{
+                      width: 22,
+                      height: 22,
+                      borderRadius: "50%",
+                      display: "grid",
+                      placeItems: "center",
+                      background: "var(--primary-soft)",
+                      color: "var(--primary)",
+                    }}
+                  >
+                    <Icon name="check" size={13} stroke={2.6} />
+                  </span>
+                ) : s === "active" ? (
+                  <Spinner small />
+                ) : (
+                  <span style={{ width: 8, height: 8, borderRadius: "50%", background: "var(--ink-3)", opacity: 0.5 }} />
+                )}
+              </span>
+              <span style={{ fontSize: 14.5, fontWeight: s === "active" ? 600 : 500, color: s === "active" ? "var(--ink)" : "var(--ink-2)" }}>
+                {label}
+                {s === "active" ? "…" : ""}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* the universe ticker — what she's matching against, scrolling by */}
+      <div style={{ marginTop: 16, overflow: "hidden", maskImage: "linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent)", WebkitMaskImage: "linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent)" }}>
+        <div style={{ display: "flex", gap: 18, width: "max-content", animation: "scanTicker 16s linear infinite" }}>
+          {[...MATCH_TICKER, ...MATCH_TICKER].map((s, i) => (
+            <span key={`${s}-${i}`} style={{ display: "inline-flex", alignItems: "center", gap: 6, opacity: 0.75 }}>
+              <TokenLogo symbol={s} size={20} />
+              <span className="tnum" style={{ fontSize: 11.5, fontWeight: 600, color: "var(--ink-3)" }}>{s}</span>
+            </span>
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -499,8 +581,18 @@ function ResultState({
   const product = recognized?.product ?? "this product";
   const min = connections.length * MIN_PER_LEG;
   const amount = parseFloat(amt) || 0;
+
+  // Live context for the suggestion cards + the amount panel: spendable cash,
+  // spot prices, and 1D move/sparkline per symbol (same sources as Market rows).
+  const { address } = useSmartAccount();
+  const { data: cash } = useUsdcBalance(address ?? undefined);
+  const { data: prices } = usePrices();
+  const { data: market } = useMarketSummary();
+  const cashUsd = cash?.value ?? 0;
+
   const under = amount > 0 && amount < min;
-  const ready = amount >= min;
+  const overCash = amount > cashUsd && cashUsd > 0;
+  const ready = amount >= min && !overCash;
 
   const buildPlan = () => {
     haptic.medium();
@@ -531,14 +623,20 @@ function ResultState({
         </p>
       </div>
 
-      {/* connection cards */}
+      {/* connection cards — with the same live stats Market rows carry */}
       <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 14 }}>
         {connections.map((c, i) => (
-          <ConnectionCard key={c.symbol + i} c={c} index={i} />
+          <ConnectionCard
+            key={c.symbol + i}
+            c={c}
+            index={i}
+            priceUsd={prices?.prices[c.symbol]?.priceUsd ?? undefined}
+            day={market?.summary?.[c.symbol]}
+          />
         ))}
       </div>
 
-      {/* amount */}
+      {/* amount — with the user's cash in view and quick-size chips */}
       <div style={{ marginTop: 20 }}>
         <div className="label-eyebrow" style={{ marginBottom: 8 }}>
           How much to invest
@@ -557,9 +655,58 @@ function ResultState({
             style={{ flex: 1, fontSize: 30, fontWeight: 600, letterSpacing: "-.02em", width: "100%" }}
           />
         </div>
-        <div style={{ marginTop: 8, fontSize: 12.5, color: under ? "var(--neg)" : "var(--ink-3)" }}>
-          Min ${min} — about ${MIN_PER_LEG} per company so every leg fills.
+        <div
+          style={{
+            marginTop: 10,
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            gap: 10,
+            flexWrap: "wrap",
+          }}
+        >
+          <span className="tnum" style={{ fontSize: 12.5, color: "var(--ink-2)" }}>
+            {cashUsd.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDG
+            available
+          </span>
+          <div style={{ display: "flex", gap: 8 }}>
+            {([25, 50, 75] as const).map((pct) => (
+              <button
+                key={pct}
+                className="chip tap"
+                style={{ height: 26, fontSize: 11.5, fontWeight: 600 }}
+                disabled={cashUsd <= 0}
+                onClick={() => {
+                  haptic.select();
+                  setAmt(((cashUsd * pct) / 100).toFixed(2));
+                }}
+              >
+                {pct}%
+              </button>
+            ))}
+            <button
+              className="chip tap"
+              style={{ height: 26, fontSize: 11.5, fontWeight: 600 }}
+              disabled={cashUsd <= 0}
+              onClick={() => {
+                haptic.select();
+                setAmt(cashUsd.toFixed(2));
+              }}
+            >
+              Max
+            </button>
+          </div>
         </div>
+        <div style={{ marginTop: 8, fontSize: 12.5, color: under || overCash ? "var(--neg)" : "var(--ink-3)" }}>
+          {overCash
+            ? `That's more than your ${cashUsd.toLocaleString("en-US", { maximumFractionDigits: 2 })} USDG — add cash or lower the amount.`
+            : `Min $${min} — about $${MIN_PER_LEG} per company so every leg fills.`}
+        </div>
+        {ready && (
+          <div className="tnum" style={{ marginTop: 8, fontSize: 12, lineHeight: 1.6, color: "var(--ink-3)" }}>
+            ≈ {connections.map((c) => `$${((amount * c.weight) / 100).toFixed(0)} ${c.symbol}`).join(" · ")}
+          </div>
+        )}
       </div>
 
       <button
@@ -577,8 +724,20 @@ function ResultState({
   );
 }
 
-// One connection: real company logo, symbol/name, type chip, weight%, reasoning.
-function ConnectionCard({ c, index }: { c: ScanConnection; index: number }) {
+// One connection: real company logo, symbol/name, type chip, weight%, reasoning
+// — plus the live market line (price, 1D move, sparkline) the plan screen shows.
+function ConnectionCard({
+  c,
+  index,
+  priceUsd,
+  day,
+}: {
+  c: ScanConnection;
+  index: number;
+  priceUsd?: number;
+  day?: { dayChangePct: number; spark: number[] };
+}) {
+  const up = (day?.dayChangePct ?? 0) >= 0;
   return (
     <div
       className="anim-rise"
@@ -627,6 +786,36 @@ function ConnectionCard({ c, index }: { c: ScanConnection; index: number }) {
           {c.weight}%
         </span>
       </div>
+
+      {/* live market line — real price, real 1D move, real sparkline */}
+      {(priceUsd !== undefined || day) && (
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 12,
+            marginTop: 11,
+            paddingTop: 11,
+            borderTop: "1px solid var(--line-2)",
+          }}
+        >
+          {day?.spark && day.spark.length > 1 && (
+            <Sparkline data={day.spark} w={64} h={22} color={up ? "var(--pos)" : "var(--neg)"} />
+          )}
+          {priceUsd !== undefined && (
+            <span className="tnum" style={{ fontSize: 14.5, fontWeight: 600, color: "var(--ink)" }}>
+              ${priceUsd.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </span>
+          )}
+          {day && (
+            <span className="tnum" style={{ fontSize: 12.5, fontWeight: 600, color: up ? "var(--pos)" : "var(--neg)" }}>
+              {up ? "▲" : "▼"} {Math.abs(day.dayChangePct).toFixed(2)}%
+              <span style={{ color: "var(--ink-3)", fontWeight: 500 }}> today</span>
+            </span>
+          )}
+        </div>
+      )}
+
       <p style={{ margin: "10px 0 0", fontSize: 13, lineHeight: 1.5, color: "var(--ink-2)" }}>{c.reasoning}</p>
     </div>
   );
