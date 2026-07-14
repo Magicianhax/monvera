@@ -162,6 +162,7 @@ export function useRefreshBalances() {
   return useCallback(() => {
     const invalidate = () => {
       qc.invalidateQueries({ queryKey: ["usdc-balance"] });
+      qc.invalidateQueries({ queryKey: ["monvera-balance"] });
       qc.invalidateQueries({ queryKey: ["portfolio"] });
       qc.invalidateQueries({ queryKey: ["activity"] });
       qc.invalidateQueries({ queryKey: ["transactions"] });
