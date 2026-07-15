@@ -335,10 +335,10 @@ export function TokenScreen({
 
 // $MONVERA chart — the app's native scrubbable PriceChart with range chips,
 // same treatment as a stock's detail chart. Data is real pool OHLCV.
-const CHART_RANGES: TokenChartRange[] = ["1D", "1W", "1M", "1Y", "All"];
+const CHART_RANGES: TokenChartRange[] = ["5m", "1h", "4h", "1d", "7d"];
 
 function MonveraChart() {
-  const [range, setRange] = useState<TokenChartRange>("1D");
+  const [range, setRange] = useState<TokenChartRange>("1h");
   const { data: chart, isLoading } = useMonveraChart(range);
   const series = chart?.series ?? [];
   const up = (chart?.changePct ?? 0) >= 0;

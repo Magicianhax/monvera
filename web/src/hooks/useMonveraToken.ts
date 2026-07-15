@@ -32,7 +32,7 @@ export function useMonveraPrice() {
   });
 }
 
-export type TokenChartRange = "1D" | "1W" | "1M" | "1Y" | "All";
+export type TokenChartRange = "5m" | "1h" | "4h" | "1d" | "7d";
 export interface TokenChart {
   series: number[];
   changePct: number | null;

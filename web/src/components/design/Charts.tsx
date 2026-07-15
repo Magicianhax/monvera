@@ -5,6 +5,7 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import gsap from "gsap";
 import { useGSAP } from "@gsap/react";
+import { useDesktopLayout } from "@/hooks/useDesktopLayout";
 
 gsap.registerPlugin(useGSAP);
 
@@ -125,12 +126,27 @@ export interface PriceChartProps {
 }
 
 const PAD = 7; // vertical inset (viewBox %) so the line never touches the edges
+const PILL_EDGE_PX = 48; // ≈ half the price pill's rendered width, for edge clamping
+
+// Scrub-pill price format. Stocks are dollars (2dp); sub-cent tokens like
+// $MONVERA need more precision or they read as "$0.00". Adaptive by magnitude.
+function fmtChartPrice(v: number): string {
+  if (!Number.isFinite(v)) return "$0";
+  if (v >= 1) return `$${v.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  if (v >= 0.01) return `$${v.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 4 })}`;
+  return `$${Number(v.toPrecision(3))}`; // e.g. 0.000598
+}
 
 export function PriceChart({ data, up = true, height = 210, label, onScrub, raw = false }: PriceChartProps) {
   const id = useId().replace(/:/g, "");
   const wrapRef = useRef<HTMLDivElement>(null);
-  // xPct/yPct in [0,100]; price = the real interpolated value at the cursor.
-  const [cursor, setCursor] = useState<{ xPct: number; yPct: number; price: number } | null>(null);
+  // Desktop mice scrub on plain hover; phones scrub from a press (see pointer move).
+  const { active: desktop } = useDesktopLayout();
+  // xPct/yPct in [0,100]; price = the real interpolated value at the cursor;
+  // w = wrapper px width measured at scrub time (drives the pill's px clamp).
+  const [cursor, setCursor] = useState<{ xPct: number; yPct: number; price: number; w: number } | null>(
+    null,
+  );
 
   const series = raw ? data : densify(data, 6);
   const min = series.length ? Math.min(...series) : 0;
@@ -153,7 +169,7 @@ export function PriceChart({ data, up = true, height = 210, label, onScrub, raw 
     if (!rect || rect.width === 0) return;
     const f = (clientX - rect.left) / rect.width;
     const c = pointAt(f);
-    setCursor(c);
+    setCursor({ ...c, w: rect.width });
     onScrub?.({ price: c.price, index: Math.round(Math.max(0, Math.min(1, f)) * (data.length - 1)) });
   }
   function endScrub() {
@@ -167,8 +183,12 @@ export function PriceChart({ data, up = true, height = 210, label, onScrub, raw 
   const line = smoothPath(pts);
   const area = `${line} L 100 100 L 0 100 Z`;
   const last = pts[pts.length - 1];
-  // Keep the price pill from clipping at the chart edges.
-  const pillLeft = cursor ? Math.max(15, Math.min(85, cursor.xPct)) : 0;
+  // Keep the price pill from clipping at the chart edges. The phone clamp is
+  // 15% of the viewBox (tuned for the ~400px frame); on desktop charts 700px+
+  // wide that would detach the pill from the cursor, so clamp by real pixels.
+  const pillClampPct =
+    desktop && cursor && cursor.w > 0 ? Math.min(50, (PILL_EDGE_PX / cursor.w) * 100) : 15;
+  const pillLeft = cursor ? Math.max(pillClampPct, Math.min(100 - pillClampPct, cursor.xPct)) : 0;
 
   return (
     <div
@@ -181,7 +201,10 @@ export function PriceChart({ data, up = true, height = 210, label, onScrub, raw 
         scrubTo(e.clientX);
       }}
       onPointerMove={(e) => {
-        if (cursor || e.buttons > 0 || e.pointerType === "touch") scrubTo(e.clientX);
+        // Touch scrubs from a press; desktop mice scrub on plain hover so the
+        // crosshair + pill work without click-dragging.
+        if (cursor || e.buttons > 0 || e.pointerType === "touch" || (desktop && e.pointerType === "mouse"))
+          scrubTo(e.clientX);
       }}
       onPointerUp={endScrub}
       onPointerCancel={endScrub}
@@ -296,7 +319,7 @@ export function PriceChart({ data, up = true, height = 210, label, onScrub, raw 
               boxShadow: "var(--shadow)",
             }}
           >
-            ${cursor.price.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            {fmtChartPrice(cursor.price)}
           </span>
         </>
       )}
