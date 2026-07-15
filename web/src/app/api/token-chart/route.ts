@@ -1,9 +1,17 @@
-// GET /api/token-chart?range=1D|1W|1M|1Y|All — $MONVERA price history for the
+// GET /api/token-chart?range=5m|1h|4h|1d|7d — $MONVERA price history for the
 // native PriceChart (same shape as /api/market: { series, changePct, asOf }).
 // Source: GeckoTerminal OHLCV for the main MONVERA/VIRTUAL pool on Robinhood
-// Chain (network slug "robinhood"). Cached per range so a burst of viewers
-// doesn't hammer the upstream; stale-served on failure.
+// Chain (network slug "robinhood").
+//
+// Resilience: GeckoTerminal rate-limits by IP, and Cloudflare Workers egress
+// from a shared pool of IPs, so the upstream intermittently 429s the Worker even
+// though the same request succeeds from a browser. The in-memory Map cache does
+// NOT survive a Worker cold start, so on its own a single 429 turned into a hard
+// error on every range. We therefore persist each successful series to KV and
+// serve the last-good series from KV whenever the upstream fails — a throttled
+// request shows a slightly-stale chart instead of an error.
 import type { NextRequest } from "next/server";
+import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { MONVERA_PAIR } from "@/lib/monveraToken";
 import { rateLimit, clientIp } from "@/lib/server/rateLimit";
 import { tooManyRequests, badRequest, serverError } from "@/lib/server/respond";
@@ -16,10 +24,7 @@ const BASE = `https://api.geckoterminal.com/api/v2/networks/robinhood/pools/${PO
 // range → GeckoTerminal timeframe/aggregate + how many candles. Crypto-style
 // intervals; the token is young, so longer ranges simply return fewer points
 // (real data, never faked). GeckoTerminal aggregates: minute 1/5/15, hour 1/4/12,
-// day 1.
-// The pool is young: GeckoTerminal has no daily candles yet, so the longer
-// ranges use 12-hour aggregates (which always have data). A fallback to hourly
-// covers any timeframe that still comes back empty.
+// day 1. A fallback to plain hourly covers any timeframe that comes back empty.
 const RANGES: Record<string, { tf: string; agg: number; limit: number }> = {
   "5m": { tf: "minute", agg: 5, limit: 288 }, // ~24h of 5-min candles
   "1h": { tf: "hour", agg: 1, limit: 168 }, // ~7d hourly
@@ -50,7 +55,48 @@ interface ChartBody {
   asOf: string;
 }
 
+// Per-isolate cache; short-lived. Backed by KV for cross-isolate / cold-start
+// survival (see resilience note above).
 const cache = new Map<string, { at: number; body: ChartBody }>();
+
+interface KvNamespace {
+  get(key: string): Promise<string | null>;
+  put(key: string, value: string, opts?: { expirationTtl?: number }): Promise<void>;
+}
+
+function kv(): KvNamespace | null {
+  try {
+    const env = getCloudflareContext().env as { KV?: KvNamespace };
+    return env.KV ?? null;
+  } catch {
+    return null;
+  }
+}
+
+const kvKey = (range: string) => `token-chart:v1:${range}`;
+// Keep last-good for a day so a throttled window still renders a chart.
+const KV_TTL_S = 24 * 60 * 60;
+
+async function readKv(range: string): Promise<ChartBody | null> {
+  const store = kv();
+  if (!store) return null;
+  try {
+    const raw = await store.get(kvKey(range));
+    return raw ? (JSON.parse(raw) as ChartBody) : null;
+  } catch {
+    return null;
+  }
+}
+
+async function writeKv(range: string, body: ChartBody): Promise<void> {
+  const store = kv();
+  if (!store) return;
+  try {
+    await store.put(kvKey(range), JSON.stringify(body), { expirationTtl: KV_TTL_S });
+  } catch {
+    /* best-effort */
+  }
+}
 
 export async function GET(req: NextRequest) {
   const limit = rateLimit(`token-chart:${clientIp(req)}`, 120, 60_000);
@@ -66,33 +112,37 @@ export async function GET(req: NextRequest) {
     return Response.json(hit.body, { headers: { "Cache-Control": "public, s-maxage=60, stale-while-revalidate=180" } });
   }
 
+  // Fetch fresh; on ANY failure (empty, rate-limit, timeout) fall back to plain
+  // hourly, then to the last-good series in KV, so the chart shows real data
+  // instead of an error.
+  let series: number[] = [];
   try {
-    // Try the requested timeframe; on ANY failure (empty, rate-limit, timeout)
-    // fall back to plain hourly, which is the most reliably-available series, so
-    // the chart shows real data instead of an error.
-    let series: number[] = [];
+    series = await ohlcv(cfg.tf, cfg.agg, cfg.limit);
+  } catch {
+    /* fall through to hourly */
+  }
+  if (series.length === 0 && !(cfg.tf === "hour" && cfg.agg === 1)) {
     try {
-      series = await ohlcv(cfg.tf, cfg.agg, cfg.limit);
+      series = await ohlcv("hour", 1, 168);
     } catch {
-      /* fall through to hourly */
+      /* fall through to stale */
     }
-    if (series.length === 0 && !(cfg.tf === "hour" && cfg.agg === 1)) {
-      try {
-        series = await ohlcv("hour", 1, 168);
-      } catch {
-        /* fall through to stale/error */
-      }
-    }
-    if (series.length === 0) {
-      if (hit) return Response.json(hit.body, { headers: { "Cache-Control": "public, s-maxage=30" } });
-      throw new Error("geckoterminal: empty ohlcv");
-    }
+  }
+
+  if (series.length > 0) {
     const changePct = series.length > 1 ? ((series[series.length - 1] - series[0]) / series[0]) * 100 : 0;
     const body: ChartBody = { series, changePct, asOf: new Date().toISOString() };
     cache.set(range, { at: now, body });
+    // Persist last-good so a future throttled window can serve stale.
+    await writeKv(range, body);
     return Response.json(body, { headers: { "Cache-Control": "public, s-maxage=60, stale-while-revalidate=180" } });
-  } catch (err) {
-    if (hit) return Response.json(hit.body, { headers: { "Cache-Control": "public, s-maxage=30" } });
-    return serverError("token-chart", err);
   }
+
+  // Upstream unavailable — serve stale from KV (survives cold starts), else the
+  // per-isolate cache, else a real error.
+  const stale = (await readKv(range)) ?? hit?.body ?? null;
+  if (stale) {
+    return Response.json(stale, { headers: { "Cache-Control": "public, s-maxage=30" } });
+  }
+  return serverError("token-chart", new Error("geckoterminal: unavailable, no cached series"));
 }

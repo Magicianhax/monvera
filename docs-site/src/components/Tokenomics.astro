@@ -1,0 +1,171 @@
+---
+// $MONVERA tokenomics visual — an allocation donut and a supply/vesting curve.
+// Static SVG (no client JS); values are the locked Virtuals launch allocation.
+// Total supply 1,000,000,000 (expressed in millions below).
+const TOTAL = 1000;
+
+interface Alloc {
+  name: string;
+  release: string;
+  pct: number;
+  amount: number; // millions
+  color: string;
+}
+const ALLOC: Alloc[] = [
+  { name: "Pledger allocation", release: "Immediately claimable at launch", pct: 69.3, amount: 693, color: "#2fb9a6" },
+  { name: "Sniper Tax Buyback for Team", release: "Locked 3 months, then linear over 9 months", pct: 12.9, amount: 129, color: "#e8894a" },
+  { name: "Liquidity Pool", release: "Fixed supply", pct: 10.1, amount: 101, color: "#c9d64e" },
+  { name: "Developer vesting", release: "6-month cliff, then 6-month linear", pct: 7.7, amount: 77, color: "#a78bfa" },
+];
+
+// ── donut (stroke-dasharray with pathLength=100) ──
+let acc = 0;
+const donut = ALLOC.map((a) => {
+  const seg = { color: a.color, dash: a.pct, offset: -acc };
+  acc += a.pct;
+  return seg;
+});
+
+// ── vesting curve: cumulative unlocked supply over 12 months ──
+const M = 12;
+const P = 693; // pledger, all at launch
+const L = 101; // liquidity, fixed at launch
+const S = 129; // sniper buyback: 3mo lock, linear over 9mo
+const D = 77; // developer: 6mo cliff, linear over 6mo
+const sniper = (m: number) => (m <= 3 ? 0 : m >= 12 ? S : (S * (m - 3)) / 9);
+const dev = (m: number) => (m <= 6 ? 0 : m >= 12 ? D : (D * (m - 6)) / 6);
+const months = Array.from({ length: M + 1 }, (_, i) => i);
+const zero = months.map(() => 0);
+const b1 = months.map(() => P);
+const b2 = months.map(() => P + L);
+const b3 = months.map((m) => P + L + sniper(m));
+const b4 = months.map((m) => P + L + sniper(m) + dev(m));
+
+const W = 680, H = 260, padL = 46, padB = 28, padT = 12, padR = 14;
+const x0 = padL, x1 = W - padR, y0 = padT, y1 = H - padB;
+const xm = (m: number) => x0 + (m / M) * (x1 - x0);
+const yv = (v: number) => y1 - (v / TOTAL) * (y1 - y0);
+const areaPath = (top: number[], bot: number[]) => {
+  const t = months.map((m) => `${xm(m).toFixed(1)},${yv(top[m]).toFixed(1)}`);
+  const b = months.map((m) => `${xm(m).toFixed(1)},${yv(bot[m]).toFixed(1)}`).reverse();
+  return `M${t.join(" L")} L${b.join(" L")} Z`;
+};
+const bands = [
+  { color: "#2fb9a6", d: areaPath(b1, zero) },
+  { color: "#c9d64e", d: areaPath(b2, b1) },
+  { color: "#e8894a", d: areaPath(b3, b2) },
+  { color: "#a78bfa", d: areaPath(b4, b3) },
+];
+const yTicks = [0, 250, 500, 750, 1000];
+const yLabel = (v: number) => (v === 0 ? "0" : v === 1000 ? "1B" : `${v}M`);
+const xTicks = [
+  { m: 0, label: "13 Jul 26" },
+  { m: 3, label: "13 Oct 26" },
+  { m: 6, label: "13 Jan 27" },
+  { m: 9, label: "13 Apr 27" },
+  { m: 12, label: "13 Jul 27" },
+];
+---
+
+<div class="tk">
+  <!-- Allocation -->
+  <div class="tk-card">
+    <div class="tk-head">Allocation</div>
+    <div class="tk-alloc">
+      <div class="tk-donut">
+        <svg viewBox="0 0 120 120" role="img" aria-label="Token allocation donut">
+          <g transform="rotate(-90 60 60)">
+            {donut.map((s) => (
+              <circle
+                cx="60" cy="60" r="45" fill="none"
+                stroke={s.color} stroke-width="16"
+                pathLength="100"
+                stroke-dasharray={`${s.dash} ${100 - s.dash}`}
+                stroke-dashoffset={s.offset}
+              />
+            ))}
+          </g>
+          <text x="60" y="55" text-anchor="middle" class="tk-donut-cap">Total</text>
+          <text x="60" y="72" text-anchor="middle" class="tk-donut-total">1B</text>
+        </svg>
+        <div class="tk-pill">Vesting unlocks in 90 days</div>
+      </div>
+      <ul class="tk-legend">
+        {ALLOC.map((a) => (
+          <li>
+            <span class="tk-dot" style={`background:${a.color}`}></span>
+            <span class="tk-legend-txt">
+              <span class="tk-legend-name">{a.name}</span>
+              <span class="tk-legend-sub">{a.release}</span>
+            </span>
+            <span class="tk-legend-pct">{a.pct.toFixed(2)}%</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  </div>
+
+  <!-- Supply over time -->
+  <div class="tk-card">
+    <div class="tk-head">Circulating supply over time</div>
+    <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Circulating supply vesting curve" class="tk-chart">
+      {yTicks.map((v) => (
+        <g>
+          <line x1={x0} y1={yv(v)} x2={x1} y2={yv(v)} class="tk-grid" />
+          <text x={x0 - 6} y={yv(v) + 3} text-anchor="end" class="tk-axis">{yLabel(v)}</text>
+        </g>
+      ))}
+      {bands.map((b) => (
+        <path d={b.d} fill={b.color} fill-opacity="0.9" />
+      ))}
+      <line x1={xm(0)} y1={y0} x2={xm(0)} y2={y1} class="tk-today" />
+      <text x={xm(0) + 4} y={y0 + 10} class="tk-today-lbl">Today</text>
+      {xTicks.map((t) => (
+        <text x={xm(t.m)} y={y1 + 16} text-anchor="middle" class="tk-axis">{t.label}</text>
+      ))}
+    </svg>
+    <ul class="tk-legend tk-legend-row">
+      {ALLOC.map((a) => (
+        <li><span class="tk-dot" style={`background:${a.color}`}></span><span class="tk-legend-name">{a.name}</span></li>
+      ))}
+    </ul>
+  </div>
+</div>
+
+<style>
+  .tk { display: grid; gap: 1rem; margin: 1rem 0 1.5rem; }
+  @media (min-width: 1024px) { .tk { grid-template-columns: 1fr 1fr; } }
+  .tk-card {
+    border: 1px solid var(--sl-color-gray-5);
+    border-radius: 12px;
+    padding: 1rem 1.1rem;
+    background: var(--sl-color-black);
+  }
+  .tk-head { font-weight: 600; font-size: 0.95rem; margin-bottom: 0.85rem; color: var(--sl-color-white); }
+  .tk-alloc { display: flex; gap: 1.1rem; align-items: center; flex-wrap: wrap; }
+  .tk-donut { display: flex; flex-direction: column; align-items: center; gap: 0.6rem; flex: 0 0 auto; }
+  .tk-donut svg { width: 150px; height: 150px; }
+  .tk-donut-cap { fill: var(--sl-color-gray-3); font-size: 8px; }
+  .tk-donut-total { fill: var(--sl-color-white); font-size: 17px; font-weight: 700; }
+  .tk-pill {
+    font-size: 0.7rem; font-weight: 600; color: #2fb9a6;
+    background: color-mix(in srgb, #2fb9a6 16%, transparent);
+    padding: 3px 9px; border-radius: 999px;
+  }
+  .tk-legend { list-style: none; padding: 0; margin: 0; flex: 1 1 240px; min-width: 220px; display: flex; flex-direction: column; gap: 0.7rem; }
+  .tk-legend li { display: flex; align-items: flex-start; gap: 0.55rem; }
+  .tk-dot { width: 10px; height: 10px; border-radius: 3px; flex: 0 0 auto; margin-top: 4px; }
+  .tk-legend-txt { display: flex; flex-direction: column; flex: 1; min-width: 0; }
+  .tk-legend-name { font-weight: 600; font-size: 0.85rem; color: var(--sl-color-white); }
+  .tk-legend-sub { font-size: 0.75rem; color: var(--sl-color-gray-3); line-height: 1.35; }
+  .tk-legend-pct { font-weight: 700; font-size: 0.9rem; color: var(--sl-color-white); font-variant-numeric: tabular-nums; }
+  .tk-chart { width: 100%; height: auto; }
+  .tk-grid { stroke: var(--sl-color-gray-5); stroke-width: 1; }
+  .tk-axis { fill: var(--sl-color-gray-3); font-size: 10px; }
+  .tk-today { stroke: var(--sl-color-gray-2); stroke-width: 1; stroke-dasharray: 3 3; }
+  .tk-today-lbl { fill: var(--sl-color-gray-2); font-size: 9px; }
+  .tk-legend-row { flex-direction: row; flex-wrap: wrap; gap: 0.5rem 1rem; margin-top: 0.75rem; }
+  .tk-legend-row li { align-items: center; }
+  .tk-legend-row .tk-dot { margin-top: 0; }
+  .tk-legend-row .tk-legend-name { font-size: 0.78rem; font-weight: 500; }
+</style>
