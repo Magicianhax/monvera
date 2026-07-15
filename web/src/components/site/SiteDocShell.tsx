@@ -72,6 +72,7 @@ export function SiteDocShell({
           <div className={s.footLinks}>
             <Link href="/">Home</Link>
             <Link href="/demo">Try the demo</Link>
+            <Link href="/buyback">Buyback</Link>
             <a href="https://docs.monvera.best">Docs</a>
             <Link href="/brand">Brand kit</Link>
             <a href="https://x.com/monvera_best" target="_blank" rel="noreferrer">@monvera_best</a>

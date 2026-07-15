@@ -26,7 +26,7 @@ import { USDG } from "@/lib/tokens";
 export const TREASURY = getAddress("0xb87f5A74267ca3F9512b8511B32cCd804EA3707E");
 const BUYBACK_PCT = 0.2;
 
-const client = createPublicClient({ chain, transport: http(SERVER_RPC_URL) });
+const client = createPublicClient({ chain, transport: http(SERVER_RPC_URL, { retryCount: 1, timeout: 8_000 }) });
 const TRANSFER = parseAbiItem("event Transfer(address indexed from, address indexed to, uint256 value)");
 const TRANSFER_TOPIC = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
 const BAL_ABI = [
@@ -154,14 +154,18 @@ export async function getBuybackData(): Promise<{ stats: BuybackStats; buybacks:
     balanceOf(MONVERA.address, MONVERA.decimals),
   ]);
 
-  const bbRows = (
-    await db()
-      .prepare("SELECT tx_hash,block_number,bought_at,monvera_amount,usdg_spent,price_usd FROM buybacks ORDER BY bought_at DESC")
-      .all<{ tx_hash: string; block_number: number; bought_at: number; monvera_amount: number; usdg_spent: number; price_usd: number }>()
-  ).results;
-  const exRows = (
-    await db().prepare("SELECT id,spent_at,description,amount_usd FROM treasury_expenses ORDER BY spent_at DESC").all<{ id: number; spent_at: number; description: string; amount_usd: number }>()
-  ).results;
+  let bbRows: { tx_hash: string; block_number: number; bought_at: number; monvera_amount: number; usdg_spent: number; price_usd: number }[] = [];
+  let exRows: { id: number; spent_at: number; description: string; amount_usd: number }[] = [];
+  try {
+    bbRows = (
+      await db()
+        .prepare("SELECT tx_hash,block_number,bought_at,monvera_amount,usdg_spent,price_usd FROM buybacks ORDER BY bought_at DESC")
+        .all<{ tx_hash: string; block_number: number; bought_at: number; monvera_amount: number; usdg_spent: number; price_usd: number }>()
+    ).results;
+    exRows = (await db().prepare("SELECT id,spent_at,description,amount_usd FROM treasury_expenses ORDER BY spent_at DESC").all<{ id: number; spent_at: number; description: string; amount_usd: number }>()).results;
+  } catch {
+    /* D1 not ready — render with on-chain figures only rather than 500 */
+  }
 
   const buybacks: Buyback[] = bbRows.map((r) => ({
     txHash: r.tx_hash, blockNumber: r.block_number, boughtAt: r.bought_at,

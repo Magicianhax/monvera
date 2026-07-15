@@ -162,6 +162,20 @@ export function TokenScreen({
       {/* holder gate — progress toward Scan to Buy (+ the wallet's holding in USDG) */}
       <HolderCard gate={gate} priceUsd={tok?.priceUsd} go={go} />
 
+      {/* buyback transparency — a share of trading revenue buys $MONVERA back */}
+      <div style={{ padding: "22px 22px 0" }}>
+        <a
+          href="/buyback"
+          style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "14px 16px", borderRadius: "var(--rr)", background: "var(--surface)", boxShadow: "var(--shadow)", textDecoration: "none" }}
+        >
+          <div>
+            <div style={{ fontSize: 14.5, fontWeight: 600, color: "var(--ink)" }}>Buyback transparency</div>
+            <div style={{ fontSize: 12.5, color: "var(--ink-2)", marginTop: 2 }}>20% of trading revenue buys back $MONVERA — see it live</div>
+          </div>
+          <span style={{ fontSize: 18, color: "var(--ink-3)", flex: "none" }}>↗</span>
+        </a>
+      </div>
+
       {/* links */}
       <div style={{ display: "flex", gap: 10, padding: "22px 22px 0" }}>
         <LinkPill href={MONVERA_LINKS.virtuals} label="Virtuals" />

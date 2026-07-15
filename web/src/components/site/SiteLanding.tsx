@@ -794,6 +794,7 @@ export function SiteLanding({
               <a href="#own">What you own</a>
               <Link href="/agent">Meet Vera</Link>
               <Link href="/strategies">Open strategies</Link>
+              <Link href="/buyback">Buyback</Link>
               <Link href="/demo">Try the demo</Link>
               <Link href="/app">Open the app</Link>
               <Link href="/roadmap">Roadmap</Link>
