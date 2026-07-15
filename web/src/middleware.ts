@@ -28,6 +28,14 @@ export const config = {
 const GATED_PAGES = ["/app"];
 const GATED_APIS = ["/api/quote", "/api/allocate", "/api/portfolio-review", "/api/autopilot", "/api/pimlico"];
 
+// Social / link-preview crawlers only read a page's OG metadata to build a card;
+// they don't "use" the product. They run from US datacenters, so the geo-gate's
+// 451 /restricted rewrite left every shared /app link with no preview card on X,
+// Slack, Discord, etc. Let them through to the real page (200 + OG). Real users
+// are still gated by country below.
+const CRAWLER_UA =
+  /facebookexternalhit|facebot|twitterbot|slackbot|slack-imgproxy|discordbot|linkedinbot|telegrambot|whatsapp|pinterest|redditbot|applebot|googlebot|bingbot|skypeuripreview|embedly|iframely|vkshare|google-inspectiontool|mastodon|opengraph|w3c_validator/i;
+
 function isHttp(req: NextRequest): boolean {
   // Cloudflare terminates TLS; the original scheme arrives in headers. Check
   // both spellings — cf-visitor is CF-specific, x-forwarded-proto is generic.
@@ -68,6 +76,9 @@ export function middleware(req: NextRequest) {
     GATED_PAGES.some((p) => path === p || path.startsWith(p + "/")) ||
     GATED_APIS.some((p) => path === p || path.startsWith(p + "/"));
   if (!gated) return NextResponse.next();
+
+  // Link-preview crawlers bypass the geo-gate so the OG card renders everywhere.
+  if (CRAWLER_UA.test(req.headers.get("user-agent") ?? "")) return NextResponse.next();
 
   const country = req.headers.get("cf-ipcountry")?.toUpperCase();
   if (!country || !BLOCKED.has(country)) return NextResponse.next();
