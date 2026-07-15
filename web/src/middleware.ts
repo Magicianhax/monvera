@@ -72,13 +72,18 @@ export function middleware(req: NextRequest) {
 
   // ── 2. geo-gate (product + money APIs only) ──
   const path = req.nextUrl.pathname;
-  const gated =
-    GATED_PAGES.some((p) => path === p || path.startsWith(p + "/")) ||
-    GATED_APIS.some((p) => path === p || path.startsWith(p + "/"));
-  if (!gated) return NextResponse.next();
+  const gatedPage = GATED_PAGES.some((p) => path === p || path.startsWith(p + "/"));
+  const gatedApi = GATED_APIS.some((p) => path === p || path.startsWith(p + "/"));
+  if (!gatedPage && !gatedApi) return NextResponse.next();
 
-  // Link-preview crawlers bypass the geo-gate so the OG card renders everywhere.
-  if (CRAWLER_UA.test(req.headers.get("user-agent") ?? "")) return NextResponse.next();
+  // Link-preview crawlers may bypass the gate ONLY for pages, so a shared /app
+  // link renders its OG card. User-Agent is spoofable, which is acceptable here:
+  // the geo-gate is a compliance screen (already VPN-bypassable) and a page view
+  // moves no money. The money-moving APIs are NEVER header-bypassable — a spoofed
+  // UA must not reach a gated endpoint.
+  if (gatedPage && !gatedApi && CRAWLER_UA.test(req.headers.get("user-agent") ?? "")) {
+    return NextResponse.next();
+  }
 
   const country = req.headers.get("cf-ipcountry")?.toUpperCase();
   if (!country || !BLOCKED.has(country)) return NextResponse.next();
