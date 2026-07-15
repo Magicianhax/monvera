@@ -29,7 +29,10 @@ const RANGES: Record<string, { tf: string; agg: number; limit: number }> = {
 };
 
 async function ohlcv(tf: string, agg: number, limit: number): Promise<number[]> {
-  const res = await fetch(`${BASE}/${tf}?aggregate=${agg}&limit=${limit}`, { signal: AbortSignal.timeout(8_000) });
+  const res = await fetch(`${BASE}/${tf}?aggregate=${agg}&limit=${limit}`, {
+    headers: { accept: "application/json" },
+    signal: AbortSignal.timeout(8_000),
+  });
   if (!res.ok) throw new Error(`geckoterminal ${res.status}`);
   const json = (await res.json()) as { data?: { attributes?: { ohlcv_list?: number[][] } } };
   // ohlcv_list is [ts, open, high, low, close, volume], NEWEST first → reverse
@@ -64,11 +67,26 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    let series = await ohlcv(cfg.tf, cfg.agg, cfg.limit);
-    // Fallback: any range that returns empty (e.g. sparse aggregates on a young
-    // pool) falls back to plain hourly so the chart always renders real data.
-    if (series.length === 0) series = await ohlcv("hour", 1, 168);
-    if (series.length === 0) throw new Error("geckoterminal: empty ohlcv");
+    // Try the requested timeframe; on ANY failure (empty, rate-limit, timeout)
+    // fall back to plain hourly, which is the most reliably-available series, so
+    // the chart shows real data instead of an error.
+    let series: number[] = [];
+    try {
+      series = await ohlcv(cfg.tf, cfg.agg, cfg.limit);
+    } catch {
+      /* fall through to hourly */
+    }
+    if (series.length === 0 && !(cfg.tf === "hour" && cfg.agg === 1)) {
+      try {
+        series = await ohlcv("hour", 1, 168);
+      } catch {
+        /* fall through to stale/error */
+      }
+    }
+    if (series.length === 0) {
+      if (hit) return Response.json(hit.body, { headers: { "Cache-Control": "public, s-maxage=30" } });
+      throw new Error("geckoterminal: empty ohlcv");
+    }
     const changePct = series.length > 1 ? ((series[series.length - 1] - series[0]) / series[0]) * 100 : 0;
     const body: ChartBody = { series, changePct, asOf: new Date().toISOString() };
     cache.set(range, { at: now, body });
