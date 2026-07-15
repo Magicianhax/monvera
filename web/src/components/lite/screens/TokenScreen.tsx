@@ -11,14 +11,14 @@
 // screens: back-button header, inline styles with CSS vars, primitives.
 import { useEffect, useState } from "react";
 import { formatUnits, parseUnits } from "viem";
-import { useMonveraPrice, useMonveraGate } from "@/hooks/useMonveraToken";
+import { useMonveraPrice, useMonveraGate, useMonveraChart, type TokenChartRange } from "@/hooks/useMonveraToken";
 import { useMonveraSwap } from "@/hooks/useMonveraSwap";
 import { useSmartAccount } from "@/hooks/useSmartAccount";
 import { useUsdcBalance } from "@/hooks/useBalances";
 import { TOKEN_TABS } from "@/lib/tokenContent";
 import { MONVERA, MONVERA_LINKS, HOLDER_THRESHOLD } from "@/lib/monveraToken";
 import { EXPLORER_URL } from "@/lib/chain";
-import { Icon, useToast } from "@/components/design";
+import { Icon, PriceChart, useToast } from "@/components/design";
 import { haptic } from "@/lib/haptics";
 import { shortAddress } from "@/lib/format";
 import { iconBtn, Spinner } from "./primitives";
@@ -142,14 +142,8 @@ export function TokenScreen({
         )}
       </div>
 
-      {/* chart — embedded DexScreener for the main MONVERA/VIRTUAL pool */}
-      <div className="anim-rise" style={{ animationDelay: ".05s", padding: "16px 22px 0" }}>
-        <iframe
-          src={MONVERA_LINKS.chartEmbed}
-          title="$MONVERA chart"
-          style={{ width: "100%", height: 320, border: 0, borderRadius: 16, display: "block" }}
-        />
-      </div>
+      {/* chart — the app's native PriceChart, fed by GeckoTerminal OHLCV */}
+      <MonveraChart />
 
       {/* buy / sell — trading first; stats + the holder gate sit below it */}
       <SwapPanel
@@ -335,6 +329,52 @@ export function TokenScreen({
       >
         $MONVERA is the project token, not the product. Not investment advice.
       </p>
+    </div>
+  );
+}
+
+// $MONVERA chart — the app's native scrubbable PriceChart with range chips,
+// same treatment as a stock's detail chart. Data is real pool OHLCV.
+const CHART_RANGES: TokenChartRange[] = ["1D", "1W", "1M", "1Y", "All"];
+
+function MonveraChart() {
+  const [range, setRange] = useState<TokenChartRange>("1D");
+  const { data: chart, isLoading } = useMonveraChart(range);
+  const series = chart?.series ?? [];
+  const up = (chart?.changePct ?? 0) >= 0;
+
+  return (
+    <div className="anim-rise" style={{ animationDelay: ".05s", padding: "8px 22px 0" }}>
+      <div style={{ minHeight: 210 }}>
+        {series.length > 1 ? (
+          <PriceChart
+            data={series}
+            up={up}
+            height={210}
+            raw
+            label={`$MONVERA price chart, ${up ? "up" : "down"} ${Math.abs(chart?.changePct ?? 0).toFixed(1)}% over ${range}. Touch and drag to read the price at any point.`}
+          />
+        ) : (
+          <div style={{ height: 210, display: "grid", placeItems: "center", color: "var(--ink-3)", fontSize: 13 }}>
+            {isLoading ? <Spinner /> : "Chart data isn't available yet."}
+          </div>
+        )}
+      </div>
+      <div style={{ display: "flex", gap: 8, justifyContent: "center", marginTop: 12 }}>
+        {CHART_RANGES.map((r) => (
+          <button
+            key={r}
+            className={`chip tap ${range === r ? "is-on" : ""}`}
+            onClick={() => {
+              haptic.select();
+              setRange(r);
+            }}
+            style={{ height: 30, fontSize: 12.5, fontWeight: 600, minWidth: 44 }}
+          >
+            {r}
+          </button>
+        ))}
+      </div>
     </div>
   );
 }
@@ -814,7 +854,7 @@ function SwapPanel({
         )}
       </button>
       <div style={{ textAlign: "center", marginTop: 10, fontSize: 12, color: "var(--ink-3)" }}>
-        Gasless · routed for the best price · 3% max slippage
+        Swaps are powered by Li.Fi
       </div>
     </div>
   );

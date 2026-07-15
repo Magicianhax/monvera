@@ -32,6 +32,28 @@ export function useMonveraPrice() {
   });
 }
 
+export type TokenChartRange = "1D" | "1W" | "1M" | "1Y" | "All";
+export interface TokenChart {
+  series: number[];
+  changePct: number | null;
+  asOf: string;
+}
+
+/** $MONVERA price history for the native PriceChart (GeckoTerminal OHLCV). */
+export function useMonveraChart(range: TokenChartRange) {
+  return useQuery({
+    queryKey: ["monvera-chart", range],
+    refetchInterval: 120_000,
+    staleTime: 60_000,
+    placeholderData: keepPreviousData,
+    queryFn: async (): Promise<TokenChart> => {
+      const res = await fetch(`/api/token-chart?range=${range}`);
+      if (!res.ok) throw new Error("Couldn't load the $MONVERA chart.");
+      return (await res.json()) as TokenChart;
+    },
+  });
+}
+
 /** The 100k-MONVERA holder gate, read from the user's EOA. */
 export function useMonveraGate(address?: string) {
   const query = useQuery({
