@@ -25,7 +25,9 @@ import { MonveraIcon } from "@/components/design";
 const TOKEN_CA = "0x7541872e32Bb529d7FF11D6C59832269ce33a6FF";
 const TOKEN_BUY_URL = "https://app.virtuals.io/virtuals/105667";
 const TOKEN_EXPLORER_URL = `https://robinhoodchain.blockscout.com/token/${TOKEN_CA}`;
-const TOKEN_DEXSCREENER_URL = "https://dexscreener.com/robinhood/0x721d6F589364ea0361c497A6494Ccb3B30ec5635";
+// DexScreener resolves a token address to its most-liquid pair, so point at the
+// real $MONVERA contract (not a stale/wrong pool address) for the live chart.
+const TOKEN_DEXSCREENER_URL = `https://dexscreener.com/robinhood/${TOKEN_CA}`;
 import { DemoMount } from "@/components/demo/DemoMount";
 import type { DemoPlay } from "@/components/demo/DemoProvider";
 import { ROADMAP } from "@/lib/roadmap";
