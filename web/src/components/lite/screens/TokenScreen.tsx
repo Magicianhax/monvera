@@ -160,7 +160,7 @@ export function TokenScreen({
       </div>
 
       {/* holder gate — progress toward Scan to Buy (+ the wallet's holding in USDG) */}
-      <HolderCard gate={gate} priceUsd={tok?.priceUsd} />
+      <HolderCard gate={gate} priceUsd={tok?.priceUsd} go={go} />
 
       {/* links */}
       <div style={{ display: "flex", gap: 10, padding: "22px 22px 0" }}>
@@ -403,7 +403,15 @@ function StatCell({ label, value }: { label: string; value: string }) {
 
 // Holder gate — a met badge, or a progress bar toward the 100k unlock. Also the
 // home of "what my $MONVERA is worth": tokens held valued live in USDG.
-function HolderCard({ gate, priceUsd }: { gate: ReturnType<typeof useMonveraGate>; priceUsd?: number }) {
+function HolderCard({
+  gate,
+  priceUsd,
+  go,
+}: {
+  gate: ReturnType<typeof useMonveraGate>;
+  priceUsd?: number;
+  go: (t: string | number, p?: Record<string, unknown>) => void;
+}) {
   const held = Number(gate.balance / BigInt(10) ** BigInt(18));
   const heldUsd = priceUsd ? Number(formatUnits(gate.balance, 18)) * priceUsd : null;
   return (
@@ -440,26 +448,41 @@ function HolderCard({ gate, priceUsd }: { gate: ReturnType<typeof useMonveraGate
         </div>
       )}
       {gate.isHolder ? (
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <span
-            style={{
-              width: 32,
-              height: 32,
-              borderRadius: "50%",
-              flex: "none",
-              display: "grid",
-              placeItems: "center",
-              background: "var(--primary-soft)",
-              color: "var(--primary)",
+        <>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <span
+              style={{
+                width: 32,
+                height: 32,
+                borderRadius: "50%",
+                flex: "none",
+                display: "grid",
+                placeItems: "center",
+                background: "var(--primary-soft)",
+                color: "var(--primary)",
+              }}
+            >
+              <Icon name="check" size={18} />
+            </span>
+            <div style={{ fontSize: 14.5, fontWeight: 600, color: "var(--ink)" }}>
+              You&apos;re a holder{" "}
+              <span style={{ fontWeight: 500, color: "var(--ink-2)" }}>— Scan to Buy is unlocked</span>
+            </div>
+          </div>
+          <button
+            className="btn btn-primary btn-block tap"
+            style={{ marginTop: 14 }}
+            onClick={() => {
+              haptic.medium();
+              go("scan");
             }}
           >
-            <Icon name="check" size={18} />
-          </span>
-          <div style={{ fontSize: 14.5, fontWeight: 600, color: "var(--ink)" }}>
-            Holder ✓{" "}
-            <span style={{ fontWeight: 500, color: "var(--ink-2)" }}>— Scan to Buy unlocks soon</span>
-          </div>
-        </div>
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+              <Icon name="camera" size={18} />
+              Open Scan to Buy
+            </span>
+          </button>
+        </>
       ) : (
         <>
           <div
