@@ -73,6 +73,19 @@ export async function submitRfqIntent(
 }
 
 /**
+ * A settlement failure reason the user can actually read. The router reports
+ * raw revert selectors (e.g. 0x151d90fe = ValidationSignatureSegmentMissing(),
+ * a failure inside Arcus's own settlement assembly — nothing moved).
+ */
+function friendlyRfqFailure(reason: string | null): string {
+  if (!reason) return "That trade didn't go through. Nothing was charged.";
+  if (/^0x[0-9a-fA-F]{8}$/.test(reason)) {
+    return "The trading venue couldn't settle this order (their side rejected it). Nothing was charged — try again in a minute.";
+  }
+  return reason;
+}
+
+/**
  * Poll a submitted RFQ fill until it settles.
  *
  * Throws ONLY when the router reports the fill actually failed. A timeout is not
@@ -93,7 +106,7 @@ export async function waitForRfqFill(
       last = (await res.json()) as RfqStatusResponse;
       opts.onTick?.(last);
       if (last.filled) return { ...last, timedOut: false };
-      if (last.failed) throw new Error(last.reason || "That trade didn't go through.");
+      if (last.failed) throw new Error(friendlyRfqFailure(last.reason));
     }
     if (Date.now() > deadline) return { ...last, timedOut: true };
     await new Promise((r) => setTimeout(r, delay));

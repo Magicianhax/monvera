@@ -238,9 +238,23 @@ export interface ArcusQuote {
 // need a "settling" state. `minBuyAmount` is enforced on-chain, so the router
 // submitting on our behalf stays non-custodial.
 
-/** Pick the RFQ venue: signable intent, no client tx. */
+/** True if this intent's witness binds a taker — the shape our relay can settle. */
+function hasTakerWitness(toSign: unknown): boolean {
+  const witness = (toSign as { message?: { witness?: { taker?: unknown } } })?.message?.witness;
+  return typeof witness?.taker === "string";
+}
+
+/** Pick the RFQ venue: signable intent, no client tx.
+ *
+ *  Pinned to the `arcus` venue: the router now also returns a LiFi RFQ-style
+ *  quote whose witness is a LiFiCall (no `taker`). We relay every submission
+ *  with venue:"arcus", so a LiFi-witnessed intent can never settle through us —
+ *  picking one made buys fail with "That signature doesn't match this account".
+ */
 function pickRfq(r: RouterResponse): VenueQuote | null {
-  const rfq = (r.all ?? []).filter((q) => q.buyAmount && q.toSign && !q.tx?.data);
+  const rfq = (r.all ?? []).filter(
+    (q) => q.buyAmount && q.toSign && !q.tx?.data && q.venue === "arcus" && hasTakerWitness(q.toSign),
+  );
   return best(rfq, r.recommended);
 }
 

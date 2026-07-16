@@ -64,7 +64,12 @@ export async function POST(req: NextRequest) {
   // witness is what Permit2 verifies on-chain, so a signature lifted from
   // somewhere else cannot be replayed here under a different taker.
   const bound = signedTaker(body.typedData);
-  if (!bound || bound.toLowerCase() !== body.taker.toLowerCase()) {
+  if (!bound) {
+    // An intent with no taker in its witness (e.g. the router's LiFi-style
+    // quote) can't settle through the arcus venue we relay to. Stale quote.
+    return badRequest("That quote can't be placed from here. Refresh and try again.");
+  }
+  if (bound.toLowerCase() !== body.taker.toLowerCase()) {
     return badRequest("That signature doesn't match this account.");
   }
 

@@ -89,13 +89,48 @@ async function balanceOf(token: Address, decimals: number): Promise<number> {
 // ── Indexer: record new treasury funding (USDG->VIRTUAL) and buyback legs ──
 const LAST_BLOCK_KEY = "buyback:lastblock:v1";
 const INDEX_LOCK_KEY = "buyback:indexed:v1";
-const CHUNK = BigInt(9000);
+// The RPC serves topic-filtered getLogs over 500k+ block ranges in one call
+// (verified live); tiny chunks made the cursor crawl ~9k blocks per run and lag
+// the chain head by days. Keep a chunk cap only as a safety valve.
+const CHUNK = BigInt(400_000);
 const ZERO = BigInt(0);
 const ONE = BigInt(1);
 const WINDOW = BigInt(20000);
+// How far back a relayed fill may look for its USDG funding outflow.
+const RELAY_LOOKBACK = BigInt(2000);
+
+/** The nearest prior USDG outflow from the treasury (within RELAY_LOOKBACK
+ *  blocks) that hasn't already been consumed by another record — the funding
+ *  side of a relayed buyback. */
+async function findFundingOutflow(fillBlock: bigint): Promise<{ txHash: string; usdgSpent: number } | null> {
+  const from = fillBlock > RELAY_LOOKBACK ? fillBlock - RELAY_LOOKBACK : ZERO;
+  let logs;
+  try {
+    logs = await client.getLogs({ address: USDG.address, event: TRANSFER, args: { from: TREASURY }, fromBlock: from, toBlock: fillBlock });
+  } catch {
+    return null;
+  }
+  // Newest-first: the funding tx is typically seconds before the fill.
+  logs.sort((a, b) => Number(b.blockNumber - a.blockNumber));
+  for (const lg of logs) {
+    const h = lg.transactionHash as string;
+    const used = await db()
+      .prepare(
+        "SELECT 1 AS x FROM buybacks WHERE tx_hash=? OR source_tx=? UNION ALL SELECT 1 FROM treasury_funding WHERE tx_hash=?",
+      )
+      .bind(h, h, h)
+      .first();
+    if (used) continue;
+    const amount = (lg.args as { value?: bigint }).value ?? ZERO;
+    if (amount === ZERO) continue;
+    return { txHash: h, usdgSpent: Number(formatUnits(amount, USDG.decimals)) };
+  }
+  return null;
+}
 
 /** Classify one treasury tx by its Transfer logs and record it if it is a
- *  funding leg, a routed buyback, or a direct buyback. Idempotent per tx. */
+ *  funding leg, a routed buyback, a direct buyback, or a relayed fill.
+ *  Idempotent per tx. */
 async function classifyTx(txHash: `0x${string}`): Promise<void> {
   const seen = await db()
     .prepare("SELECT 1 AS x FROM buybacks WHERE tx_hash=? UNION ALL SELECT 1 FROM treasury_funding WHERE tx_hash=?")
@@ -133,13 +168,26 @@ async function classifyTx(txHash: `0x${string}`): Promise<void> {
       .run();
     return;
   }
-  // Direct buyback (future-proof): USDG out + MONVERA in, no VIRTUAL hop.
+  // Direct buyback: USDG out + MONVERA in within one tx.
   if (usdgOut > ZERO && monveraIn > ZERO) {
     const usdgSpent = Number(formatUnits(usdgOut, USDG.decimals));
     const price = monveraAmount > 0 ? usdgSpent / monveraAmount : 0;
     await db()
       .prepare("INSERT OR IGNORE INTO buybacks (tx_hash,block_number,bought_at,monvera_amount,usdg_spent,virtual_spent,price_usd) VALUES (?,?,?,?,?,?,?)")
       .bind(txHash, blockNumber, at, monveraAmount, usdgSpent, 0, price)
+      .run();
+    return;
+  }
+  // Relayed buyback: MONVERA arrives with no treasury outflow in the SAME tx —
+  // the USDG left in an earlier tx and a relay delivered the fill (the permit+
+  // relay route). Pair the fill with the nearest prior unconsumed USDG outflow.
+  if (monveraIn > ZERO && usdgOut === ZERO && virtualOut === ZERO) {
+    const fundedBy = await findFundingOutflow(receipt.blockNumber);
+    const usdgSpent = fundedBy?.usdgSpent ?? 0;
+    const price = usdgSpent > 0 && monveraAmount > 0 ? usdgSpent / monveraAmount : 0;
+    await db()
+      .prepare("INSERT OR IGNORE INTO buybacks (tx_hash,block_number,bought_at,monvera_amount,usdg_spent,virtual_spent,price_usd,source_tx) VALUES (?,?,?,?,?,?,?,?)")
+      .bind(txHash, blockNumber, at, monveraAmount, usdgSpent, 0, price, fundedBy?.txHash ?? null)
       .run();
     return;
   }
