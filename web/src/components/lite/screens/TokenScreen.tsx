@@ -891,7 +891,7 @@ function SwapPanel({
         )}
       </button>
       <div style={{ textAlign: "center", marginTop: 10, fontSize: 12, color: "var(--ink-3)" }}>
-        Swaps are powered by Li.Fi
+        Swaps are powered by Matcha
       </div>
     </div>
   );

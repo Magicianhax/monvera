@@ -12,7 +12,7 @@
 // a one-time EOA approve(smartAccount, max) paid by /api/gas-drip dust — shown
 // in Privy's confirm UI, never silent; every sell then relays
 // [ transferFrom(EOA->SA), approve(spender), quote.tx ] as one sponsored
-// UserOp. Routing = /api/token-quote (LiFi best-rate, v2 fallback).
+// UserOp. Routing = /api/token-quote (best of Matcha/0x vs direct v2 router).
 import { useCallback, useState } from "react";
 import { encodeFunctionData, maxUint256 } from "viem";
 import { useSignTypedData, useSendTransaction } from "@privy-io/react-auth";
@@ -45,7 +45,9 @@ interface TokenQuote {
   toAmountMin: string;
   approvalAddress: `0x${string}`;
   tx: { to: `0x${string}`; data: `0x${string}`; value: string };
-  source: "lifi" | "router";
+  source: "matcha" | "router";
+  /** matcha only: forwards the swap output from the smart account to the EOA. */
+  sweepTx?: { to: `0x${string}`; data: `0x${string}`; value: string };
 }
 
 /** `address` = the smart account that executes; `to` = the EOA that receives. */
@@ -128,6 +130,7 @@ export function useMonveraSwap() {
             data: encodeFunctionData({ abi: ERC20_MINI_ABI, functionName: "approve", args: [q.approvalAddress, amountIn] }),
           },
           { to: q.tx.to, data: q.tx.data, value: BigInt(q.tx.value || 0) },
+          ...(q.sweepTx ? [{ to: q.sweepTx.to, data: q.sweepTx.data, value: BigInt(q.sweepTx.value || 0) }] : []),
         ];
 
         // Balance backstop: a UserOp that "succeeds" only proves it didn't
@@ -148,11 +151,11 @@ export function useMonveraSwap() {
           receipt = await sendSponsoredCalls(provider, buildCalls(q));
           executed = q;
         } catch (err) {
-          // LiFi routes occasionally revert in simulation (executor quirks on
+          // Matcha routes occasionally revert in simulation (executor quirks on
           // this young chain). The direct v2 router path is the designed
           // fallback — re-quote and retry once before surfacing anything.
-          if (q.source !== "lifi") throw err;
-          console.warn("[monvera-swap] LiFi buy route reverted, retrying via router:", err instanceof Error ? err.message : err);
+          if (q.source !== "matcha") throw err;
+          console.warn("[monvera-swap] Matcha buy route reverted, retrying via router:", err instanceof Error ? err.message : err);
           const rq = await fetchQuote("buy", amountIn, smartAccount, eoa, "router");
           receipt = await sendSponsoredCalls(provider, buildCalls(rq));
           executed = rq;
@@ -239,6 +242,7 @@ export function useMonveraSwap() {
             data: encodeFunctionData({ abi: ERC20_MINI_ABI, functionName: "approve", args: [quote.approvalAddress, amountRaw] }),
           },
           { to: quote.tx.to, data: quote.tx.data, value: BigInt(quote.tx.value || 0) },
+          ...(quote.sweepTx ? [{ to: quote.sweepTx.to, data: quote.sweepTx.data, value: BigInt(quote.sweepTx.value || 0) }] : []),
         ];
 
         // USDG-received backstop (same rationale as the buy path).
@@ -255,10 +259,10 @@ export function useMonveraSwap() {
           receipt = await sendSponsoredCalls(provider, buildCalls(q));
           executed = q;
         } catch (err) {
-          // Same LiFi-revert fallback as the buy path: re-quote via the direct
+          // Same Matcha-revert fallback as the buy path: re-quote via the direct
           // v2 router and retry once.
-          if (q.source !== "lifi") throw err;
-          console.warn("[monvera-swap] LiFi sell route reverted, retrying via router:", err instanceof Error ? err.message : err);
+          if (q.source !== "matcha") throw err;
+          console.warn("[monvera-swap] Matcha sell route reverted, retrying via router:", err instanceof Error ? err.message : err);
           const rq = await fetchQuote("sell", amountRaw, smartAccount, eoa, "router");
           receipt = await sendSponsoredCalls(provider, buildCalls(rq));
           executed = rq;

@@ -1,7 +1,6 @@
-// GET /api/token-quote — a fresh buy/sell quote for $MONVERA. Primary route is
-// LiFi (verified live on 4663; beats the direct route even after its fee by
-// using the deeper WETH pools); on ANY LiFi failure we fall back to the direct
-// Uniswap v2 router over USDG<->VIRTUAL<->MONVERA. Never cached — quotes go
+// GET /api/token-quote — a fresh buy/sell quote for $MONVERA. Quotes Matcha
+// (0x Swap API) and the direct Uniswap v2 router (USDG<->VIRTUAL<->MONVERA)
+// side by side and serves whichever guarantees more out. Never cached — quotes go
 // stale in seconds and the client batches the returned `tx` into one gasless
 // UserOp. `address` = the SMART ACCOUNT that executes the route; `to` = the EOA
 // that receives the output. Public but rate-limited per IP.
@@ -16,78 +15,89 @@ import { tooManyRequests, badRequest, serverError } from "@/lib/server/respond";
 
 export const dynamic = "force-dynamic"; // quotes must be fresh — never cache
 
-const LIFI_QUOTE_URL = "https://li.quest/v1/quote";
 const client = createPublicClient({ chain, transport: http(SERVER_RPC_URL) });
 
-// LiFi's ONLY contract on Robinhood Chain (its LiFiDiamond — verified via
-// li.quest/v1/chains, and it is both the approval spender and the tx target for
-// every route). The client grants an exact-amount approval to approvalAddress
-// then calls tx.to, so both MUST be this address — otherwise a manipulated
-// quote could name an attacker contract that pulls the just-approved funds.
-// Anything off-list falls back to the direct router path.
-const LIFI_DIAMOND_4663 = "0xb477751b76cf82d00a686a1232f5fcd772414af3";
+// Matcha (0x Swap API v2, allowance-holder flow). 0x's canonical AllowanceHolder
+// is both the approval spender and the tx target for every route (verified live
+// on 4663). The client grants an exact-amount approval to approvalAddress then
+// calls tx.to, so both MUST be this address — otherwise a manipulated quote
+// could name an attacker contract that pulls the just-approved funds. Anything
+// off-pin falls back to the direct router path.
+const ZEROX_QUOTE_URL = "https://api.0x.org/swap/allowance-holder/quote";
+const ALLOWANCE_HOLDER_4663 = "0x0000000000001ff3684f28c67538d4d072c22734";
 
 interface QuoteBody {
   toAmount: string;
   toAmountMin: string;
   approvalAddress: string;
   tx: { to: string; data: string; value: string };
-  source: "lifi" | "router";
+  source: "matcha" | "router";
+  /** matcha only: 0x pays the taker (the smart account), so the client appends
+   *  this pre-encoded transfer to hand the output on to the recipient EOA. */
+  sweepTx?: { to: string; data: string; value: string };
 }
 
-/** LiFi quote. Returns null on any failure so the caller falls back to the router. */
-async function lifiQuote(
+const ERC20_TRANSFER_ABI = [
+  { type: "function", name: "transfer", stateMutability: "nonpayable", inputs: [{ type: "address" }, { type: "uint256" }], outputs: [{ type: "bool" }] },
+] as const;
+
+/** Matcha/0x quote. Returns null on any failure so the caller falls back to the router. */
+async function matchaQuote(
   side: "buy" | "sell",
   amount: string,
   address: string,
   to: string,
 ): Promise<QuoteBody | null> {
-  const fromToken = side === "buy" ? USDG.address : MONVERA.address;
-  const toToken = side === "buy" ? MONVERA.address : USDG.address;
+  const key = process.env.ZEROX_API_KEY;
+  if (!key) return null;
+  const sellToken = side === "buy" ? USDG.address : MONVERA.address;
+  const buyToken = side === "buy" ? MONVERA.address : USDG.address;
 
-  const url = new URL(LIFI_QUOTE_URL);
-  url.searchParams.set("fromChain", "4663");
-  url.searchParams.set("toChain", "4663");
-  url.searchParams.set("fromToken", fromToken);
-  url.searchParams.set("toToken", toToken);
-  url.searchParams.set("fromAddress", address);
-  url.searchParams.set("toAddress", to);
-  url.searchParams.set("fromAmount", amount);
-  url.searchParams.set("slippage", "0.03");
+  const url = new URL(ZEROX_QUOTE_URL);
+  url.searchParams.set("chainId", "4663");
+  url.searchParams.set("sellToken", sellToken);
+  url.searchParams.set("buyToken", buyToken);
+  url.searchParams.set("sellAmount", amount);
+  url.searchParams.set("taker", address);
+  url.searchParams.set("slippageBps", "300");
 
-  const headers: Record<string, string> = {};
-  const key = process.env.LIFI_API_KEY;
-  if (key) headers["x-lifi-api-key"] = key; // higher RPM + routing tier; blank = public tier
-
-  const res = await fetch(url, { headers, signal: AbortSignal.timeout(10_000) });
+  const res = await fetch(url, {
+    headers: { "0x-api-key": key, "0x-version": "v2" },
+    signal: AbortSignal.timeout(10_000),
+  });
   if (!res.ok) return null;
   const json = (await res.json()) as {
-    estimate?: { toAmount?: string; toAmountMin?: string; approvalAddress?: string };
-    transactionRequest?: { to?: string; data?: string; value?: string };
+    liquidityAvailable?: boolean;
+    buyAmount?: string;
+    minBuyAmount?: string;
+    transaction?: { to?: string; data?: string; value?: string };
   };
-  const est = json.estimate;
-  const tx = json.transactionRequest;
-  if (!est?.toAmount || !est.toAmountMin || !est.approvalAddress || !tx?.to || !tx.data) return null;
-  // Both the approval spender AND the call target must be LiFi's own diamond —
-  // reject (→ router fallback) if either points elsewhere, so a manipulated
-  // quote can't redirect the exact-amount approval to a draining contract.
-  if (
-    est.approvalAddress.toLowerCase() !== LIFI_DIAMOND_4663 ||
-    tx.to.toLowerCase() !== LIFI_DIAMOND_4663
-  ) {
-    return null;
-  }
+  const tx = json.transaction;
+  if (!json.liquidityAvailable || !json.buyAmount || !json.minBuyAmount || !tx?.to || !tx.data) return null;
+  if (tx.to.toLowerCase() !== ALLOWANCE_HOLDER_4663) return null;
+  const minOut = BigInt(json.minBuyAmount);
+  // 0x delivers to the taker (the smart account); forward the guaranteed
+  // minimum on to the recipient EOA in the same batch. Positive slippage above
+  // minOut stays on the smart account (harmless dust, ≤ slippageBps).
+  const sweep =
+    to.toLowerCase() === address.toLowerCase()
+      ? undefined
+      : {
+          to: buyToken,
+          data: encodeFunctionData({ abi: ERC20_TRANSFER_ABI, functionName: "transfer", args: [to as `0x${string}`, minOut] }),
+          value: "0",
+        };
   return {
-    toAmount: String(BigInt(est.toAmount)),
-    toAmountMin: String(BigInt(est.toAmountMin)),
-    approvalAddress: est.approvalAddress,
-    // value comes hex ("0x0") — normalize to a decimal string the client BigInt()s.
+    toAmount: String(BigInt(json.buyAmount)),
+    toAmountMin: String(minOut),
+    approvalAddress: tx.to,
     tx: { to: tx.to, data: tx.data, value: tx.value ? String(BigInt(tx.value)) : "0" },
-    source: "lifi",
+    source: "matcha",
+    sweepTx: sweep,
   };
 }
 
-/** Direct Uniswap v2 router quote — the fallback when LiFi is unavailable. */
+/** Direct Uniswap v2 router quote — compared against Matcha on every request. */
 async function routerQuote(side: "buy" | "sell", amount: bigint, to: string): Promise<QuoteBody> {
   const path = side === "buy" ? BUY_PATH : SELL_PATH;
   const amounts = (await client.readContract({
@@ -123,7 +133,7 @@ export async function GET(req: NextRequest) {
   const amountStr = url.searchParams.get("amount");
   const address = url.searchParams.get("address");
   const to = url.searchParams.get("to");
-  // prefer=router skips LiFi — the client's retry path after a LiFi route
+  // prefer=router skips Matcha — the client's retry path after a Matcha route
   // reverted in UserOp simulation.
   const preferRouter = url.searchParams.get("prefer") === "router";
 
@@ -139,15 +149,17 @@ export async function GET(req: NextRequest) {
   if (amount <= BigInt(0)) return badRequest("Amount must be positive.");
 
   try {
-    let body: QuoteBody | null = null;
-    if (!preferRouter) {
-      try {
-        body = await lifiQuote(side, String(amount), address, to);
-      } catch {
-        body = null; // any LiFi error -> router fallback
-      }
-    }
-    if (!body) body = await routerQuote(side, amount, to);
+    // Best net output wins: quote Matcha and the direct router side by side and
+    // serve whichever guarantees more out (fees are baked into both quotes), so
+    // users never get a worse price for the attribution. prefer=router skips
+    // Matcha — the client's retry path after a route reverted in simulation.
+    const [matcha, router] = await Promise.all([
+      preferRouter ? Promise.resolve(null) : matchaQuote(side, String(amount), address, to).catch(() => null),
+      routerQuote(side, amount, to).catch(() => null),
+    ]);
+    const body =
+      matcha && (!router || BigInt(matcha.toAmountMin) > BigInt(router.toAmountMin)) ? matcha : router;
+    if (!body) throw new Error("no route available");
     return Response.json(body, { headers: { "Cache-Control": "no-store" } });
   } catch (err) {
     return serverError("token-quote", err);
