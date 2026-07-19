@@ -34,7 +34,7 @@ test("GET / lists all services free", async () => {
   const r = await route(new Request("https://asp.example/"), env, ctx);
   expect(r.status).toBe(200);
   const body = (await r.json()) as { services: unknown[] };
-  expect(body.services.length).toBe(10);
+  expect(body.services.length).toBe(11);
 });
 
 test("paid route without payment gets 402 + challenge header", async () => {
