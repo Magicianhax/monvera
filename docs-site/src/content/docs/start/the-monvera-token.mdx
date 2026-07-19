@@ -1,69 +1,62 @@
 ---
 title: "The $MONVERA token"
-description: "$MONVERA is the community's stake in Vera, launched on Virtuals Protocol on Robinhood Chain. What it is, where it trades, its tokenomics — and why the app never requires it."
+description: "A community token on Robinhood Chain. The app never requires it, and it is not an investment product."
 ---
 
-import { Aside, LinkCard, CardGrid } from '@astrojs/starlight/components';
+import { Aside } from '@astrojs/starlight/components';
 import Tokenomics from '../../../components/Tokenomics.astro';
 
-$MONVERA is Monvera's token — the community's stake in Vera, launched on [Virtuals Protocol](https://app.virtuals.io/virtuals/105667) on **Robinhood Chain**, the same chain the app settles on.
+$MONVERA is a community token for the agent, launched on [Virtuals Protocol](https://app.virtuals.io/virtuals/105667) on Robinhood Chain — the same chain the app settles on. **You never need it.** Investing with Vera costs no token toll, and nothing in the product is gated behind buying one.
 
-<Aside type="note" title="The app never requires it">
-Investing with Vera is free of any token toll. $MONVERA is how you back the agent, not how you unlock her. It isn't an investment product, and its price can go down as well as up.
-</Aside>
+It is not an investment product, it is not a claim on Monvera's revenue, and its price can go to zero.
 
 ## The facts
 
 | | |
 | --- | --- |
 | Ticker | **$MONVERA** |
-| Chain | Robinhood Chain (the app's own chain) |
-| Contract | `0x7541872e32Bb529d7FF11D6C59832269ce33a6FF` |
-| Total supply | 1,000,000,000 (fixed — no mint, no inflation) |
+| Chain | Robinhood Chain (4663) |
+| Contract | [`0x7541872e32Bb529d7FF11D6C59832269ce33a6FF`](https://robinhoodchain.blockscout.com/token/0x7541872e32Bb529d7FF11D6C59832269ce33a6FF) |
+| Total supply | 1,000,000,000 — fixed, no mint, no inflation |
 | Launched | 13 Jul 2026, via Virtuals Protocol |
+| Pool | [app.virtuals.io/virtuals/105667](https://app.virtuals.io/virtuals/105667) |
+| Chart | [DexScreener](https://dexscreener.com/robinhood/0x7541872e32Bb529d7FF11D6C59832269ce33a6FF) |
 
-<CardGrid>
-  <LinkCard title="Buy on Virtuals" href="https://app.virtuals.io/virtuals/105667" description="The launch pool on Virtuals Protocol." />
-  <LinkCard title="Live chart" href="https://dexscreener.com/robinhood/0x7541872e32Bb529d7FF11D6C59832269ce33a6FF" description="The trading pair on DexScreener." />
-  <LinkCard title="Verify the contract" href="https://robinhoodchain.blockscout.com/token/0x7541872e32Bb529d7FF11D6C59832269ce33a6FF" description="The token on Blockscout — holders, transfers, code." />
-</CardGrid>
+## Buying and selling in the app
 
-## Buy & sell in the app
+The app trades $MONVERA directly — ask Vera to open the $MONVERA panel and you get the chart, the stats, and a buy/sell box.
 
-The app now trades $MONVERA directly. On the home screen you'll see a live price pill (tap it for the full token screen: chart, stats, and the buy/sell panel).
+- **Buying is gasless.** You pay in USDG from your Monvera wallet, the same sponsored flow as any stock buy. Orders route for the best available price across the chain's pools, slippage capped at 3%.
+- **Your first sell needs one setup step.** The token contract does not support signature-based approvals, so your wallet has to sign a single on-chain approval once. The app covers the cost — you will see "Preparing your wallet…" for a few seconds. Every sell after that is instant and sponsored.
+- **Same wallet as your stocks.** $MONVERA sits alongside your tokenized holdings: self-custody, visible on Blockscout, withdrawable any time.
 
-- **Buying is gasless.** You pay in USDG from your Monvera wallet — the same sponsored, no-ETH-needed flow as every stock buy. Orders are routed for the best available price across the chain's pools (via Matcha, with a direct Uniswap fallback), with slippage capped at 3%.
-- **Selling is gasless too, with one wrinkle on your very first sell.** The token contract doesn't support signature-based approvals, so your wallet needs to sign one tiny on-chain approval once. The app covers it: you'll see "Preparing your wallet…" for a few seconds while we send your wallet a sliver of ETH to pay for that single approval. Every sell after that is instant and fully sponsored.
-- **Same wallet as your stocks.** $MONVERA sits in your normal Monvera wallet next to your tokenized stocks — self-custody, visible on Blockscout, withdrawable any time.
+## The holder mark
 
-### The holder gate
+The panel shows progress toward **100,000 $MONVERA**. Holding that much marks you as a holder, the tier that unlocks holder features as they ship — starting with Scan to Buy, where you photograph a product and Vera maps it to listed companies.
 
-The token screen shows your progress toward **100,000 $MONVERA** (about $100 at launch). Holding that much marks you as a holder — the tier that unlocks holder features as they ship, starting with **Scan to Buy** (photograph any product and Vera maps it to listed companies and invests, recorded on-chain). Per [our roadmap](https://monvera.best/roadmap) standard: it's *unlocking soon*, and we say so in the app rather than pretending it's live.
+Per the [roadmap](https://monvera.best/roadmap) standard, that is *unlocking soon*, and the app says so rather than pretending it is live.
 
 ## Tokenomics
 
-Set by the Virtuals launch mechanics and locked — nobody, including us, can edit them.
+Set by the Virtuals launch mechanics and locked. Nobody, including Monvera, can edit them.
 
 <Tokenomics />
 
 | Allocation | Share | Release |
 | --- | --- | --- |
-| Pledger allocation | 69.30% | Immediately claimable at launch (13 Jul 2026) |
-| Sniper Tax Buyback for Team | 12.90% | Locked for 3 months, then linear over 9 months (13 Oct 2026 → 13 Jul 2027) |
-| Liquidity Pool | 10.10% | Fixed supply, locked in the trading pool |
-| Developer vesting | 7.70% | 6-month cliff, then linear over 6 months (13 Jan 2027 → 13 Jul 2027) |
+| Pledger allocation | 69.30% | Claimable at launch (13 Jul 2026) |
+| Sniper tax buyback for team | 12.90% | Locked 3 months, then linear over 9 (13 Oct 2026 → 13 Jul 2027) |
+| Liquidity pool | 10.10% | Fixed, locked in the trading pool |
+| Developer vesting | 7.70% | 6-month cliff, then linear over 6 (13 Jan 2027 → 13 Jul 2027) |
 
-Most of the supply is liquid at launch. Two tranches vest over time — the sniper-tax
-buyback (locked three months, then released linearly over nine) and the developer
-allocation (a six-month cliff, then six months linear) — with everything fully
-unlocked by 13 Jul 2027.
+Most of the supply is liquid from day one. The two vesting tranches are fully unlocked by 13 Jul 2027.
 
-## What the token is for
+## What it is for
 
-Vera is a working agent: she routes real volume through a live venue, records a signed risk assessment for every plan, and sells portfolio-plan building to other agents on Virtuals ACP. $MONVERA is the community's way to back that agent inside the Virtuals agent economy.
+Vera is a working agent: she routes real volume through a live venue, records a signed risk assessment for every plan, and sells plan-building to other agents on Virtuals ACP. $MONVERA is how the Virtuals agent economy backs an agent — a community token on the same chain as the product, with fixed supply and locked tokenomics.
 
-What that means today: a stake in the agent, on the same chain as the product, with fixed supply and locked tokenomics. Where it can go — paying for Vera's agent-to-agent work, early access to new capabilities, community input on strategies — follows the same standard as [our roadmap](https://monvera.best/roadmap): we say *exploring* until it ships.
+That is what it is today. Ideas beyond it — paying for Vera's agent-to-agent work, early access to new capabilities, community input on strategies — follow the same roadmap standard: *exploring* until it ships. Do not buy on the strength of any of them.
 
 <Aside type="caution" title="Stay safe">
-The only real contract is `0x7541…a6FF` on Robinhood Chain, and the only pool is the Virtuals link above. Anyone DMing you a different address, a "presale", or a "migration" is a scammer. See [staying safe from scams](/safety/staying-safe-from-scams/).
+The only real contract is `0x7541…a6FF` on Robinhood Chain, and the only pool is the Virtuals link above. Anyone sending you a different address, a "presale", or a "migration" is a scammer. See [staying safe from scams](/safety/scams-and-support/).
 </Aside>

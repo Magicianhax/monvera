@@ -1,15 +1,15 @@
 ---
 title: "Network and addresses"
-description: "The single source of truth for Robinhood Chain (4663 mainnet, 46630 testnet), RPC, explorer, and every Monvera contract address, each Blockscout-linked."
+description: "Chain 4663 values, RPC, explorer, and every Monvera contract address, Blockscout-linked."
 ---
 
-import { Aside, LinkCard } from '@astrojs/starlight/components';
+import { Aside } from '@astrojs/starlight/components';
 
-Every chain value and contract address Monvera uses is on this page, each linked to Blockscout. Take addresses from here, never from a tweet or a screenshot.
+Every chain value and contract address Monvera uses is on this page, each linked to Blockscout. Take addresses from here or from `GET /api/market` — never from a tweet, a screenshot, or a search result.
 
-## Robinhood Chain network values
+## Network values
 
-Monvera settles on Robinhood Chain, an Arbitrum-stack Ethereum L2. The native gas token is ETH (18 decimals).
+Monvera settles on Robinhood Chain, an Arbitrum-stack Ethereum L2. The native gas token is ETH (18 decimals), though accounts never hold it: gas is sponsored through ERC-4337.
 
 | Value | Mainnet | Testnet |
 | --- | --- | --- |
@@ -18,31 +18,43 @@ Monvera settles on Robinhood Chain, an Arbitrum-stack Ethereum L2. The native ga
 | Explorer (Blockscout) | `https://robinhoodchain.blockscout.com` | `https://explorer.testnet.chain.robinhood.com` |
 
 <Aside type="note">
-Public RPC caps `eth_getLogs` at 10,000 blocks per request. The Monvera record scanner chunks at 9,999 blocks and starts at deploy block `2429508`. For full record history without paging logs yourself, use [`/api/vera-record`](/dev/api/vera-record/).
+Public RPC caps `eth_getLogs` at 10,000 blocks per request, and the Blockscout indexer trails the chain head. The Monvera record scanner chunks at 9,999 blocks from deploy block `2429508`. For full history without paging logs yourself, read [`/api/vera-record`](/dev/api/vera-record/).
 </Aside>
 
-## Contract addresses (chain 4663)
+## Contracts on chain 4663
 
-Each address below is on Robinhood Chain unless noted, and each links to its Blockscout page.
-
-| Contract | Address | Backs |
+| Contract | Address | What it backs |
 | --- | --- | --- |
 | VeraRecord | [`0x7ff1a5ee19330c165146488a7ad8af6cb41da1df`](https://robinhoodchain.blockscout.com/address/0x7ff1a5ee19330c165146488a7ad8af6cb41da1df) | `record(...)`, `agentSigner()`, `committed(planId)`; emits `RecommendationCommitted` and `AllocationExecuted`; EIP-712 domain `VeraRecord` |
-| IdentityRegistry | [`0x751ae640cfa816404b017fbb8234dd21abafbbdc`](https://robinhoodchain.blockscout.com/address/0x751ae640cfa816404b017fbb8234dd21abafbbdc) | ERC-8004 ERC-721 "Stax Agent Identity" (STAXID); Vera is agent #1; `reputationScore(agentId)`, `tokenURI(agentId)` |
+| IdentityRegistry | [`0x751ae640cfa816404b017fbb8234dd21abafbbdc`](https://robinhoodchain.blockscout.com/address/0x751ae640cfa816404b017fbb8234dd21abafbbdc) | ERC-8004 ERC-721 agent identity; Vera is agent #1; `reputationScore(agentId)`, `tokenURI(agentId)` |
 | USDG | [`0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168`](https://robinhoodchain.blockscout.com/address/0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168) | Settlement currency, 6 decimals; every trade settles in USDG |
-| WETH | [`0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73`](https://robinhoodchain.blockscout.com/address/0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73) | Intermediate token (18 decimals) for Arcus routing |
-| Multicall3 | [`0xcA11bde05977b3631167028862bE2a173976CA11`](https://robinhoodchain.blockscout.com/address/0xcA11bde05977b3631167028862bE2a173976CA11) | Batched view reads at the canonical Multicall3 address |
-| Permit2 | [`0x000000000022D473030F116dDEE9F6B43aC78BA3`](https://robinhoodchain.blockscout.com/address/0x000000000022D473030F116dDEE9F6B43aC78BA3) | Token approvals for Arcus RFQ settlement |
+| WETH | [`0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73`](https://robinhoodchain.blockscout.com/address/0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73) | Intermediate token (18 decimals) for router paths |
+| Multicall3 | [`0xcA11bde05977b3631167028862bE2a173976CA11`](https://robinhoodchain.blockscout.com/address/0xcA11bde05977b3631167028862bE2a173976CA11) | Batched view reads, at the canonical Multicall3 address |
+| Permit2 | [`0x000000000022D473030F116dDEE9F6B43aC78BA3`](https://robinhoodchain.blockscout.com/address/0x000000000022D473030F116dDEE9F6B43aC78BA3) | Token approvals for RFQ settlement |
 
-`VeraRecord` and the `InferenceVerifier` verify path are the same contract at `0x7ff1a5ee19330c165146488a7ad8af6cb41da1df`. Stock and fund tokens are 18-decimal ERC-20 tokens in the ERC-8056 family; pull their addresses from [`/api/market`](/dev/api/market/), which is the catalog source of truth.
+`VeraRecord` and the `InferenceVerifier` verify path are the same contract at `0x7ff1a5ee19330c165146488a7ad8af6cb41da1df`.
 
-## Vera's canonical identity (Base, chain 8453)
+## Asset tokens
 
-Vera's canonical ERC-8004 identity lives on Base, not on 4663. The registry is [`0x8004a169fb4a3325136eb29fa0ceb6d2e539a432`](https://basescan.org/address/0x8004a169fb4a3325136eb29fa0ceb6d2e539a432) on chain `8453`, agent id `58228`, registered via Virtuals ACP. It is declared in `registrations[0]` of her [agent card](/dev/verify-vera/#what-the-agent-card-declares). The 4663 IdentityRegistry above is Monvera's own registry and holds Vera as agent #1; do not label it "canonical."
+The 95 tradable stocks and ETFs are 18-decimal ERC-20 tokens in the ERC-8056 family. Their addresses are not listed here on purpose: the catalog changes, so pull them from [`/api/market`](/dev/api/market/), which is the source of truth.
 
-## The trusted agent signer
+| Symbol | Address |
+| --- | --- |
+| AAPL | `0xaF3D76f1834A1d425780943C99Ea8A608f8a93f9` |
+| NVDA | `0xd0601CE157Db5bdC3162BbaC2a2C8aF5320D9EEC` |
+| SPY | `0x117cc2133c37B721F49dE2A7a74833232B3B4C0C` |
+| SGOV | `0x92FD66527192E3e61d4DDd13322Aa222DE86F9B5` |
 
-`agentSigner()` on VeraRecord was last read as `0xe532105523d4eD559c3a53E3E82D616bE1a085c5`. This key can rotate, so read it live before you assert against a recovered signature rather than hardcoding it. The recovery recipe is on [Verify Vera yourself](/dev/verify-vera/#recover-the-signer-and-check-it).
+Those four are the "Steady Growth" worked example used across these pages, included so the request samples can be run as written.
 
-<LinkCard title="Verify Vera yourself" href="/dev/verify-vera/" description="Recover a plan's signer and assert it equals the live agentSigner()." />
-<LinkCard title="Glossary" href="/glossary/" description="What each translated Monvera term maps to under the hood." />
+## Vera's identity on Base (chain 8453)
+
+Vera's canonical ERC-8004 identity lives on Base, not on 4663. The registry is [`0x8004a169fb4a3325136eb29fa0ceb6d2e539a432`](https://basescan.org/address/0x8004a169fb4a3325136eb29fa0ceb6d2e539a432), agent id `58228`, registered via Virtuals ACP, and declared in `registrations[0]` of her agent card. The 4663 IdentityRegistry above is Monvera's own registry and holds Vera as agent #1; it is not the canonical one.
+
+## The trusted signer
+
+`agentSigner()` on VeraRecord was last read as `0xe532105523d4eD559c3a53E3E82D616bE1a085c5`. This key can rotate. Read it live before asserting against a recovered signature rather than hardcoding it — the recipe is on [verify Vera](/dev/verify-vera/).
+
+## $MONVERA
+
+The $MONVERA token is at `0x7541872e32Bb529d7FF11D6C59832269ce33a6FF`, on Robinhood Chain, not on Base. It is unrelated to the trading stack: no route above touches it, and it is not an investment product.

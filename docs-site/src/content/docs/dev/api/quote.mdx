@@ -1,31 +1,25 @@
 ---
 title: "Get a firm price for one asset"
-description: "POST /api/quote returns a firm Arcus spot RFQ quote for one asset in USDG, with the Permit2 intent to sign and the settlement call."
+description: "POST /api/quote returns a firm Arcus RFQ quote for one asset in USDG, plus the intent to sign."
 ---
 
-import { Aside, Tabs, TabItem } from '@astrojs/starlight/components';
+`POST /api/quote` returns a firm Arcus spot RFQ quote for buying or selling one asset in USDG, along with the Permit2 typed data the taker signs and the settlement call to submit.
 
-`POST /api/quote` returns a firm Arcus spot RFQ quote for buying or selling one asset in USDG, along with the Permit2 typed data the taker signs and the settlement call to submit. It is token-gated.
+> `POST /api/quote` · requires a Privy bearer token · geo-restricted (`451`). Base URL, rate limits, and error shapes: [conventions](/dev/conventions/).
 
-<Aside type="caution" title="Gated route">
-This route requires `Authorization: Bearer <privy-token>`. Without a token, or with a bad one, it returns `401 {"error":"Please sign in to continue."}`. See [Authentication](/dev/authentication/) for how to obtain a token. Requests from blocked regions return `451`; see [where Monvera is available](/start/where-its-available/).
-</Aside>
-
-## What it returns
-
-A firm, executable RFQ quote for one leg (`mode: "quote"`), or an indicative "you will get X" price with no signable payload (`mode: "price"`). Buy means USDG to the asset token; sell means the asset token to USDG. The quote is short-lived: fetch it right before you settle, because the Permit2 typed data in `toSign` carries its own deadline.
+Buy means USDG to the asset token; sell means the asset token to USDG. Quotes are short-lived — fetch one right before you settle, because the typed data in `toSign` carries its own deadline.
 
 ## Parameters
 
-The request body is JSON.
+JSON body.
 
-| Name | Type | Required | Default | Description |
-| --- | --- | --- | --- | --- |
-| `mode` | `"price"` \| `"quote"` | yes | none | `"price"` for an indicative amount only; `"quote"` for a firm quote with the signable Permit2 intent and settlement call. |
-| `side` | `"buy"` \| `"sell"` | yes | none | `"buy"` sells USDG for the asset; `"sell"` sells the asset for USDG. |
-| `symbol` | string (1 to 12 chars) | yes | none | The asset ticker, for example `AAPL`. Unknown tickers return `400`. |
-| `sellAmount` | string (decimal digits) | yes | none | Raw base units of the sell token. On a buy the sell token is USDG (6 decimals), so `$25` is `"25000000"`. On a sell the sell token is the 18-decimal asset token. |
-| `taker` | string (address) | yes | none | The smart account that will sign and settle, for example your Monvera account address. |
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `mode` | `"price"` \| `"quote"` | yes | `"price"` for an indicative amount only; `"quote"` for a firm quote with the signable Permit2 intent and settlement call. |
+| `side` | `"buy"` \| `"sell"` | yes | `"buy"` sells USDG for the asset; `"sell"` sells the asset for USDG. |
+| `symbol` | string, 1–12 chars | yes | The asset ticker, e.g. `AAPL`. Unknown tickers return `400`. |
+| `sellAmount` | string (decimal digits) | yes | Raw base units of the sell token. On a buy that is USDG (6 decimals), so `$25` is `"25000000"`. On a sell it is the 18-decimal asset token. |
+| `taker` | string (address) | yes | The smart account that will sign and settle. |
 
 ## Returns
 
@@ -34,23 +28,20 @@ For `mode: "quote"` with liquidity available:
 | Field | Type | Description |
 | --- | --- | --- |
 | `liquidityAvailable` | boolean | `true` when a firm quote was found. `false` returns an object with only this field. |
-| `buyAmount` | string | Raw base units of the buy token you receive (an 18-decimal asset token on a buy, 6-decimal USDG on a sell). |
-| `minBuyAmount` | string | The minimum you receive after slippage (default slippage is 100 bps). |
+| `buyAmount` | string | Raw base units received (18-decimal asset token on a buy, 6-decimal USDG on a sell). |
+| `minBuyAmount` | string | Minimum received after slippage (default 100 bps). |
 | `needsAllowance` | boolean | `true` if the taker must approve the sell token to Permit2 before settling. |
-| `permit2` | string | The Permit2 spender address, `0x000000000022D473030F116dDEE9F6B43aC78BA3`. |
+| `permit2` | string | The Permit2 spender, `0x000000000022D473030F116dDEE9F6B43aC78BA3`. |
 | `sellToken` | string | The sell token address the quote is priced against. |
 | `sellAmount` | string | Echo of the raw sell amount. |
-| `toSign` | object | The Permit2 `PermitWitnessTransferFrom` EIP-712 typed data the taker signs. Pass it straight to `signTypedData`. |
-| `tx` | object | The settlement call: `{ to, data, value, signatureOffset }`. Splice the taker's signature into `data` at `signatureOffset`, then submit. |
+| `toSign` | object | The Permit2 `PermitWitnessTransferFrom` EIP-712 typed data. Pass it straight to `signTypedData`. |
+| `tx` | object | The settlement call, `{ to, data, value, signatureOffset }`. Splice the taker's signature into `data` at `signatureOffset`, then submit. |
 
-For `mode: "price"`, the response is `{ liquidityAvailable, buyAmount }` only, with no signable payload.
+`mode: "price"` responds with `{ liquidityAvailable, buyAmount }` only.
 
 ## Request
 
-Buy $25 of Apple (AAPL) for a smart account:
-
-<Tabs>
-<TabItem label="curl">
+Buy $25 of AAPL:
 
 ```bash
 curl -X POST https://monvera.best/api/quote \
@@ -65,30 +56,6 @@ curl -X POST https://monvera.best/api/quote \
   }'
 ```
 
-</TabItem>
-<TabItem label="fetch">
-
-```js
-const res = await fetch("https://monvera.best/api/quote", {
-  method: "POST",
-  headers: {
-    Authorization: `Bearer ${token}`,
-    "Content-Type": "application/json",
-  },
-  body: JSON.stringify({
-    mode: "quote",
-    side: "buy",
-    symbol: "AAPL",
-    sellAmount: "25000000", // $25 in USDG (6 decimals)
-    taker: "0x4D2b1c3A5e6F7089aB0cD1e2F3a4B5c6D7e8F901",
-  }),
-});
-const quote = await res.json();
-```
-
-</TabItem>
-</Tabs>
-
 ## Example response
 
 ```json
@@ -101,11 +68,7 @@ const quote = await res.json();
   "sellToken": "0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168",
   "sellAmount": "25000000",
   "toSign": {
-    "domain": {
-      "name": "Permit2",
-      "chainId": 4663,
-      "verifyingContract": "0x000000000022D473030F116dDEE9F6B43aC78BA3"
-    },
+    "domain": { "name": "Permit2", "chainId": 4663, "verifyingContract": "0x000000000022D473030F116dDEE9F6B43aC78BA3" },
     "types": { "PermitWitnessTransferFrom": [] },
     "message": { "deadline": "1751990400" }
   },
@@ -118,17 +81,13 @@ const quote = await res.json();
 }
 ```
 
-`buyAmount` above is the AAPL token amount (18 decimals), and `sellToken` is USDG at `0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168`. When there is no firm liquidity, the response is `{ "liquidityAvailable": false }` and nothing is signable.
+`buyAmount` is the AAPL token amount (18 decimals); `sellToken` is USDG.
 
 ## Errors
 
 | Status | Body | When |
 | --- | --- | --- |
-| `400` | `{"error":"Invalid request body."}` | The body fails schema validation (missing field, bad `mode`/`side`, non-numeric `sellAmount`, malformed `taker`). |
-| `400` | `{"error":"Unknown symbol: XYZ"}` | The `symbol` is not one of the 95 assets in the catalog. Read [`GET /api/market`](/dev/api/market/) for valid tickers. |
-| `401` | `{"error":"Please sign in to continue."}` | No bearer token, or an invalid one. |
-| `429` | `{"error":"Too many requests. Please slow down a moment."}` | More than 30 requests in 60 seconds for your account. A `Retry-After` header gives the seconds to wait. |
-| `451` | `{"error":"Monvera is not available in your region."}` | The request comes from the US, Canada, the UK, or Switzerland. |
-| `500` | `{"error":"Something went wrong. Please try again."}` | The Arcus router call failed. |
+| `400` | `{"error":"Invalid request body."}` | Schema validation failed: missing field, bad `mode`/`side`, non-numeric `sellAmount`, malformed `taker`. |
+| `400` | `{"error":"Unknown symbol: XYZ"}` | The `symbol` is not in the catalog. Valid tickers: [`GET /api/market`](/dev/api/market/). |
 
-A `{"liquidityAvailable": false}` body is a `200`, not an error: the asset is known but has no firm executable quote right now. Treat it as "cannot trade this leg at the moment" and do not sign anything.
+`{"liquidityAvailable": false}` is a `200`, not an error: the asset is known but has no firm executable quote right now. Treat it as "cannot trade this leg at the moment" and sign nothing.

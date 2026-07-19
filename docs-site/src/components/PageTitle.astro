@@ -1,0 +1,27 @@
+---
+// Page title block: the section name as an eyebrow, the H1, and the
+// frontmatter description as a subtitle. The subtitle is the biggest
+// readability win on the site — every page then opens by answering what it is
+// for, before the prose starts. Not doable in CSS: the description lives in
+// frontmatter and Starlight never renders it in the body.
+const { entry, sidebar } = Astro.locals.starlightRoute;
+const { title = '', description } = entry.data;
+
+// Find which sidebar group the current page sits in, for the eyebrow.
+function groupOf(items: any[], depth = 0): string | undefined {
+  for (const item of items) {
+    if (item.type === 'group') {
+      const hit = item.entries.some(function seek(e: any): boolean {
+        return e.type === 'link' ? e.isCurrent : e.entries.some(seek);
+      });
+      if (hit) return item.label;
+    }
+  }
+  return undefined;
+}
+const eyebrow = groupOf(sidebar);
+---
+
+{eyebrow && <p class="mv-eyebrow">{eyebrow}</p>}
+<h1 id="_top">{title}</h1>
+{description && <p class="mv-subtitle">{description}</p>}

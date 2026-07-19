@@ -1,36 +1,59 @@
 ---
 title: "Where Monvera's prices come from"
-description: "Prices come from Chainlink 8-decimal corporate-action-adjusted feeds where published, plus live Arcus RFQ quotes; assets with no feed are shown honestly."
+description: "A Chainlink feed where one exists, a live venue quote otherwise, and the executable quote always wins at trade time."
 ---
 
-import { Aside, Tabs, TabItem, LinkCard } from '@astrojs/starlight/components';
+import { Aside, Tabs, TabItem } from '@astrojs/starlight/components';
+import Transcript from '../../../components/Transcript.astro';
+import Turn from '../../../components/Turn.astro';
 
-Monvera shows two kinds of price: a Chainlink reference price where a feed is published, and a live Arcus RFQ quote (the request-for-quote price that a trade actually executes at). Assets with no Chainlink feed are shown as such rather than given a faked number.
+Monvera shows you two different numbers on purpose: a reference price, which is what the asset is worth, and an executable quote, which is what you can actually trade at this second. The reference price comes from a Chainlink feed where the chain has one, and from a live venue quote or the last real market close where it does not. When the two disagree, the executable quote is the one that moves your money. Every price is sourced or it is blank, never invented.
 
-## Chainlink reference feeds
+## Three sources, in order
 
-Chainlink feeds give the displayed reference price for assets that have one. These feeds are 8-decimal and adjusted for corporate actions (splits and similar), so the number on the chart tracks the real instrument rather than a raw, unadjusted tick. Chainlink is the price-data provider in the stack; see [the stack](/how/the-stack/).
+Each asset is priced by the first source that can answer honestly:
+
+| Order | Source | Covers | What it is |
+| --- | --- | --- | --- |
+| 1 | Chainlink price feed | 34 of the 95 assets | An on-chain feed, 8 decimals, already adjusted for splits and other corporate actions |
+| 2 | Live venue quote | Most of the rest | An indicative quote from the trading venue, derived from what a real trade of about $10 would fill at |
+| 3 | Last real market close | The remainder | The most recent daily close for the real underlying ticker |
+| — | Nothing | A handful | Shown as unpriced |
+
+That last row is deliberate. An asset no source can price shows as unpriced rather than as zero, a dash pretending to be a number, or a guess. A missing price should read as missing.
+
+Chart history is separate from all of this: charts are the real underlying ticker's daily closes, not a synthesized series.
+
+## When the sources disagree
+
+They disagree constantly, in small amounts, and the resolution rule is always the same: **money follows the executable quote, screens follow the reference price.**
+
+A reference price is a display number and is cached for a few minutes. The venue quote is fetched fresh at trade time, for each leg, immediately before that leg commits. So the number you saw a minute ago and the number you fill at are allowed to differ, and the fill is the true one.
+
+Three guards keep that from becoming a bad surprise:
+
+- A firm quote carries an **expiry**. If it lapses before the transaction runs, the leg reverts instead of filling at a stale price.
+- A firm quote carries a **minimum amount out**, set by a 1% slippage tolerance by default. Fill worse than that and the leg reverts rather than silently handing you less than you agreed to.
+- Each leg is **quoted and settled one at a time**. Quoting a whole plan upfront and settling later is exactly how the tail legs of a plan go stale, so Monvera does not do it.
+
+A Chainlink feed can go stale too. A feed that has not updated in about four and a half days is discarded rather than displayed, which is long enough to cover a holiday long weekend when equity feeds legitimately stop ticking, and short enough that a genuinely dead feed does not sit on the screen looking alive. When a feed is discarded the asset falls to the next source, the same as if it never had a feed.
 
 <Aside type="note">
-Not every one of the 95 assets (86 stocks and 9 ETFs) has a published Chainlink feed yet. Monvera marks an asset with no feed instead of inventing a price for it, so a missing feed reads as missing, not as zero or as a guess.
+Prices are quoted in USDG, the dollar-value currency every trade settles in on Robinhood Chain. A price is a price in dollars; there is no second conversion hiding behind it.
 </Aside>
-
-## Arcus RFQ quotes for what a trade costs
-
-The executable price comes from Arcus spot RFQ, in USDG (the dollar-value currency every trade settles in). Arcus returns two kinds of number: an indicative price for display, and a firm quote that can actually execute. Only firm quotes execute, and a firm quote carries an expiry, so a plan re-quotes right before it commits. If a quote has expired by the time the transaction runs, the trade reverts rather than filling at a stale price; this is one of the [failure paths](/how/accountable-ai/) the record path enforces.
 
 ## Read the prices yourself
 
-The catalog and its prices are public reads (no token). Live and historical prices for charts come from `/api/prices`, and the catalog with current prices and metadata comes from `/api/market`.
+Both routes are public GETs, no token, limited to 60 requests per 60 seconds per IP.
 
 <Tabs>
 <TabItem label="curl">
 
 ```bash
-# Current and historical prices (public)
+# Live and historical prices
 curl "https://monvera.best/api/prices"
 
-# Catalog with current prices and metadata (public)
+# The catalog, with current price and metadata per asset
 curl "https://monvera.best/api/market?symbol=AAPL"
 ```
 
@@ -38,10 +61,8 @@ curl "https://monvera.best/api/market?symbol=AAPL"
 <TabItem label="fetch">
 
 ```js
-// Current and historical prices (public)
 const prices = await (await fetch("https://monvera.best/api/prices")).json();
 
-// Catalog with current prices and metadata (public)
 const market = await (
   await fetch("https://monvera.best/api/market?symbol=AAPL")
 ).json();
@@ -50,7 +71,17 @@ const market = await (
 </TabItem>
 </Tabs>
 
-Both routes are public GETs, rate limited to 60 requests per 60 seconds per IP. A caller over the limit gets `429` with `{"error":"Too many requests. Please slow down a moment."}` and a `Retry-After` header.
+The response carries the source for each asset, so you can see which of the three tiers answered rather than inferring it.
 
-<LinkCard title="How Vera decides" href="/how/how-vera-decides/" description="Vera reasons over about twelve months of real price history and these live prices, and can be wrong." />
-<LinkCard title="The stack behind a trade" href="/how/the-stack/" description="Where Chainlink and Arcus sit relative to Robinhood Chain, Virtuals, your sign-in, and the relayer." />
+In the app, the shortest path to the same answer is to ask.
+
+<Transcript>
+  <Turn who="you">What is Nvidia at right now, and what would I actually pay?</Turn>
+  <Turn who="vera">The reference price is from its Chainlink feed. Here is a live quote for the size you asked about, which is the number your order would fill against.</Turn>
+</Transcript>
+
+## Why it is built this way
+
+Tokenized stocks on this chain have no deep on-chain market of their own, so there is no pool price to read. The honest options are an oracle feed, a real quote from the venue that would fill your order, or the real market's last close. Monvera uses all three, in that order, labels which one answered, and refuses to fill the gaps with a number nobody stands behind.
+
+Which venue actually routes and settles the trade is covered in [the stack](/how/the-stack/).

@@ -1,27 +1,46 @@
 ---
-title: "Base URL, JSON, and rate limits"
-description: "The base URL is https://monvera.best, every body is JSON, rate limits are fixed 60-second windows per route, and no response ever returns a private key."
+title: "Conventions, limits, and errors"
+description: "Base URL, JSON bodies, 60-second rate limits, and every error body the API returns."
 ---
 
 import { Aside } from '@astrojs/starlight/components';
 
-The base URL is `https://monvera.best`, every request and response body is JSON, and every route enforces a fixed 60-second rate-limit window. Public routes count per IP; token-gated routes count per user id. No response ever returns a private key, a seed phrase, or a session-signer secret.
+The base URL is `https://monvera.best`. Every request and response body is JSON. Every route enforces a fixed 60-second rate-limit window — public routes counted per client IP, gated routes per user id. Every error is one shape, `{"error":"<message>"}`, with the meaning carried by the status code. This page is the canonical version of all four; the route pages link here instead of repeating them.
 
-## Requests and responses are JSON
+## Requests and responses
 
-Send `Content-Type: application/json` on any route with a body, and read `application/json` back. POST bodies carry their arguments as JSON fields, for example `{"goal":"...","amountUsdg":"250"}` on `/api/allocate`. Amounts in USDG are strings of 6-decimal units, since USDG (`0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168`) has 6 decimals. Stock and ETF tokens are 18-decimal ERC-20 tokens on chain 4663.
+Send `Content-Type: application/json` on any route with a body and read `application/json` back. POST arguments are JSON fields, for example `{"goal":"...","amountUsdg":"250"}` on `/api/allocate`.
 
-Errors use one shape from the shared responder: `{"error":"<message>"}`. The status code carries the meaning (400, 401, 429, 451, 500). See [errors](/dev/errors/) for the exact bodies.
+| Value | Shape |
+|---|---|
+| USDG amounts | Strings of 6-decimal units — USDG has 6 decimals |
+| Stock and ETF amounts | 18-decimal ERC-20 units on chain 4663 |
+| Addresses | `0x`-prefixed hex, checksummed on the way out, case-insensitive on the way in |
+| `planId` | `bytes32` hex string |
+| Timestamps | Unix seconds |
+| Errors | `{"error":"<message>"}` plus a status code |
+
+Match on the status code, not the message text — some routes pass a more specific 400 message inside the same shape. Error messages never expose internals.
 
 <Aside type="danger">
-No Monvera route returns a private key, a seed phrase, or a session-signer secret in any field. The account is a non-custodial smart account; signing happens client-side through Privy. If an example shows a key in a response, it is fabricated.
+No route returns a private key, a seed phrase, or a session-signer secret in any field. Accounts are non-custodial and signing happens client-side through Privy. If an example shows a key in a response, it is fabricated.
 </Aside>
 
-## Rate limits are 60-second windows
+## Error codes
 
-Each route allows a fixed number of requests per 60-second window. Public routes count per client IP; gated routes count per authenticated user id. Exceeding a limit returns `429 {"error":"Too many requests. Please slow down a moment."}` with a `Retry-After` header in seconds.
+| Status | Body | Triggered by |
+|---|---|---|
+| 400 | `{"error":"Invalid request."}` | A malformed or missing field. Some routes return a more specific message in the same shape. |
+| 401 | `{"error":"Please sign in to continue."}` | A gated route with no bearer token, or a bad or expired Privy token. |
+| 429 | `{"error":"Too many requests. Please slow down a moment."}` | The route's 60-second window is exceeded. Carries a `Retry-After` header in seconds. |
+| 451 | `{"error":"Monvera is not available in your region."}` | A gated API request from a restricted region. |
+| 500 | `{"error":"Something went wrong. Please try again."}` | An unexpected server error. Retry; if it persists, say so on X at [@monvera_best](https://x.com/monvera_best). |
 
-### Public routes (per IP)
+On `429`, read `Retry-After` and wait that many seconds. `/api/autopilot/run` also holds an in-flight lock and returns `429` with `Retry-After: 30` when a run is already executing, even under the request limit. On `400`, fix the body and resend — `/api/alerts` POST returns `400` once an account already holds 20 or more active alerts, independent of the rate limit.
+
+The `451` is enforced in middleware from the Cloudflare `CF-IPCountry` header, before any account exists. Only `/app`, `/api/quote`, `/api/allocate`, `/api/portfolio-review`, `/api/autopilot`, `/api/pimlico`, and `/api/vera` are geo-gated; page paths rewrite to `/restricted` with the same status, and public market, price, and screener reads are not gated at all. The regions and the reason are in [before you invest](/start/before-you-invest/).
+
+## Rate limits, public routes (per IP)
 
 | Route | Limit per 60s |
 |---|---|
@@ -29,13 +48,13 @@ Each route allows a fixed number of requests per 60-second window. Public routes
 | `/api/market` | 60 |
 | `/api/screener` | 60 |
 | `/api/vera-record` | 30 |
-| `/api/transactions` | 30 |
-| `/api/portfolio` | 30 |
-| `/api/activity` | 30 |
+| `/api/portfolio` | 240 |
+| `/api/transactions` | 120 |
+| `/api/activity` | 120 |
 | `/api/strategies` | 30 |
 | `/api/backtest` | 20 |
 
-### Token-gated routes (per user id)
+## Rate limits, gated routes (per user id)
 
 | Route | Limit per 60s |
 |---|---|
@@ -48,17 +67,21 @@ Each route allows a fixed number of requests per 60-second window. Public routes
 | `/api/allocate` | 12 |
 | `/api/autopilot/run` | 6 |
 
-<Aside type="note">
-`/api/autopilot/run` also holds an in-flight lock: a second run while one is executing returns `429` with `Retry-After: 30`. `/api/alerts` POST rejects with a `400` once a user has 20 or more active alerts, independent of the rate limit.
-</Aside>
+## On-chain reverts
 
-## The example story reused across these docs
+`commit-plan` can accept your request and still revert on-chain. The revert rolls the whole transaction back, so a failed commit spends nothing. In order: `PlanAlreadyRecorded(planId)` if that `planId` was already committed, `InferenceExpired()` if the block timestamp is past `expiry`, `RiskCeilingBreached(assessed, maxRisk)` if `assessedRisk` exceeds `maxRisk`, and `BadSigner(recovered)` if the recovered signer is not the current `agentSigner()`.
 
-Every request example on these pages uses one coherent story so field values line up across routes:
+An expired inference is the common one, and a stale quote is usually the cause. Allocate and commit close together, and quote each leg as you execute it.
 
-- An account holding Apple (AAPL) and Nvidia (NVDA).
-- A plan named "Steady Growth" over four holdings: Apple (AAPL), Nvidia (NVDA), the S&P 500 (SPY), and US Treasuries (SGOV).
-- Chain 4663, amounts in USDG (6-decimal), stock and ETF tokens 18-decimal.
-- Token addresses: AAPL `0xaF3D76f1834A1d425780943C99Ea8A608f8a93f9`, NVDA `0xd0601CE157Db5bdC3162BbaC2a2C8aF5320D9EEC`, SPY `0x117cc2133c37B721F49dE2A7a74833232B3B4C0C`, SGOV `0x92FD66527192E3e61d4DDd13322Aa222DE86F9B5`.
+## The worked example
 
-The catalog at `GET /api/market` is the source of truth for all 95 asset addresses. Read it with the [public quickstart](/dev/quickstart/).
+Request examples across these pages use one story, so field values line up between routes: a plan named "Steady Growth" over Apple (AAPL), Nvidia (NVDA), the S&P 500 (SPY), and US Treasuries (SGOV), funded in USDG on chain 4663.
+
+| Symbol | Token address (chain 4663) |
+|---|---|
+| AAPL | `0xaF3D76f1834A1d425780943C99Ea8A608f8a93f9` |
+| NVDA | `0xd0601CE157Db5bdC3162BbaC2a2C8aF5320D9EEC` |
+| SPY | `0x117cc2133c37B721F49dE2A7a74833232B3B4C0C` |
+| SGOV | `0x92FD66527192E3e61d4DDd13322Aa222DE86F9B5` |
+
+`GET /api/market` is the source of truth for all 95 addresses — take them from the catalog, not from this table, if you are building against it.

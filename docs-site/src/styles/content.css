@@ -1,0 +1,132 @@
+/* Prose, headings, tables, code, callouts.
+   Two rules do most of the work: prose is capped at a readable measure while
+   tables and code run full width, and H2 gets a rule above it so a long page
+   reads as sections rather than an undifferentiated column. */
+
+.sl-markdown-content {
+  font-size: var(--sl-text-body);
+}
+.sl-markdown-content > p,
+.sl-markdown-content > ul,
+.sl-markdown-content > ol,
+.sl-markdown-content > blockquote {
+  max-width: var(--mv-measure);
+}
+
+/* ── headings ─────────────────────────────────────────────────────────── */
+h1 {
+  font-family: var(--font-fraunces);
+  font-weight: 600;
+  letter-spacing: -0.022em;
+}
+.sl-markdown-content h2 {
+  font-weight: 650;
+  letter-spacing: -0.012em;
+  margin-top: 3rem;
+  padding-top: 1.1rem;
+  border-top: 1px solid var(--sl-color-hairline);
+}
+.sl-markdown-content h3 {
+  font-weight: 600;
+  color: var(--sl-color-gray-1);
+  margin-top: 2rem;
+}
+/* H4 as a mono label — used for parameter groups in the API pages */
+.sl-markdown-content h4 {
+  font-family: var(--sl-font-mono);
+  font-size: 0.82rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--sl-color-gray-3);
+}
+.sl-markdown-content :is(h2, h3) > a {
+  text-decoration: none;
+}
+
+/* links: underlined, but the rule sits below the baseline and stays quiet */
+.sl-markdown-content a:not(.sl-link-card a):not(.action) {
+  text-underline-offset: 0.18em;
+  text-decoration-thickness: 1px;
+  text-decoration-color: color-mix(in srgb, var(--sl-color-text-accent) 45%, transparent);
+}
+
+/* ── code ─────────────────────────────────────────────────────────────── */
+.expressive-code {
+  margin: 1.4rem 0;
+}
+.sl-markdown-content :not(pre) > code {
+  font-size: 0.86em;
+  padding: 0.12em 0.36em;
+  border: 1px solid var(--sl-color-hairline);
+  border-radius: 0.32rem;
+}
+
+/* ── tables (the API reference lives in these) ────────────────────────── */
+.sl-markdown-content table {
+  display: block;
+  overflow-x: auto;
+  width: 100%;
+  font-size: 0.875rem;
+  border-collapse: collapse;
+}
+.sl-markdown-content th {
+  position: sticky;
+  top: 0;
+  background: var(--sl-color-black);
+  font-size: 0.6875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--sl-color-gray-3);
+  font-weight: 700;
+  border-bottom: 1px solid var(--sl-color-gray-5);
+  text-align: left;
+  padding: 0.5rem 0.9rem 0.5rem 0;
+  white-space: nowrap;
+}
+.sl-markdown-content td {
+  border-bottom: 1px solid var(--sl-color-hairline);
+  vertical-align: top;
+  padding: 0.55rem 0.9rem 0.55rem 0;
+}
+/* first column is the field/param name: mono, never wraps */
+.sl-markdown-content td:first-child {
+  white-space: nowrap;
+  font-family: var(--sl-font-mono);
+  font-size: 0.82rem;
+  color: var(--sl-color-white);
+}
+
+/* ── asides: a left rule, not a coloured box ──────────────────────────── */
+.starlight-aside {
+  background: none;
+  border: 0;
+  border-left: 2px solid var(--sl-color-gray-5);
+  border-radius: 0;
+  padding: 0.15rem 0 0.15rem 1rem;
+  max-width: var(--mv-measure);
+}
+.starlight-aside__title {
+  font-size: 0.6875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--sl-color-gray-3);
+}
+.starlight-aside__content {
+  font-size: 0.9375rem;
+}
+.starlight-aside--tip {
+  border-left-color: var(--sl-color-accent);
+}
+.starlight-aside--caution {
+  border-left-color: var(--sl-color-orange);
+}
+/* danger is the only aside that keeps a fill — reserved for irreversible
+   actions (exporting a private key, withdrawing). If everything shouts,
+   nothing does. */
+.starlight-aside--danger {
+  border-left-color: var(--sl-color-red);
+  background: color-mix(in srgb, var(--sl-color-red) 7%, transparent);
+  padding: 0.6rem 1rem;
+  border-radius: 0 0.4rem 0.4rem 0;
+}

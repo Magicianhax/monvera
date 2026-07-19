@@ -4,23 +4,34 @@ description: "You may owe tax on gains, and Monvera does not calculate, withhold
 ---
 
 import { Aside } from '@astrojs/starlight/components';
+import Transcript from '../../../components/Transcript.astro';
+import Turn from '../../../components/Turn.astro';
 
-You may owe tax on your gains, and Monvera does not calculate, withhold, or file anything for you. Selling a holding for more than you paid can be a taxable event where you live, and handling that is yours to do.
+You may owe tax on your gains, and Monvera does nothing about it. It does not calculate what you owe, does not withhold anything from your trades, and does not send a form to you or to any tax authority. If there is tax to pay, working it out and paying it is entirely on you.
 
 ## Why there may be tax
 
-There may be tax because you own real companies and funds, and selling them at a gain is usually taxable. If you buy the "Steady Growth" plan over Apple (AAPL), Nvidia (NVDA), the S&P 500 (SPY), and US Treasuries (SGOV) and later sell part of it for more than you paid, that gain can be income the tax authority where you live wants to know about. The rules and rates depend on your country and your own situation.
+Because you own real assets. Selling a holding for more than you paid is usually a taxable event, and in some countries swapping one asset for another counts too, which means a rebalance can be taxable even though no money left your account. The rules, rates and thresholds depend on where you live and on your own situation.
 
-## What Monvera does not do
+Holding is not usually the trigger; selling usually is. That distinction matters more than it sounds. A plan that is up on screen and a plan you have sold are very different things to a tax authority.
 
-Monvera is not a tax service. It does not work out what you owe, it does not take tax out of your trades, and it does not send any form to you or to a tax authority. Monvera is not able to give tax advice, and nothing here is tax advice.
+## What Monvera cannot do
 
-## Keeping your own records
+Monvera is not a tax service and cannot give tax advice. Nothing on this page is tax advice. There is no annual statement, no cost-basis report, and no withholding. Nobody is quietly handling this in the background for you.
 
-Keep your own record of what you bought and sold, because you can pull the raw history yourself. Every settled trade on your account is on the public block explorer, and Monvera surfaces your [transaction history in the app](/use/withdraw-your-money/). Save the dates, amounts, and prices you buy and sell at, so you or your accountant can work out any tax at year end.
+## Keep your own records
 
-<Aside type="caution" title="Ask a professional for your own case">
-Tax rules differ by country and change over time. For what you actually owe, ask a qualified tax professional in your own country rather than relying on a general page.
+You can pull the raw history whenever you want. Ask Vera for your activity and it opens beside the chat:
+
+<Transcript>
+  <Turn who="you">Show me everything I've bought and sold</Turn>
+  <Turn who="vera">Opening your activity — every trade with the date, the amount and the price.</Turn>
+</Transcript>
+
+Every settled trade also sits on the public block explorer against your wallet address, so the record exists independently of Monvera and of anything the app displays.
+
+Save the dates, amounts and prices as you go. Reconstructing a year of trades in one evening in April is how people get it wrong.
+
+<Aside type="caution" title="Ask a professional about your own case">
+Tax rules differ by country and change over time. For what you actually owe, ask a qualified tax professional where you live. A general page cannot answer it, and this one is not trying to.
 </Aside>
-
-Tax is separate from whether a plan makes money. You can still lose money on any plan. See [can I lose money](/safety/can-i-lose-money/). For where Monvera is available, see [where it works](/start/where-its-available/).

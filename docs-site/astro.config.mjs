@@ -1,5 +1,5 @@
 // @ts-check
-import { defineConfig } from 'astro/config';
+import { defineConfig, fontProviders } from 'astro/config';
 import starlight from '@astrojs/starlight';
 import sitemap from '@astrojs/sitemap';
 import starlightLlmsTxt from 'starlight-llms-txt';
@@ -8,19 +8,85 @@ import starlightUtils from '@lorenzo_lewis/starlight-utils';
 const SITE = 'https://docs.monvera.best';
 const TAGLINE =
   'An AI broker for real tokenized stocks and funds on Robinhood Chain. Tell Vera a goal and an amount, she builds a diversified basket of real companies, each with a reason and a plain risk read, and one tap invests it. Gasless, non-custodial, from $1.';
+const DETAILS =
+  'Vera is registered on-chain agent #1 and signs a risk assessment that is recorded on-chain with every trade. Not available in the US, Canada, the UK, or Switzerland. Nothing here is investment advice. Backtests are history, not promises.';
 
 // https://astro.build/config
 export default defineConfig({
   site: SITE,
+  // The app's typefaces, self-hosted: Fraunces for display, Hanken Grotesk for
+  // UI and body, JetBrains Mono for anything that is a value.
+  fonts: [
+    {
+      name: 'Hanken Grotesk',
+      cssVariable: '--font-hanken',
+      provider: fontProviders.fontsource(),
+      weights: [400, 500, 600, 700],
+      styles: ['normal'],
+      subsets: ['latin'],
+      fallbacks: ['system-ui', 'sans-serif'],
+    },
+    {
+      name: 'Fraunces',
+      cssVariable: '--font-fraunces',
+      provider: fontProviders.fontsource(),
+      weights: [500, 600],
+      styles: ['normal'],
+      subsets: ['latin'],
+      fallbacks: ['Georgia', 'serif'],
+    },
+    {
+      name: 'JetBrains Mono',
+      cssVariable: '--font-jetbrains',
+      provider: fontProviders.fontsource(),
+      weights: [400, 500],
+      styles: ['normal'],
+      subsets: ['latin'],
+      fallbacks: ['ui-monospace', 'monospace'],
+    },
+  ],
   integrations: [
     starlight({
       title: 'Monvera Docs',
       description: TAGLINE,
       logo: { src: './src/assets/monvera-icon.png', alt: 'Monvera' },
       favicon: '/favicon.png',
-      customCss: ['./src/styles/brand.css'],
+      // order matters: tokens define the variables the rest consume
+      customCss: [
+        './src/styles/tokens.css',
+        './src/styles/layout.css',
+        './src/styles/content.css',
+        './src/styles/components.css',
+        './src/styles/splash.css',
+      ],
+      expressiveCode: {
+        themes: ['github-dark-default', 'github-light-default'],
+        styleOverrides: {
+          borderRadius: 'var(--mv-radius)',
+          borderColor: 'var(--sl-color-gray-5)',
+          borderWidth: '1px',
+          codeFontFamily: 'var(--font-jetbrains)',
+          codeFontSize: '0.855rem',
+          codeLineHeight: '1.62',
+          codePaddingBlock: '0.95rem',
+          codePaddingInline: '1.1rem',
+          uiFontFamily: 'var(--font-hanken)',
+          frames: {
+            frameBoxShadowCssValue: 'none',
+            editorTabBarBackground: 'var(--sl-color-gray-6)',
+            editorActiveTabIndicatorBottomColor: 'var(--sl-color-accent)',
+            terminalTitlebarBackground: 'var(--sl-color-gray-6)',
+          },
+        },
+      },
       // Starlight ships no og:image; DocsHead adds a per-page card.
-      components: { Head: './src/components/DocsHead.astro' },
+      // PageTitle adds the section eyebrow + description subtitle; Sidebar
+      // appends the agent entry points.
+      components: {
+        Head: './src/components/DocsHead.astro',
+        PageTitle: './src/components/PageTitle.astro',
+        Sidebar: './src/components/Sidebar.astro',
+      },
       social: [{ icon: 'x.com', label: 'Monvera on X', href: 'https://x.com/monvera_best' }],
       // no "edit this page" link: the docs repo is private
       lastUpdated: true,
@@ -28,44 +94,52 @@ export default defineConfig({
         // Topic tabs in the header: each top-level sidebar group becomes a
         // horizontal tab, and the sidebar shows only that topic's pages.
         starlightUtils({ multiSidebar: { switcherStyle: 'horizontalList' } }),
+        // Bulk text for agents that need whole pages. The INDEX Vera reads is
+        // not this plugin's llms.txt — it cannot list pages (it never reads the
+        // content collection), so src/pages/llms.txt.ts owns that route and
+        // wins over the injected one. This keeps -small/-full and the two
+        // curated sets the index links to.
         starlightLlmsTxt({
           projectName: 'Monvera',
           description: TAGLINE,
-          details:
-            'Vera is registered on-chain agent #1 and signs a risk assessment that is recorded on-chain with every trade. Not available in the US, Canada, the UK, or Switzerland. Nothing here is investment advice. Backtests are history, not promises.',
+          details: DETAILS,
+          // drop the "[Section titled …](#…)" line Starlight adds per heading
+          customSelectors: { all: ['.sl-anchor-link'] },
+          customSets: [
+            {
+              label: 'Using Monvera',
+              paths: ['start/**', 'use/**', 'safety/**'],
+              description: 'how to use the product: plans, investing, money in and out, safety',
+            },
+            {
+              label: 'Developer and API',
+              paths: ['dev/**'],
+              description: 'REST API reference, auth, conventions, addresses, verifying Vera',
+            },
+          ],
+          // keep the abridged set about the product, not the endpoint list
+          exclude: ['dev/api/**'],
         }),
       ],
       sidebar: [
         {
           label: 'Start',
-          items: [
-            'start/what-monvera-is',
-            'start/where-its-available',
-            'start/what-you-need',
-            'start/try-the-demo',
-            'start/the-monvera-token',
-          ],
+          items: ['start/what-monvera-is', 'start/before-you-invest', 'start/the-monvera-token'],
         },
         {
+          // ordered as a first session runs: talk, read the plan, then the
+          // things you reach for later
           label: 'Guide',
           collapsed: true,
           items: [
-            'use/make-your-first-plan',
-            'use/ask-vera-anything',
-            'use/read-your-plan',
-            'use/invest-in-one-tap',
-            'use/review-your-portfolio',
-            'use/add-money',
-            'use/buy-or-sell-a-single-stock',
-            'use/tweak-a-plan-before-you-invest',
-            'use/explore-whats-available',
-            'use/build-a-watchlist',
-            'use/use-the-screener',
-            'use/set-a-price-alert',
+            'use/talk-to-vera',
+            'use/your-plan',
+            'use/your-portfolio',
+            'use/find-and-trade',
+            'use/money-in-and-out',
+            'use/watchlist-and-alerts',
             'use/autopilot',
-            'use/set-and-revoke-autopilot-limits',
             'use/scan-to-buy',
-            'use/withdraw-your-money',
           ],
         },
         {
@@ -79,8 +153,7 @@ export default defineConfig({
             'safety/is-this-investment-advice',
             'safety/backtests-are-history-not-promises',
             'safety/taxes',
-            'safety/staying-safe-from-scams',
-            'safety/get-help',
+            'safety/scams-and-support',
           ],
         },
         {
@@ -99,19 +172,68 @@ export default defineConfig({
           collapsed: true,
           items: [
             'dev/quickstart',
-            'dev/authenticated-quickstart',
             'dev/authentication',
             'dev/conventions',
-            'dev/errors',
             'dev/verify-vera',
-            'dev/vera-on-okx-ai',
             'dev/network-and-addresses',
+            'dev/mcp-server',
+            'dev/vera-on-okx-ai',
           ],
         },
         {
+          // grouped by what you are trying to do, not alphabetically — an
+          // autogenerated flat list of 23 routes is unreadable. `Auth` marks
+          // the routes that need a Privy bearer token.
           label: 'API',
           collapsed: true,
-          items: [{ autogenerate: { directory: 'dev/api' } }],
+          items: [
+            'dev/api',
+            {
+              label: 'Market data',
+              items: [
+                'dev/api/prices',
+                'dev/api/market',
+                'dev/api/screener',
+                'dev/api/themes',
+                'dev/api/strategies',
+                'dev/api/backtest',
+              ],
+            },
+            {
+              label: 'Plans',
+              items: [
+                { slug: 'dev/api/allocate', badge: { text: 'Auth', variant: 'note' } },
+                { slug: 'dev/api/quote', badge: { text: 'Auth', variant: 'note' } },
+                { slug: 'dev/api/commit-plan', badge: { text: 'Auth', variant: 'note' } },
+              ],
+            },
+            {
+              // badges track the source: portfolio/activity/transactions read
+              // public chain data and take no token (verified against
+              // verifyRequest usage in web/src/app/api/*/route.ts)
+              label: 'Your account',
+              items: [
+                'dev/api/portfolio',
+                'dev/api/activity',
+                'dev/api/transactions',
+                { slug: 'dev/api/watchlist', badge: { text: 'Auth', variant: 'note' } },
+                { slug: 'dev/api/alerts', badge: { text: 'Auth', variant: 'note' } },
+                { slug: 'dev/api/notifications', badge: { text: 'Auth', variant: 'note' } },
+              ],
+            },
+            {
+              label: 'Autopilot',
+              items: [{ slug: 'dev/api/autopilot', badge: { text: 'Auth', variant: 'note' } }],
+            },
+            {
+              label: 'Agent',
+              items: [
+                'dev/api/agent-card',
+                'dev/api/vera-record',
+                { slug: 'dev/api/pimlico', badge: { text: 'Auth', variant: 'note' } },
+              ],
+            },
+          ],
         },
         {
           label: 'Reference',

@@ -1,74 +1,87 @@
 ---
-title: "Open strategies and walk-forward backtests"
-description: "Monvera's rule-based strategies each carry a walk-forward backtest with its assumptions, and the raw JSON is public at /api/strategies."
+title: "What a backtest here is, and what it is not"
+description: "A backtest replays a fixed rule over 12 months of real closes against the S&P 500. It is history, not a promise."
 ---
 
-import { Aside, Tabs, TabItem, LinkCard } from '@astrojs/starlight/components';
+import { Aside, Tabs, TabItem } from '@astrojs/starlight/components';
+import Transcript from '../../../components/Transcript.astro';
+import Turn from '../../../components/Turn.astro';
 
-Monvera's strategies are rule-based, and each one carries a walk-forward backtest with its assumptions stated. The raw numbers are public at `/api/strategies`, so you can read the rule and its history rather than take a chart on faith.
+A backtest on Monvera is a replay: a fixed rule run over 12 months of real daily closes, rebalanced monthly, plotted against buying and holding the S&P 500 over the same window. Every rule is published in full, the raw numbers are public at `/api/strategies` and `/api/themes`, and you can reproduce the weights yourself. None of it forecasts anything. It is history.
 
-## Rule-based, not discretionary
+## What is open
 
-Each strategy is a fixed rule over the 95-asset universe, not a per-day human call. Because the rule is fixed, its history can be replayed the same way every time, which is what makes a backtest meaningful here. The strategies live at [monvera.best/strategies](https://monvera.best/strategies), and the machine-readable version is `/api/strategies`.
+| Book | What it is | Public at |
+| --- | --- | --- |
+| Steady Foundation | Every tokenized fund, weighted inversely to its own volatility, 30% cap per fund | [monvera.best/strategies](https://monvera.best/strategies) |
+| Momentum Leaders | The 8 strongest uptrends where the 1-year and 3-month returns are both positive, inverse-volatility weighted, 20% cap | [monvera.best/strategies](https://monvera.best/strategies) |
+| Balanced Growth | A 55% market core blended with 45% of the Momentum Leaders sleeve | [monvera.best/strategies](https://monvera.best/strategies) |
+| Eight theme baskets | AI, semiconductors, quantum, space, crypto-linked stocks, cloud and software, energy, fintech, each inverse-volatility weighted with a 25% cap | [monvera.best/themes](https://monvera.best/themes) |
 
-## What walk-forward means, and its limits
+Every one of these is a deterministic rule, not a daily human call and not Vera's judgment. That is what makes replaying them meaningful: the same inputs produce the same book every time, so the history you see is the rule's history rather than a story told about it afterwards. Each is refreshed from market data every 6 hours.
 
-A walk-forward backtest applies the rule forward through time, using only the price history available up to each point, then measures what the rule would have done next. That avoids scoring a rule on data it would not have had at decision time. Each backtest ships with its assumptions so you can see what it did and did not account for.
+## What walk-forward means
+
+The open books are tested walk-forward, which is the version of a backtest that is harder to cheat.
+
+The engine takes 12 months of daily closes. The first stretch is formation: the rule is allowed to look at it, and nothing is scored. Then, month by month across the remaining stretch, the rule re-runs using only the closes that existed at that moment, sets its weights, and is held to them until the next rebalance. Those months are scored. The rule never sees a price before the day it would really have had it.
+
+The result is plotted against buy-and-hold S&P 500 over the identical window, so the comparison is like for like rather than against a benchmark measured over a friendlier period.
+
+## What a backtest does not include
+
+Being honest about the gaps matters more than the curve:
+
+- **It does not know the future.** It scores a rule on the market that already happened. The next 12 months are a different market.
+- **It replays closes, not your fills.** The curve marks positions at daily closing prices. What you actually pay is a live quote at the moment you invest.
+- **It is short.** Twelve months is one market regime, and a rule that looks strong across one regime can be exactly wrong in the next.
+- **It cannot cover everything.** Assets with no honest 12-month public history, mostly tokenized private companies and tickers that collide with an unrelated listing, are excluded and named on the page. They are never filled in with invented data.
 
 <Aside type="caution">
-A backtest is history, not a promise. It shows what a rule did on past prices, and past prices do not predict future ones. See [backtests are history, not promises](/safety/backtests-are-history-not-promises/).
+A rule that beat the S&P 500 in the tested window is a rule that beat it in that window. It is not evidence it will do so again, and it is not advice to buy it. Past prices do not predict future ones.
 </Aside>
 
-## Read the strategies and run a backtest
+## Vera's plans get the same treatment
 
-`/api/strategies` returns the strategies with their backtests, and `POST /api/backtest` runs a walk-forward backtest for a strategy rule. Both are public (no token).
+When Vera builds you a plan, the same engine backtests that specific mix: 12 months of real closes, monthly rebalance, against buy-and-hold S&P 500. If part of the plan has no honest history, the response says what share of the weight was actually covered and names what was left out, rather than quietly testing a smaller basket and calling it the plan. Ask for the Steady Growth plan and you will see its curve next to the benchmark, with those caveats attached.
+
+<Transcript>
+  <Turn who="you">How would the AI basket have done over the past year?</Turn>
+  <Turn who="vera">Here is the walk-forward result against the S&P 500, with the full weight rule and the two names excluded for having no honest 12-month history. It is what the rule did, not what it will do.</Turn>
+</Transcript>
+
+## Pull the raw numbers
+
+All three routes are public, no token. `/api/strategies` allows 30 requests per 60 seconds per IP, `/api/themes` 120, and `/api/backtest` 20.
 
 <Tabs>
 <TabItem label="curl">
 
 ```bash
-# The open strategies with their backtests (public GET)
+# Strategies with their walk-forward backtests
 curl "https://monvera.best/api/strategies"
 
-# A walk-forward backtest for a strategy rule (public POST)
+# Theme baskets, weights, exclusions and backtests
+curl "https://monvera.best/api/themes"
+
+# Backtest a rule yourself
 curl -X POST "https://monvera.best/api/backtest" \
   -H "Content-Type: application/json" \
-  -d '{"strategy":"steady-growth"}'
+  -d '{"strategy":"momentum-leaders"}'
 ```
 
 </TabItem>
 <TabItem label="fetch">
 
 ```js
-// The open strategies with their backtests (public GET)
 const strategies = await (
   await fetch("https://monvera.best/api/strategies")
 ).json();
 
-// A walk-forward backtest for a strategy rule (public POST)
-const backtest = await (
-  await fetch("https://monvera.best/api/backtest", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ strategy: "steady-growth" }),
-  })
-).json();
+const themes = await (await fetch("https://monvera.best/api/themes")).json();
 ```
 
 </TabItem>
 </Tabs>
 
-`/api/strategies` is rate limited to 30 requests per 60 seconds per IP, and `/api/backtest` to 20 requests per 60 seconds per IP. A caller over the limit gets `429` with `{"error":"Too many requests. Please slow down a moment."}` and a `Retry-After` header.
-
-## Theme baskets
-
-The same engine also builds one basket per investing theme: Artificial Intelligence, Semiconductors, Quantum, Space, Crypto-linked stocks, Cloud and Software, Energy, and Fintech. Each theme takes its curated universe, weights every name inversely to its volatility with a 25% cap, and gets the same walk-forward backtest against the S&P 500. Names without a year of public history are excluded and listed by name on the page, because we name exclusions instead of inventing data for them.
-
-<img src="/screens/themes-index.webp" alt="The theme baskets index: eight cards, each with its six-month walk-forward result against the S&P 500 and its allocation bar" />
-
-Browse them at [monvera.best/themes](https://monvera.best/themes), or pull the raw JSON from [`/api/themes`](/dev/api/themes/) (public, no auth, 120 requests per 60 seconds per IP). Every theme page shows the full rule so you can reproduce the weights yourself.
-
-<img src="/screens/themes-ai.webp" alt="The Artificial Intelligence basket page: walk-forward curve against SPY, stats, full weight legend, and the reproducible rule" />
-
-<LinkCard title="How Vera decides" href="/how/how-vera-decides/" description="Vera reasons over the same real price history these strategies backtest against." />
-<LinkCard title="Where prices come from" href="/how/where-prices-come-from/" description="The Chainlink feeds and Arcus quotes behind the price history." />
+Each payload carries the rule in words, the current weights, the exclusions by name, and the backtest with its benchmark series, so you can check the arithmetic instead of trusting the picture.

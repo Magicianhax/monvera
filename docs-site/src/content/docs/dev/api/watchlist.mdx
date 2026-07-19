@@ -1,100 +1,50 @@
 ---
-title: "Watchlist API"
-description: "GET and POST /api/watchlist to read and toggle the signed-in account's saved tickers, synced across devices."
+title: "Read and toggle saved tickers"
+description: "Read and toggle the signed-in account's saved tickers, synced across devices."
 ---
 
-import { Aside, Tabs, TabItem } from '@astrojs/starlight/components';
+`GET` returns the signed-in account's saved symbols, oldest first (insertion order). `POST` toggles one ticker on or off and returns the full updated list. Both directions are idempotent, so re-adding a symbol you already hold is a no-op. This list is the cross-device source of truth; the app keeps a localStorage cache for instant UX, then reconciles against this route.
 
-`GET /api/watchlist` returns the signed-in account's saved tickers, and `POST /api/watchlist` toggles one on or off. Both require a Privy bearer token, and the list is the cross-device source of truth (the app keeps a localStorage cache for instant UX, then reconciles against this route).
-
-<Aside type="note" title="Token required">
-Every request needs `Authorization: Bearer <privy-token>`. A missing or bad token returns `401 {"error":"Please sign in to continue."}`. See [Authentication](/dev/authentication/) for how to obtain the token and the full public-versus-gated matrix.
-</Aside>
-
-Base URL: `https://monvera.best`.
-
-## Read your watchlist
-
-`GET /api/watchlist` returns your saved symbols, oldest first (insertion order).
-
-<Tabs>
-<TabItem label="curl">
-```bash
-curl https://monvera.best/api/watchlist \
-  -H "Authorization: Bearer $MONVERA_TOKEN"
-```
-</TabItem>
-<TabItem label="fetch">
-```js
-const res = await fetch("https://monvera.best/api/watchlist", {
-  headers: { Authorization: `Bearer ${token}` },
-});
-const { symbols } = await res.json();
-```
-</TabItem>
-</Tabs>
-
-Response:
-
-```json
-{ "symbols": ["AAPL", "NVDA"] }
-```
-
-## Add or remove a symbol
-
-`POST /api/watchlist` with `{ "symbol", "on" }` toggles one ticker, then returns the full updated list. Set `on: true` to add, `on: false` to remove. Both directions are idempotent, so re-adding a symbol you already hold is a no-op.
-
-<Tabs>
-<TabItem label="curl">
-```bash
-curl -X POST https://monvera.best/api/watchlist \
-  -H "Authorization: Bearer $MONVERA_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"symbol":"SPY","on":true}'
-```
-</TabItem>
-<TabItem label="fetch">
-```js
-const res = await fetch("https://monvera.best/api/watchlist", {
-  method: "POST",
-  headers: {
-    Authorization: `Bearer ${token}`,
-    "Content-Type": "application/json",
-  },
-  body: JSON.stringify({ symbol: "SPY", on: true }),
-});
-const { symbols } = await res.json();
-```
-</TabItem>
-</Tabs>
-
-Response:
-
-```json
-{ "symbols": ["AAPL", "NVDA", "SPY"] }
-```
+`GET`, `POST /api/watchlist` · requires a Privy bearer token, `401` without one. Base URL, rate limits, and error shapes: [conventions](/dev/conventions/).
 
 ## Request body (POST)
 
 | Field | Type | Required | Description |
 | --- | --- | --- | --- |
-| `symbol` | string (1 to 12 chars) | yes | A ticker from the 95-asset catalog (86 stocks + 9 ETFs). Must match a symbol returned by [`GET /api/market`](/dev/api/market/), for example `AAPL`, `NVDA`, `SPY`, `SGOV`. |
-| `on` | boolean | yes | `true` adds the symbol, `false` removes it. |
+| `symbol` | string (1 to 12 chars) | yes | A ticker from the 95-asset catalog. Must match a symbol from [`GET /api/market`](/dev/api/market/), for example `AAPL`, `SPY`, `SGOV`. |
+| `on` | boolean | yes | `true` adds, `false` removes. |
 
-## Response fields
+## Returns
 
 | Field | Type | Description |
 | --- | --- | --- |
 | `symbols` | string[] | Your watched tickers, oldest first. Capped at 300 per account. |
 
-## Errors you can hit
+## Example
+
+```bash
+# read
+curl https://monvera.best/api/watchlist \
+  -H "Authorization: Bearer $MONVERA_TOKEN"
+
+# add SPY
+curl -X POST https://monvera.best/api/watchlist \
+  -H "Authorization: Bearer $MONVERA_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"symbol":"SPY","on":true}'
+```
+
+```json
+{ "symbols": ["AAPL", "NVDA", "SPY"] }
+```
+
+## Errors
 
 | Status | Body | When |
 | --- | --- | --- |
-| 401 | `{"error":"Please sign in to continue."}` | Missing or invalid bearer token. |
-| 400 | `{"error":"Invalid watchlist change."}` | Body fails validation (missing `symbol`/`on`, wrong type, or `symbol` over 12 chars). |
-| 400 | `{"error":"Unknown symbol."}` | `symbol` is not one of the 95 assets in the catalog. |
-| 429 | `{"error":"Too many requests. Please slow down a moment."}` | More than 60 POSTs in 60 seconds per account. Read the `Retry-After` header for the wait in seconds. |
-| 500 | `{"error":"Something went wrong. Please try again."}` | Store write failed. |
+| 400 | `{"error":"Invalid watchlist change."}` | Body fails validation: missing `symbol` or `on`, wrong type, or `symbol` over 12 chars. |
+| 400 | `{"error":"Unknown symbol."}` | `symbol` is not one of the 95 catalog assets. |
 
-The 60-per-60-seconds limit applies to `POST` only; `GET` is unmetered. Related routes: [alerts](/dev/api/alerts/) and [notifications](/dev/api/notifications/).
+## Notes
+
+The rate limit applies to `POST` only, counted per account; `GET` is unmetered. See also [alerts](/dev/api/alerts/) and [notifications](/dev/api/notifications/).

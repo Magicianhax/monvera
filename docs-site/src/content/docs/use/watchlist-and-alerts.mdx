@@ -1,0 +1,49 @@
+---
+title: "Watchlists and price alerts"
+description: "Ask Vera to watch a company or ping you at a price, then list or cancel what she is watching."
+---
+
+import { Aside } from '@astrojs/starlight/components';
+import Transcript from '../../../components/Transcript.astro';
+import Turn from '../../../components/Turn.astro';
+
+Tell Vera to watch a company and it joins your watchlist, where its live price and day move sit together with everything else you are keeping an eye on. Tell her a price and she alerts you when the company reaches it. Both are just things you say, and neither one ever buys or sells anything.
+
+<Transcript>
+  <Turn who="you">Watch Palantir and Netflix</Turn>
+  <Turn who="vera">Added both. Your watchlist has six names now.</Turn>
+  <Turn who="you">Tell me when NVDA drops below $150</Turn>
+  <Turn who="vera">Watching Nvidia for $150 or lower. It's $172.40 right now.</Turn>
+</Transcript>
+
+## Your watchlist
+
+"Watch Palantir" adds it. "What's on my watchlist?" opens it beside the chat, each row showing the real company name, its live price, and today's move, so you can scan your shortlist at a glance. "Stop watching Netflix" takes it off.
+
+A watchlist is a shortlist, not a plan. It commits nothing and buys nothing. It is where names go while you make up your mind — and when you do decide, "buy $50 of Palantir" works from the same conversation.
+
+Your watchlist is tied to your sign-in, so it follows you to any device you sign in on.
+
+## Price alerts
+
+An alert is a price you hand Vera and forget about. Say it in whichever direction you mean:
+
+- **"Tell me when NVDA drops below $150"** — she pings you when the price falls to that level or lower.
+- **"Alert me if Apple goes above $260"** — the same the other way up.
+- **"Let me know if Tesla hits $400"** — she works out the direction from the current price and tells you which way she is watching.
+
+She confirms what she is watching, in which direction, and where the price sits right now, so you can check she understood you before you stop thinking about it.
+
+Alerts run against the same live prices as everything else in Monvera, and they keep watching whether or not the app is open. They are also independent of your watchlist: you can set an alert on a company you are not watching, and watch a company you have no alert on.
+
+## See and cancel your alerts
+
+"What alerts do I have?" lists them, each with the company, the price, and the direction. "Cancel the Apple one" removes it. "Cancel all my alerts" clears the list. You can hold up to 20 active alerts at once; ask for a 21st and Vera tells you to retire one first.
+
+## Where an alert reaches you
+
+When a price is hit, the alert lands in your Monvera inbox. Ask "any messages for me?" and Vera reads out what has fired since you last looked, or opens the alerts panel beside the chat so you can see them all. Nothing happens to your money at that moment — the alert is a tap on the shoulder, and the next move is yours to make or ignore.
+
+<Aside type="tip">
+An alert waits for you. If you would rather Monvera keep investing without checking in each time, that is [Autopilot](/use/autopilot/), which runs on a schedule inside limits you set.
+</Aside>

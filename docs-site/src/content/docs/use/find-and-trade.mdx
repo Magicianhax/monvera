@@ -1,0 +1,72 @@
+---
+title: "Find a company and trade it"
+description: "Browse by theme, rank all 95 on real figures, then buy or sell one company on its own."
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components';
+import Transcript from '../../../components/Transcript.astro';
+import Turn from '../../../components/Turn.astro';
+
+You do not need a plan to own one company. Ask Vera what is available, sort the list on real numbers, check a price, then buy or sell that one name on its own. Monvera lists 95 real tokenized stocks and funds — 86 companies and 9 funds — and every one of them can be traded by itself.
+
+<Transcript>
+  <Turn who="you">What clean energy names do you have?</Turn>
+  <Turn who="vera">Seven. First Solar, Enphase, NextEra… want the full list or the best 1-year returns?</Turn>
+  <Turn who="you">Buy $50 of First Solar</Turn>
+  <Turn who="vera">$50 of FSLR at $214.80. Confirm and it's yours.</Turn>
+</Transcript>
+
+## Browse by theme
+
+Ask for a theme — AI, clean energy, semiconductors, big tech, healthcare — and Vera pulls the listed companies that belong to it, so you look at one area at a time instead of scrolling a list of 95. She can open the market panel beside the chat if you would rather scan it yourself, and "what moved today?" gets you the day's biggest risers and fallers.
+
+The nine funds each cover a whole area in a single holding: the S&P 500, the Nasdaq 100, US Treasuries, silver, semiconductors, S&P 500 Momentum, the tech sector, oil, and South Korea. A fund spreads your money across many companies at once, which is why Vera often puts one in a basket.
+
+A big move up is not a reason to buy and a big move down is not a reason to sell. Prices swing both ways.
+
+## Rank the list on real figures
+
+When you want to sort rather than browse, ask Vera to screen. She ranks all 95 on four figures drawn from real price history, and you choose which one orders the list.
+
+| Figure | What it tells you |
+| --- | --- |
+| 1-year return | How much the price changed over twelve months. Plus 40% rose; minus 15% fell. |
+| 3-month return | The same idea recently, so a good quarter is not hidden by a bad year. |
+| Volatility | How much the price bounces around. Higher means bigger swings — a rougher ride to hold. |
+| Max drawdown | The biggest fall from a past high to the low that followed. The worst stretch a holder sat through. |
+
+Say "rank everything by 1-year return", "which are the least volatile?", or "show me the worst drawdowns" and you get that ordering. Where a company has no price history for a figure, it is flagged as missing rather than shown a made-up zero.
+
+<Aside type="caution">
+These are past figures, not predictions. The company that rose most last year can fall this year, and a low-volatility name can still lose you money. Sorting real history is useful; it is not a forecast, and none of it is advice.
+</Aside>
+
+## Check a price, or compare two
+
+"How's Nvidia doing?" gets you the live price and the day's move. "Show me Apple over the last year" gets you the price history. "Apple vs Microsoft over a year" puts both on one chart so you can see which held up better and how differently they moved. If you are placing something large, "how much can I move in one go?" tells you how deep the market is for that name right now.
+
+Prices are the live market price, the same one any buyer pays. When a company has no live feed, Monvera shows that honestly instead of printing a stale number — where the numbers come from is on [where prices come from](/how/where-prices-come-from/).
+
+## Buy one company
+
+<Steps>
+
+1. **Say what you want.** "Buy $50 of First Solar" is enough. Vera prices it and shows you what you would be paying.
+
+2. **Check the amount and the price.** From $1 up, though a single buy of a few dollars is worth sanity-checking against the venue's roughly $11 minimum — Vera tells you if the amount is too small to fill.
+
+3. **Approve the spend.** This is the one thing you sign. The network cost is covered, so you never fund a separate fee.
+
+4. **You own it.** The holding appears in your account at the price it filled. Some fills arrive as settling for a few minutes before they can be sold on — that is normal and nothing is stuck.
+
+</Steps>
+
+## Sell one company
+
+Selling runs the same way in reverse. "Sell half my Nvidia" or "sell all my First Solar" gets you a quote, you confirm, and the holding turns back into dollars in your balance. You can sell part of a position or all of it, and you never have to sell a whole plan to exit one name in it.
+
+Owning one company means none of the spread a basket gives you: it falls exactly as hard as that company does. [Can I lose money?](/safety/can-i-lose-money/) is worth reading before you concentrate.
+
+## If a trade does not go through
+
+Nothing is spent when a trade stops. There are three honest reasons it happens: the price you were quoted expired before you confirmed, so it stops rather than filling at a stale number; your account did not hold enough to cover it; or the company could not be filled right then, in which case Monvera retries on the other venue before giving up. In every case you can ask again for a fresh price.

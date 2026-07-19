@@ -1,68 +1,40 @@
 ---
-title: "Read Vera's on-chain track record"
-description: "GET /api/vera-record returns Vera's recorded recommendations, executed volume, recent plans, and her IdentityRegistry reputation score."
+title: "Vera's on-chain track record"
+description: "Vera's recorded recommendations, executed USDG volume, recent plans, and reputation."
 ---
 
-import { Aside, Tabs, TabItem, Badge, LinkCard } from '@astrojs/starlight/components';
+`GET /api/vera-record` returns Vera's verifiable track record straight from the on-chain event log: how many recommendations she has committed, how much USDG settled against them, her most recent plans, and her IdentityRegistry reputation score.
 
-<Badge text="GET" variant="tip" /> <Badge text="Public" variant="note" /> `https://monvera.best/api/vera-record`
+`GET /api/vera-record` · public, no token · 30 requests per 60 seconds per IP. Base URL and error shapes: [conventions](/dev/conventions/).
 
-GET Vera's verifiable track record straight from the on-chain event log: how many recommendations she has committed, how much USDG has settled against them, her most recent plans, and her IdentityRegistry reputation score. Pass `?user=0x...` to scope the record to one account, or omit it for Vera's global record. Public chain data, no token. Rate limited to 30 requests per 60 seconds per IP.
-
-Each recorded recommendation is the risk assessment Vera signed with her `agentSigner` key. The user separately signed the spend. This route reports what was recorded on-chain. To recover the signer of a `RiskInference` payload and confirm it equals `agentSigner()`, follow [Verify Vera yourself](/dev/verify-vera/).
-
-## What it returns
-
-A `record` object aggregated from Vera's `RecommendationCommitted` and `AllocationExecuted` logs on chain 4663, plus a `reputation` field read live from the IdentityRegistry. Empty history returns a clean zero-state, not an error.
+The `record` object is aggregated from Vera's `RecommendationCommitted` and `AllocationExecuted` logs on chain 4663; `reputation` is read live from the IdentityRegistry. Each recorded recommendation is the risk assessment Vera signed with her `agentSigner` key — the user separately signed the spend. To recover the signer of a `RiskInference` payload and confirm it equals `agentSigner()`, follow [Verify Vera](/dev/verify-vera/).
 
 ## Parameters
 
 | Name | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- |
-| `user` | address | no | global | Restrict the record to one account. An invalid address returns 400. |
+| `user` | address | no | global | Restrict the record to one account. |
 
 ## Returns
 
 | Field | Type | Description |
 | --- | --- | --- |
 | `record.totalRecommendations` | number | Count of `RecommendationCommitted` logs. |
-| `record.totalExecutedUsd` | number | Sum of USDG settled across executed plans (6-decimal amounts as a number). |
+| `record.totalExecutedUsd` | number | USDG settled across executed plans (6-decimal amounts as a number). |
 | `record.executedCount` | number | Count of `AllocationExecuted` logs. |
 | `record.recentRecommendations` | array | Up to 8 plans, newest first. |
-| `record.recentRecommendations[].planId` | bytes32 | The single-use plan id. |
-| `record.recentRecommendations[].riskScore` | number | Assessed risk in basis points. |
-| `record.recentRecommendations[].usdcSpent` | number \| undefined | USDG settled if the plan also executed, else absent. |
-| `record.recentRecommendations[].txHash` | bytes32 | The transaction that recorded the plan. Open it on Blockscout. |
-| `record.recentRecommendations[].blockNumber` | number | Block the record landed in. |
-| `reputation` | string \| null | Vera's `reputationScore(agentId)` as a decimal string, or null if the registry read is unavailable. |
+| `…[].planId` | bytes32 | The single-use plan id. |
+| `…[].riskScore` | number | Assessed risk in basis points. |
+| `…[].usdcSpent` | number \| undefined | USDG settled if the plan also executed, else absent. |
+| `…[].txHash` | bytes32 | Transaction that recorded the plan. |
+| `…[].blockNumber` | number | Block the record landed in. |
+| `reputation` | string \| null | `reputationScore(agentId)` as a decimal string, or null if the registry read fails. |
 
-<Aside type="note" title="Reputation reads zero until feedback is written">
-`reputationScore` is owner-updated through feedback only, so it reads `"0"` until feedback exists. A `"0"` or `null` reputation is honest, not an error. Do not read it as a live performance score.
-</Aside>
-
-## Example request
-
-<Tabs>
-<TabItem label="curl">
+## Example
 
 ```bash
 curl "https://monvera.best/api/vera-record?user=0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045"
 ```
-
-</TabItem>
-<TabItem label="fetch">
-
-```javascript
-const res = await fetch(
-  "https://monvera.best/api/vera-record?user=0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045"
-);
-const { record, reputation } = await res.json();
-```
-
-</TabItem>
-</Tabs>
-
-## Example response
 
 ```json
 {
@@ -84,16 +56,14 @@ const { record, reputation } = await res.json();
 }
 ```
 
-Open any `txHash` at `https://robinhoodchain.blockscout.com/tx/<txHash>` to read the `RecommendationCommitted` log for yourself.
+Open any `txHash` at `https://robinhoodchain.blockscout.com/tx/<txHash>` to read the `RecommendationCommitted` log yourself.
 
-## Failure paths
+## Errors and edge cases
 
-- A malformed `user` value returns 400 `{"error":"user must be a valid address."}`.
-- Over 30 requests in 60 seconds from one IP returns 429 `{"error":"Too many requests. Please slow down a moment."}` with a `Retry-After` header.
-- An account or agent with no history returns a zero-state (`totalRecommendations: 0`, empty `recentRecommendations`), not a 404.
+| Status | Body | When |
+| --- | --- | --- |
+| 400 | `{"error":"user must be a valid address."}` | `user` is not a valid address. |
 
-## Related
+An account or agent with no history returns a zero-state (`totalRecommendations: 0`, empty `recentRecommendations`), not a 404.
 
-<LinkCard title="Verify Vera yourself" href="/dev/verify-vera/" description="Read the agent card, recover the RiskInference signer, and confirm it equals agentSigner()." />
-<LinkCard title="Vera's agent card" href="/dev/api/agent-card/" description="Her on-chain identity, signer, and registrations." />
-<LinkCard title="Accountable AI" href="/how/accountable-ai/" description="Why Vera's signed risk assessment is recorded in the same transaction as the trade." />
+`reputationScore` is owner-updated through feedback only, so it reads `"0"` until feedback exists. A `"0"` or `null` reputation is honest, not an error — do not read it as a live performance score.

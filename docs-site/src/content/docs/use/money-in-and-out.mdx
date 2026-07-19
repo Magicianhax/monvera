@@ -1,0 +1,69 @@
+---
+title: "Add money and take it out"
+description: "Send USDG in to invest, sell back to dollars, and send it out again whenever you want."
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components';
+import Transcript from '../../../components/Transcript.astro';
+import Turn from '../../../components/Turn.astro';
+
+You fund your account by sending it USDG — a dollar-value currency where one USDG tracks one US dollar — and you take money out by selling holdings back to USDG and sending it to an address you control. Both start by saying so.
+
+<Transcript>
+  <Turn who="you">I want to add money</Turn>
+  <Turn who="vera">Here's your deposit address. Send USDG on Robinhood Chain to it and your balance updates when it lands.</Turn>
+  <Turn who="you">What's my balance?</Turn>
+  <Turn who="vera">$248.10 in cash, plus $412 in holdings.</Turn>
+</Transcript>
+
+## Add money
+
+<Steps>
+
+1. **Ask for your deposit address.** "Add money" or "where do I deposit?" opens the deposit panel with your address and a QR code. The address is yours and does not change, so you can reuse it.
+
+2. **Send USDG to it, on Robinhood Chain.** Send only USDG, and only to the address Monvera shows you inside your account.
+
+3. **Wait for it to land.** Your balance goes up on its own once the transfer settles. Then you can invest.
+
+</Steps>
+
+This is real money. Send only USDG, only on Robinhood Chain, and only to the address shown inside your own account. Anyone messaging you a different address is not Monvera.
+
+## Getting USDG in the first place
+
+Monvera does not sell you USDG. There is no card payment and no bank transfer inside the app — you bring USDG you already hold, from an exchange or wallet that supports it, and bridge or send it to Robinhood Chain.
+
+That is the one part of Monvera that still asks something of you, and it is worth saying plainly rather than dressing up. If a provider starts selling USDG on Robinhood Chain directly, the step disappears and this page will say so.
+
+## How much you need
+
+You can start from $1. Each company inside a plan needs about $11 because of the trading venue's minimum, so a plan spread across four names wants about $44 or more to be worth building. Leave a little headroom above the amount you intend to invest, since prices move between asking and confirming.
+
+## Sell back to dollars
+
+"Sell half my Nvidia" or "sell everything" turns holdings back into USDG at the live market price. You confirm, and the dollars land in your balance. You can sell one position or all of them, and you never have to sell a whole plan to exit a single name in it.
+
+Selling is the first half of taking money out. Cash sitting in your balance is still inside your Monvera account — it is yours, but it has not left yet.
+
+## Send it out
+
+<Steps>
+
+1. **Say where it's going.** "Send $200 to my wallet" opens the send panel. Enter the destination address you control.
+
+2. **Check the address, then the amount.** Read it once more before you go on.
+
+3. **Confirm.** Your dollars leave Monvera and arrive at the address you named.
+
+</Steps>
+
+<Aside type="danger">
+A send goes exactly where you point it. Monvera cannot reverse it, cancel it, or pull the money back, and neither can anyone else. Verify the destination address character by character, and send a small test amount first if there is any doubt.
+</Aside>
+
+## Why Monvera cannot hold your money
+
+Your holdings sit in your own non-custodial account the whole time. Monvera cannot move, freeze, or withhold them, because every sell and every send needs your signature — which is also why nobody at Monvera can undo a mistaken send for you. The account remains yours even if Monvera disappears; how to prove that and how recovery works is on [your account and recovery](/safety/your-account-and-recovery/).
+
+Switching Autopilot off does not sell anything, and taking money out does not close your account. You can come back to a balance of zero and start again from $1.

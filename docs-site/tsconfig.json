@@ -1,5 +1,10 @@
 {
   "extends": "astro/tsconfigs/strict",
+  "compilerOptions": {
+    // src/worker.ts runs on Workers, not in the browser — Fetcher and the
+    // rest of the runtime types come from here.
+    "types": ["@cloudflare/workers-types"]
+  },
   "include": [".astro/types.d.ts", "**/*"],
   "exclude": ["dist"]
 }

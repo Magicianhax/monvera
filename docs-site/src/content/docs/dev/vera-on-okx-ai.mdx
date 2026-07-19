@@ -1,47 +1,45 @@
 ---
 title: "Vera on OKX.AI"
-description: "Vera is listed on the OKX.AI marketplace as agent #6711: pay-per-call stock research, plans, baskets and executable trade instructions over tokenized xStocks, settled via x402 on X Layer."
+description: "Vera is agent #6711 on OKX.AI: pay-per-call stock research over xStocks, paid via x402."
 ---
 
-import { Aside, LinkCard } from '@astrojs/starlight/components';
+import { Aside } from '@astrojs/starlight/components';
 
-Vera is listed on [OKX.AI](https://www.okx.ai) — OKX's agent marketplace — as **agent #6711, "Vera by Monvera"**. Any person or agent can pay her per call for research, allocation plans, themed baskets and ready-to-execute trade instructions over real tokenized stocks (xStocks). This listing runs on its own infrastructure and is separate from the Monvera app on Robinhood Chain.
+Vera is listed on [OKX.AI](https://www.okx.ai), OKX's agent marketplace, as **agent #6711, "Vera by Monvera"**. Any person or agent can pay her per call for research, allocation plans, themed baskets, and ready-to-execute trade instructions over real tokenized stocks (xStocks). This listing runs on its own infrastructure and is separate from the Monvera app on Robinhood Chain.
 
 <Aside type="note">Research output, not investment advice. Vera never holds funds and never signs trades: you pay per call, and any trade instructions she returns are executed by your own wallet.</Aside>
 
 ## What she sells
 
-All services live at `https://vera.monvera.best` and are priced in USDT (per call):
+All services live at `https://vera.monvera.best`, priced in USDT per call:
 
 | Service | Price | What you get |
 | --- | --- | --- |
-| Live Tokenized Stock Quote | free | Live price + liquidity snapshot for one xStock |
-| AI Stock Allocation Plan | $0.50 | Goal + budget + risk → weighted portfolio with reasons and a 1-year backtest |
+| Live Tokenized Stock Quote | free | Live price and liquidity snapshot for one xStock |
+| AI Stock Allocation Plan | $0.50 | Goal, budget, and risk into a weighted basket with reasons and a 1-year backtest |
 | Themed Stock Basket | $0.35 | halal · blue-chip · index · ai-semis · dividend · momentum · barbell |
-| Portfolio Rebalance Planner | $0.35 | Holdings + target → minimal sell/buy instructions |
+| Portfolio Rebalance Planner | $0.35 | Holdings plus target into minimal sell/buy instructions |
 | Stock Head-to-Head Compare | $0.30 | Two stocks, real 12-month data, a clear verdict |
 | Tokenized Stock Research Note | $0.25 | One stock, the 12-month picture, the key risk, who it fits |
-| Halal Stock Compliance Screen | $0.25 | AAOIFI sector + ratio screens with a reason per name (certification in progress) |
-| Portfolio Backtest | $0.25 | Any weighted basket vs SPY: return, volatility, worst dip, Sharpe |
+| Halal Stock Compliance Screen | $0.25 | AAOIFI sector and ratio screens with a reason per name (certification in progress) |
+| Portfolio Backtest | $0.25 | Any weighted basket against SPY: return, volatility, worst dip, Sharpe |
 | Momentum Stock Screener | $0.25 | The whole universe ranked by risk-adjusted momentum |
 | Trade Legs Builder | $0.25 | A plan turned into ordered, executable swap instructions |
 
-The universe is 37 tokenized stocks and ETFs (xStocks by Backed on Solana), each one verified tradable with a real swap-build before it is allowed into a plan. Names that quote but cannot execute are excluded until liquidity appears.
+The universe is 37 tokenized stocks and ETFs (xStocks by Backed, on Solana), each verified tradable with a real swap-build before it is allowed into a plan. Names that quote but cannot execute are excluded until liquidity appears.
 
 ## How paying works
 
-Every paid endpoint speaks x402: an unpaid call returns HTTP 402 with a payment challenge, your wallet signs a gasless USDT authorization, the OKX broker settles it on X Layer, and the same call retried with the payment header returns the result. From OKX.AI or any onchainos-enabled agent this is automatic — you just see a price confirmation.
+Every paid endpoint speaks x402. An unpaid call returns HTTP 402 with a payment challenge, your wallet signs a gasless USDT authorization, the OKX broker settles it on X Layer, and the same call retried with the payment header returns the result. From OKX.AI or any onchainos-enabled agent this is automatic — you see a price confirmation, nothing more.
 
-Payments settle in **USDT0 or USDG on X Layer** (chain 196). Trade execution is separate: the legs Vera returns are swaps on **Solana**, where xStocks liquidity actually lives, executed by your own wallet through the OKX DEX aggregator. Buys and sells both work, from any amount.
+Payments settle in USDT0 or USDG on X Layer (chain 196). Execution is separate: the legs Vera returns are swaps on Solana, where xStocks liquidity actually lives, run by your own wallet through the OKX DEX aggregator. Buys and sells both work, at any amount.
 
-## Her track record is on-chain
+## Her record is on-chain here too
 
-Every paid plan or basket is committed to **VeraRecordV2** on X Layer at
-[`0xd97cd1a25484252bf234ab384c3818b05e6594e0`](https://www.oklink.com/x-layer/address/0xd97cd1a25484252bf234ab384c3818b05e6594e0).
-Each `RecommendationCommitted` event binds the plan hash, the payer, the amount paid, the risk score and the leg count under one EIP-712 signature from her agent key — so a third party cannot forge entries, and anyone can audit what Vera recommended, to whom, and when. Backtests are history, not promises; the record makes the history checkable.
+Every paid plan or basket is committed to **VeraRecordV2** on X Layer at [`0xd97cd1a25484252bf234ab384c3818b05e6594e0`](https://www.oklink.com/x-layer/address/0xd97cd1a25484252bf234ab384c3818b05e6594e0). Each `RecommendationCommitted` event binds the plan hash, the payer, the amount paid, the risk score, and the leg count under one EIP-712 signature from her agent key, so entries cannot be forged and anyone can audit what Vera recommended, to whom, and when. The same recover-the-signer method on [verify Vera](/dev/verify-vera/) works against this contract.
+
+Backtests are history, not promises. The record makes the history checkable.
 
 ## Relationship to the Monvera app
 
-Same Vera, different venue. The [Monvera app](https://monvera.best) is her home: real tokenized stocks on Robinhood Chain, one-tap investing, gasless. The OKX.AI listing packages her research brain as pay-per-call services for the agent economy, with its own wallet, its own revenue, and its own on-chain record. Nothing you do on one touches the other.
-
-<LinkCard title="Verify Vera yourself" href="/dev/verify-vera/" description="The same verify-the-signer approach works for VeraRecordV2 on X Layer." />
+Same Vera, different venue. The [Monvera app](https://monvera.best) is her home: real tokenized stocks on Robinhood Chain, bought by talking to her, gasless and non-custodial. The OKX.AI listing packages her research brain as pay-per-call services for the agent economy, with its own wallet, its own revenue, and its own on-chain record. Nothing you do on one touches the other.

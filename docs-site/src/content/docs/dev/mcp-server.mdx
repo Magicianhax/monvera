@@ -1,0 +1,73 @@
+---
+title: "MCP server"
+description: "Connect an AI agent to these docs over MCP at docs.monvera.best/mcp — search and read every page."
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+These docs are an MCP server. Point any Model Context Protocol client at `https://docs.monvera.best/mcp` and it can search and read every page — no key, no signup, no rate limit.
+
+```
+https://docs.monvera.best/mcp
+```
+
+It speaks Streamable HTTP over a single `POST`. There is no authentication because there is nothing to protect: the corpus is the same public documentation you are reading, and the server is strictly read-only.
+
+## Tools
+
+| Tool | What it does |
+| --- | --- |
+| `search_monvera_docs` | Find pages by keyword. Takes `query`, optional `section` (`start`, `use`, `safety`, `how`, `dev`, `reference`) and `limit`. Returns each match with its id, title, URL, and an excerpt. |
+| `get_monvera_doc` | Return one page in full. Takes `id`, the value `search_monvera_docs` gave you — for example `use/your-plan`. A full URL works too. |
+
+The intended loop is search first, then read: `search_monvera_docs` to find the page, `get_monvera_doc` to get its text.
+
+## Connect a client
+
+Most clients take a URL. In an `mcpServers` config block:
+
+```json
+{
+  "mcpServers": {
+    "monvera-docs": {
+      "type": "http",
+      "url": "https://docs.monvera.best/mcp"
+    }
+  }
+}
+```
+
+With the Claude Code CLI:
+
+```bash
+claude mcp add --transport http monvera-docs https://docs.monvera.best/mcp
+```
+
+## Call it directly
+
+Every MCP message is JSON-RPC, so `curl` is a fine client:
+
+```bash
+curl -s -X POST https://docs.monvera.best/mcp \
+  -H 'content-type: application/json' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/call",
+       "params":{"name":"search_monvera_docs",
+                 "arguments":{"query":"what it costs","limit":3}}}'
+```
+
+## Plain text, if you prefer
+
+Not every agent speaks MCP. The same content is published as plain text:
+
+| File | What it holds |
+| --- | --- |
+| [`/llms.txt`](https://docs.monvera.best/llms.txt) | Every page, grouped, with a one-line description each. Start here. |
+| [`/_llms-txt/using-monvera.txt`](https://docs.monvera.best/_llms-txt/using-monvera.txt) | The full text of every product page. |
+| [`/_llms-txt/developer-and-api.txt`](https://docs.monvera.best/_llms-txt/developer-and-api.txt) | The full text of every developer and API page. |
+| [`/llms-full.txt`](https://docs.monvera.best/llms-full.txt) | The whole site in one file. |
+
+Vera reads `/llms.txt` herself, which is why she can point you at a page when you ask her something these docs answer.
+
+<Aside type="caution">
+The server answers questions about Monvera's documentation. It does not place trades, read your account, or touch your money — those live behind the [authenticated API](/dev/authentication/), which needs your own token.
+</Aside>

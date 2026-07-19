@@ -1,33 +1,66 @@
 ---
-title: "How Vera decides, and where she can be wrong"
-description: "Vera reasons over about twelve months of real price history and live Chainlink prices; she can be wrong, and her signature proves authorship, not correctness."
+title: "How Vera picks and weights a plan"
+description: "Vera picks and sizes names from 12 months of real numbers, then scores the risk. It is a model, not a forecast."
 ---
 
-import { Aside, LinkCard } from '@astrojs/starlight/components';
+import { Aside } from '@astrojs/starlight/components';
+import Transcript from '../../../components/Transcript.astro';
+import Turn from '../../../components/Turn.astro';
 
-Vera builds a plan by reasoning over about twelve months of real price history plus live prices, then attaching a plain risk read to each holding. She is not clairvoyant. She can be wrong, and nothing about signing a plan changes that.
+Vera builds a plan from numbers you can pull yourself: 12 months of real daily closes for every asset in the universe, live prices, and a live check that each name can actually be bought right now. She reads that table, picks names against your goal, sizes them so no single name can sink the plan, and scores the risk. Everything she reads is real. What she does with it is a model, not a forecast.
 
-## What Vera reasons over
+## What she reads before she picks anything
 
-Vera works from two inputs, both real and both checkable. The first is about twelve months of real equity price history for each asset, the same history the [screener](/use/use-the-screener/) and [backtests](/how/open-strategies-and-backtests/) draw from. The second is live prices at plan time: Chainlink feeds where a feed is published, and firm Arcus RFQ quotes for the executable price. Where those prices come from, and which assets have no Chainlink feed, is documented on [where prices come from](/how/where-prices-come-from/).
+Four numbers per asset, computed from the last 12 months of the real underlying ticker's daily closes:
 
-From that, Vera produces a named plan (for example "Steady Growth" over Apple, Nvidia, the S&P 500, and US Treasuries), a one-line reason per holding, and an assessed risk. The assessed risk is what she signs into the `RiskInference` struct, bounded by a risk ceiling, when the plan is recorded on-chain.
+| Number | What it tells her |
+| --- | --- |
+| 1-year return | The longer trend |
+| 3-month return | Whether that trend is still alive or rolling over |
+| Annualized volatility | How violently the price moves |
+| Worst peak-to-trough drop | How bad the worst stretch actually got |
 
-## Where Vera can be wrong
+She also gets the live price for each asset and, for the names she shortlists, a quote probe confirming the trade would fill. Assets whose public ticker is not the same instrument, mostly tokenized private companies, have no honest history, so they carry no numbers and Vera treats them as a small thematic slice at most, never a core holding.
 
-Vera's inputs are backward-looking, and past prices do not predict future ones. Twelve months of history captures how an asset moved; it does not tell you how it will move. A plan Vera assessed as steady can still fall, because these are real companies and real prices, and prices fall. You can lose money; see [can I lose money](/safety/can-i-lose-money/).
+## How names get picked and sized
 
-Vera outputs options with reasons and a risk read, not directives. A plan is a basket you judge before you commit, not a recommendation to act on. Nothing Vera returns is investment advice.
+Picking is judgment against your goal, constrained hard. Vera may only allocate across assets that are buyable right now, and weights must sum to 100. Past that, the numbers set the shape: cautious goals lean toward low-volatility, shallow-drawdown names and broad index funds; growth goals favor names where the 1-year and 3-month trends are both positive, because a fading 3-month behind a big 1-year is momentum rolling over.
 
-## What a signature does and does not prove
+Sizing is the part that is not discretionary. Positions are sized inversely to volatility, so the wilder a name moves, the smaller its slice. That is why a plan built around one volatile stock still ends up with most of its weight somewhere calmer.
+
+Two things then happen before you see the draft. Any pick with no live executable quote is dropped and its weight redistributed, so Vera never proposes something that fails at invest time. And legs are capped to clear the venue minimum: you can start from $1, but each leg needs about $11, so a small amount buys fewer names rather than legs too small to fill.
+
+<Transcript>
+  <Turn who="you">Put $200 into AI companies, nothing too wild</Turn>
+  <Turn who="vera">Six names, about $33 each. I skipped two of the AI set: one has no honest 12-month history and one has no live quote right now. Weights are inverse to volatility, so the steadiest name carries the biggest slice.</Turn>
+</Transcript>
+
+## The risk read
+
+Every plan carries one blended risk score from 0 to 10000, and it is the number Vera signs. Roughly:
+
+| Kind of holding | Typical score |
+| --- | --- |
+| Broad index funds | 3000 to 4500 |
+| Single technology stocks | 5000 to 7000 |
+| Crypto | 7000 to 9000 |
+
+The plan's score is the blend across its holdings, checked against a ceiling. If it exceeds the ceiling the plan was built under, the transaction reverts rather than recording an over-risk plan.
+
+Each holding also gets a one-line reason, grounded in those same numbers. If a reason calls a name steadier than most of its sector, that traces back to its measured volatility, not to vibes.
+
+## Where this can be wrong
+
+The inputs are backward-looking, all of them. Twelve months of closes describe how an asset moved; they say nothing about how it will move. A plan Vera scores as steady can still fall hard, because these are real companies at real prices, and prices fall. You can lose money on any plan she builds.
+
+The scoring is calibration, not prediction. A 4000 does not mean "will drop less than a 7000 next year". It means "this mix has historically moved less violently than that one". Markets change regime, and a name that was calm for 12 months can gap on a single earnings call.
+
+She is also working with an incomplete picture on purpose. She sees prices, not balance sheets, not filings, not the news you read this morning. She has no view on what happens next week.
 
 <Aside type="caution">
-Vera signs the risk assessment; you sign the spend. Her signature proves she authored that exact assessment at that time. It does not prove the assessment is correct, and it does not promise a return.
+Vera outputs options with reasons and a risk read, not directives. A plan is a basket for you to judge before you commit, and nothing she returns is investment advice.
 </Aside>
 
-The on-chain record makes Vera's track record honest, not infallible. Because her signed assessment is recorded in the same transaction as the trades (see [how the plan is signed and recorded](/how/accountable-ai/)), her calls cannot be quietly deleted or rewritten after the fact. That accountability means a wrong call stays on the record too. The value of the signature is that you can hold the assessment to what actually happened, not that the assessment was right.
+## Why a wrong call still matters
 
-For the honest read on backtests as history rather than promises, see [backtests are history, not promises](/safety/backtests-are-history-not-promises/).
-
-<LinkCard title="Where prices come from" href="/how/where-prices-come-from/" description="Chainlink feeds and live Arcus RFQ quotes, with assets that have no feed shown honestly." />
-<LinkCard title="Open strategies and backtests" href="/how/open-strategies-and-backtests/" description="Rule-based strategies with walk-forward backtests, raw JSON at /api/strategies." />
+Because the assessment is recorded on-chain in the same transaction as the buys, the calls that went badly stay on the record beside the ones that went well. That is the honest version of a track record: not a claim that Vera is right, but a record you can check her against. How it is written and read is covered in [what Monvera records on-chain](/how/accountable-ai/).

@@ -1,15 +1,17 @@
 ---
 title: "Authenticate with a Privy bearer token"
-description: "Gated routes take Authorization: Bearer <privy-token>; public reads take none. The full public versus token-gated matrix, with the exact 401 and 451 bodies."
+description: "Gated routes take Authorization: Bearer plus a Privy token; public reads take no header."
 ---
 
-import { Tabs, TabItem, Aside } from '@astrojs/starlight/components';
+import { Aside } from '@astrojs/starlight/components';
 
-Gated routes take `Authorization: Bearer <privy-token>`; public routes take no header at all. The base URL is `https://monvera.best`. A missing or bad token on a gated route returns `401 {"error":"Please sign in to continue."}`. The token is a Privy access token tied to a signed-in Monvera account, checked server-side by `verifyRequest()`.
+Gated routes take `Authorization: Bearer <privy-token>`. Public routes take no header at all. The token is a Privy access token from a signed-in Monvera session, checked server-side by `verifyRequest()`. Missing, malformed, or expired, it returns `401 {"error":"Please sign in to continue."}`.
 
-## Get a Privy bearer token
+There is no API key, no client secret, and no way to mint a token outside a real signed-in account. Every gated route acts for the user that token belongs to.
 
-The token is the Privy access token from a signed-in session. Sign in on `https://monvera.best` (email or social through Privy), then read the token from the Privy client SDK:
+## Get a token
+
+Sign in at `https://monvera.best` with email or a social login, then read the access token from the Privy client SDK:
 
 ```js
 import { usePrivy } from "@privy-io/react-auth";
@@ -18,79 +20,64 @@ const { getAccessToken } = usePrivy();
 const privyToken = await getAccessToken();
 ```
 
-Send it as a bearer token on every gated request:
+Send it on every gated request:
 
-<Tabs>
-<TabItem label="curl">
 ```bash
 curl -X POST "https://monvera.best/api/allocate" \
   -H "Authorization: Bearer $PRIVY_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"goal":"grow my money steadily for five years","amountUsdg":"250"}'
 ```
-</TabItem>
-<TabItem label="fetch">
-```js
-const res = await fetch("https://monvera.best/api/allocate", {
-  method: "POST",
-  headers: {
-    "Authorization": `Bearer ${privyToken}`,
-    "Content-Type": "application/json",
-  },
-  body: JSON.stringify({ goal: "grow my money steadily for five years", amountUsdg: "250" }),
-});
-```
-</TabItem>
-</Tabs>
 
-<Aside type="caution">
-No Monvera response ever returns a private key, a seed phrase, or a session-signer secret. If you see one in an example, it is wrong. See [conventions](/dev/conventions/).
-</Aside>
+Tokens expire. Refresh through the SDK and resend rather than caching one for a long-running job.
 
-## Public routes need no token
+## Public routes
 
-These routes are public GET reads with no `Authorization` header. Rate limited per IP.
+No `Authorization` header. Rate limited per client IP.
 
 | Route | Method | Notes |
 |---|---|---|
 | `/api/market` | GET | Catalog of 95 assets; `?symbol=` and `?range=` |
 | `/api/prices` | GET | Current and historical prices |
-| `/api/screener` | GET | The 95 assets ranked by four price-history metrics |
+| `/api/screener` | GET | The catalog ranked by four price-history metrics |
 | `/api/strategies` | GET | Open rule-based strategies with backtests |
-| `/api/backtest` | POST | Walk-forward backtest for a strategy rule (public) |
+| `/api/themes` | GET | One deterministic basket per investing theme |
+| `/api/backtest` | POST | Walk-forward backtest for a strategy rule |
 | `/api/portfolio` | GET | Positions and value; read by `?address=` |
 | `/api/transactions` | GET | Settled on-chain trades; read by `?address=` |
 | `/api/activity` | GET | Activity feed; read by `?address=` |
-| `/api/vera-record` | GET | Signed on-chain record; read by `?user=` |
+| `/api/vera-record` | GET | Vera's signed on-chain record; read by `?user=` |
 | `/.well-known/agent-card.json` | GET | Vera's discovery document |
 
-`portfolio`, `transactions`, and `activity` are public reads keyed by `?address=`, so any account address can be inspected without a token. `backtest` is a public POST.
+`portfolio`, `transactions`, and `activity` are public reads keyed by `?address=`, so any account address can be inspected without a token — the chain is public either way. `backtest` is a public POST.
 
-## Token-gated routes take a bearer token
+## Token-gated routes
 
-These routes require `Authorization: Bearer <privy-token>`. Rate limited per user id.
+Require `Authorization: Bearer <privy-token>`. Rate limited per user id.
 
 | Route | Method | Notes |
 |---|---|---|
-| `/api/quote` | POST | Firm Arcus RFQ quote; taker in body. POST and gated, not a GET |
+| `/api/quote` | POST | Firm router quote; taker in the body |
 | `/api/allocate` | POST | Goal plus amount into a named draft plan |
-| `/api/commit-plan` | POST | Runs the one sponsored transaction; address in body |
-| `/api/pimlico` | POST | Gas-sponsorship relay for the ERC-4337 userOp |
-| `/api/watchlist` | GET / POST | Your saved assets |
-| `/api/alerts` | GET / POST / DELETE | Your price alerts |
-| `/api/notifications` | GET / POST | Your notification feed |
+| `/api/commit-plan` | POST | Executes the plan and records the risk assessment |
+| `/api/pimlico` | POST | Gas-sponsorship relay for the ERC-4337 user operation |
+| `/api/watchlist` | GET / POST | The account's saved assets |
+| `/api/alerts` | GET / POST / DELETE | The account's price alerts |
+| `/api/notifications` | GET / POST | The account's notification feed |
 | `/api/autopilot` | GET / POST / DELETE | Create, read, and revoke Autopilot |
-| `/api/autopilot/run` | POST | Trigger one Autopilot run within existing bounds |
+| `/api/autopilot/run` | POST | One Autopilot run within existing bounds |
 | `/api/autopilot/runs` | GET | History of Autopilot runs |
 
 <Aside type="note">
-`quote` is a POST with the taker in the request body and it needs a bearer token. It is not a public GET. Sending it as a GET or without a token returns `401`.
+`/api/quote` is a POST with the taker in the request body, and it needs a token. Sending it as a GET, or without a header, returns `401`.
 </Aside>
 
-## Internal routes are not callable
+## What a token cannot do
 
-`/api/cron/autopilot` and `/api/cron/alerts` are gated by an internal cron secret, not by a Privy token. Cloudflare Cron invokes them. They are not part of the public API and a bearer token will not reach them, so do not build against them.
+A bearer token authenticates a caller; it does not authorize a spend. The account is a non-custodial Privy embedded wallet the user owns, and moving funds needs their signature on the user operation and token permits. A stolen token can read an account and draft plans. It cannot buy, sell, or withdraw on its own, and no response on any route ever returns a private key, a seed phrase, or a session-signer secret.
 
-## Blocked regions return 451
+## Routes you cannot call
 
-Requests from the US, Canada, the UK, or Switzerland are blocked before any account exists, enforced in middleware by the Cloudflare `CF-IPCountry` header. Gated API paths from a blocked region return `451 {"error":"Monvera is not available in your region."}`, and page paths rewrite to `/restricted` with status 451. Only `/app`, `/api/quote`, `/api/allocate`, `/api/autopilot`, and `/api/pimlico` are geo-gated; public market, price, and screener reads are not. See [where Monvera is available](/start/where-its-available/) and [errors](/dev/errors/).
+`/api/cron/autopilot` and `/api/cron/alerts` are gated by an internal cron secret and invoked by Cloudflare Cron. A Privy token will not reach them. Do not build against them.
+
+Requests from restricted regions are blocked in middleware before any account exists, and gated API paths return `451`. The exact body and the affected paths are in [conventions](/dev/conventions/); the policy itself is in [before you invest](/start/before-you-invest/).

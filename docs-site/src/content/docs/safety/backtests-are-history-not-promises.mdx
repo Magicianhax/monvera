@@ -1,26 +1,41 @@
 ---
 title: "Backtests are history, not promises"
-description: "A backtest shows what a rule did on past prices. It is history, not a promise, and the raw numbers are open at /api/strategies."
+description: "A backtest measures what a rule did on past prices. It is not a forecast of what you will earn."
 ---
 
 import { Aside } from '@astrojs/starlight/components';
+import Transcript from '../../../components/Transcript.astro';
+import Turn from '../../../components/Turn.astro';
 
-A backtest shows what a rule would have done on past prices. It is history, not a promise. The raw numbers behind every strategy are open for anyone to read at [https://monvera.best/api/strategies](https://monvera.best/api/strategies), so you can check the figures instead of taking a chart on faith.
+A backtest tells you what a rule did on past prices. It cannot tell you what it will do next. The two get confused constantly because both are shown as a percentage, and only one of them is a fact.
 
 ## What a backtest is
 
-A backtest runs a fixed rule over real price history and reports what that rule returned in the past. When a strategy shows a past return, that number came from running its rule across real prices of companies like Apple (AAPL) and the S&P 500 (SPY) over a past window. It is a measurement of history, and it is real. It is a record of what already happened.
+A fixed rule run over real historical prices, reporting what it would have returned. The number is a genuine measurement of the past. Nothing about the prices is simulated: Apple traded where it traded.
 
 ## What a backtest is not
 
-A backtest is not a forecast of what you will earn. The future does not repeat the past on schedule. A rule that returned well over the last few years can return badly over the next few, and a backtest cannot tell you which. It does not include every cost, every gap in trading, or every event that has not happened yet. Treat the number as a fact about the past and nothing more.
+It is not a forecast of your return. The future does not repeat the past on schedule, and a rule that returned well over the last five years can return badly over the next five. A backtest also cannot include:
+
+- costs and spreads exactly as you will pay them
+- market conditions that have not happened yet
+- your own timing, which is almost never the backtest's start date
+
+A high number should raise your suspicion as much as your interest. A rule tested over a narrow, favourable window looks excellent and means nothing. Judge a strategy on whether its rule makes sense, not on how good its history looks.
 
 <Aside type="caution" title="A good backtest is not a good outcome">
-Judge a strategy by its rule and its assumptions, not only by its past return. A high past number can come from a narrow window that will not repeat. The plan you invest can still lose money.
+Backtested returns and your returns are separate things. A plan built on a strategy with an excellent history can start losing money the day you buy it.
 </Aside>
+
+## Ask Vera and she says the same
+
+<Transcript>
+  <Turn who="you">How did that strategy do?</Turn>
+  <Turn who="vera">Backtested, not live — history, not a promise. I can show you the rule and the assumptions the number came from.</Turn>
+</Transcript>
 
 ## Check the numbers yourself
 
-The raw JSON is public, so you do not have to trust a summary. Open [https://monvera.best/api/strategies](https://monvera.best/api/strategies) to read each strategy's rule, its assumptions, and its walk-forward backtest as plain data. For how these strategies are built and what the assumptions mean, see [open strategies and backtests](/how/open-strategies-and-backtests/).
+The strategy data is public JSON at [monvera.best/api/strategies](https://monvera.best/api/strategies): each strategy's rule, its assumptions, and its walk-forward backtest, as plain data you can pull apart. You do not have to trust a summary of it, including this one.
 
-Whatever a backtest shows, you can still lose money on a live plan. See [can I lose money](/safety/can-i-lose-money/). For the full standing on availability and advice, see [where it works](/start/where-its-available/).
+Whatever the history shows, [you can lose money](/safety/can-i-lose-money/) on the live plan.

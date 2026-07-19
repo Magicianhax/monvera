@@ -1,105 +1,33 @@
 ---
-title: "How Vera's plan is signed and recorded on-chain"
-description: "Vera signs a RiskInference risk assessment; one gas-sponsored transaction trades via Arcus and records that signed assessment via VeraRecord on chain 4663."
+title: "What Monvera records on-chain, and how you check it"
+description: "Vera signs the risk assessment, you sign the spend, and both land on-chain in one transaction anyone can read."
 ---
 
-import { Aside, Steps, Tabs, TabItem, LinkCard } from '@astrojs/starlight/components';
+import { Aside, Tabs, TabItem } from '@astrojs/starlight/components';
+import Transcript from '../../../components/Transcript.astro';
+import Turn from '../../../components/Turn.astro';
 
-Vera signs a risk assessment for every plan, and one transaction both buys your stocks and writes that signed assessment on-chain, so the record cannot be edited afterward. This page traces that flow end to end and names the exact contract, struct, and event you can check yourself.
+Every plan you invest writes Vera's signed risk assessment onto Robinhood Chain in the same transaction that buys the stocks. **Vera signs the risk assessment; you sign the spend.** Because both land together, her call on a plan cannot be edited, deleted, or backdated later, and you can read the whole record from public chain data without asking Monvera for anything.
 
-<figure class="shot">
-  <img src="/screens/success.webp" alt="The finish screen linking to the on-chain receipt on Blockscout" class="phone-shot" />
-  <figcaption>The finish screen links to the on-chain receipt on Blockscout.</figcaption>
-</figure>
+## What lands on the record
 
+Two things are recorded per plan: the values Vera actually signed, and the facts about the trade written alongside them.
 
-Two signatures happen, and they mean different things. Vera signs the **risk assessment** (a small typed struct that proves she authored this exact risk call). You separately sign the **spend** (the user operation that authorizes the money). Do not blur them: Vera's signature proves authorship, not that the plan will make money.
+| Recorded | What it is | Inside Vera's signature |
+| --- | --- | --- |
+| `planId` | A hash of the exact allocation, single-use | Yes |
+| `assessedRisk` | Vera's risk score for this plan, 0 to 10000 | Yes |
+| `maxRisk` | The ceiling the plan was not allowed to exceed | Yes |
+| `expiry` | The moment the assessment goes stale | Yes |
+| `user` | The account that invested | No, recorded alongside |
+| `agentId` | Vera's registry id on chain 4663, which is `1` | No, recorded alongside |
+| `usdSpent`, `legCount` | Dollars committed and how many names | No, recorded alongside |
 
-## The flow, from goal to permanent record
+The contract emits `RecommendationCommitted` and `AllocationExecuted` on success. Those two events are Vera's public track record: every plan she has assessed, with the risk she assessed it at, timestamped by the block it landed in.
 
-<Steps>
+## Read a record yourself
 
-1. **You give a goal and an amount.** For example, "grow my money steadily for five years" and $500. Vera turns that into a named plan, "Steady Growth", over four holdings: Apple (AAPL), Nvidia (NVDA), the S&P 500 (SPY), and US Treasuries (SGOV).
-
-2. **Vera signs a risk assessment.** Her signing key (her `agentSigner`) produces an EIP-712 signature over a `RiskInference` struct that binds this plan id to an assessed risk, a risk ceiling, and an expiry. The signature is authorship: it proves the agent, not a person, authored this risk call.
-
-3. **You sign the spend.** You approve one ERC-4337 user operation (the batched transaction). This is where you, not Vera, authorize the money to move.
-
-4. **One transaction trades and records.** Trades execute via Arcus spot RFQ (a request-for-quote venue that returns a firm executable price). The Arcus settle calls and the `VeraRecord.record(...)` call are batched into a single gas-sponsored user operation. The trade and the signed risk assessment land in the same transaction.
-
-5. **The record is permanent.** `VeraRecord` verifies Vera's signature on-chain and emits `RecommendationCommitted` and `AllocationExecuted`. The plan id is single-use, so the same record cannot be written twice or edited later.
-
-</Steps>
-
-<Aside type="note">
-On chain 4663 the on-chain entrypoint is `VeraRecord.record(...)`, not `investWithAI`. `StaxExecutor.investWithAI` and `InferenceVerifier` are Mantle-era artifacts and are not used here.
-</Aside>
-
-## The contract that verifies and records
-
-The verify-and-record contract (`VeraRecord`) lives at `0x7ff1a5ee19330c165146488a7ad8af6cb41da1df` on chain 4663. The frontend calls one function, batched with the Arcus settle calls in the same sponsored user operation:
-
-```solidity
-function record(
-  bytes32 planId, bytes32 recHash, uint16 assessedRisk, uint16 maxRisk,
-  uint256 expiry, bytes calldata signature, address user, uint256 agentId,
-  uint256 usdSpent, uint256 legCount
-) external
-```
-
-Because `record` runs inside the same transaction as the buys, there is no window where the trades exist without the signed assessment, or the assessment without the trades.
-
-## What Vera signs
-
-Vera signs a `RiskInference` struct under the EIP-712 domain named `VeraRecord`:
-
-```solidity
-// RISK_TYPEHASH
-keccak256("RiskInference(bytes32 planId,uint16 assessedRisk,uint16 maxRisk,uint256 expiry)")
-```
-
-```js
-// EIP-712 domain used by the signer and the deployed contract
-const domain = {
-  name: "VeraRecord",
-  version: "1",
-  chainId: 4663,
-  verifyingContract: "0x7ff1a5ee19330c165146488a7ad8af6cb41da1df",
-};
-```
-
-The signer to check against is whatever `agentSigner()` returns live. It can rotate, so read it rather than trusting a hardcoded value (last known: `0xe532105523d4eD559c3a53E3E82D616bE1a085c5`):
-
-```bash
-cast call 0x7ff1a5ee19330c165146488a7ad8af6cb41da1df "agentSigner()(address)" \
-  --rpc-url https://rpc.mainnet.chain.robinhood.com
-```
-
-Vera is agent #1 in Monvera's `IdentityRegistry` at `0x751ae640cfa816404b017fbb8234dd21abafbbdc`. Her canonical ERC-8004 identity is registered separately on Base (`8453:58228`). Both are documented on [Verify Vera](/dev/verify-vera/).
-
-## What the transaction reverts on
-
-The record fails, reverting the whole transaction (including the trades), if the signed assessment does not hold up:
-
-- `PlanAlreadyRecorded(planId)` if this plan id was already recorded (single-use replay guard).
-- `InferenceExpired()` if `block.timestamp` is past `expiry`.
-- `RiskCeilingBreached(assessed, maxRisk)` if `assessedRisk` exceeds `maxRisk`.
-- `BadSigner(recovered)` if the recovered signer is not `agentSigner()`.
-
-A stale or out-of-bounds assessment cannot be recorded quietly next to a completed trade. Either both land together or neither does.
-
-## The events that prove it happened
-
-On success, `VeraRecord` emits two events you can pull from Blockscout:
-
-```solidity
-event RecommendationCommitted(bytes32 indexed planId, address indexed user, bytes32 recHash, uint16 riskScore, uint256 agentId);
-event AllocationExecuted(bytes32 indexed planId, address indexed user, uint256 usdcSpent, uint256 legCount);
-```
-
-## Check a record yourself
-
-`GET /api/vera-record` is public (no token) and returns the recorded assessments for an account, so you can confirm a plan without trusting the app UI:
+`GET /api/vera-record` is public, needs no token, and returns the recorded assessments for any account, so you can confirm a plan without trusting anything the app shows you.
 
 <Tabs>
 <TabItem label="curl">
@@ -121,11 +49,42 @@ const data = await res.json();
 </TabItem>
 </Tabs>
 
-Public reads of `/api/vera-record` are rate limited to 30 requests per 60 seconds per IP; a caller over the limit gets `429` with `{"error":"Too many requests. Please slow down a moment."}` and a `Retry-After` header. For the full runnable chain (read the agent card, recover the signer, match it to `agentSigner()`), see [Verify Vera](/dev/verify-vera/). Public RPC caps `eth_getLogs` at 10,000 blocks, so full history goes through `/api/vera-record` rather than a raw log scan.
+Public reads are limited to 30 requests per 60 seconds per IP. The same events are readable straight off the chain on Blockscout; the public RPC caps a log scan at 10,000 blocks, which is why full history goes through the API rather than a raw scan.
 
-## What the signature proves and what it does not
+To go further and prove authorship rather than read it, follow [Verify Vera](/dev/verify-vera/): read her agent card, recover the signer from a plan's payload, and assert it equals the live `agentSigner()` on the contract. That page has the runnable procedure and every address.
 
-The signature proves Vera authored this exact risk assessment at this time, and that it is recorded unalterably alongside the trades. It does not promise a return and is not advice. Vera can be wrong; see [how Vera decides and where she can be wrong](/how/how-vera-decides/). For availability, the not-advice line, and what has not been audited, see [where Monvera is available](/start/where-its-available/) and [staying safe](/safety/staying-safe-from-scams/).
+You can also just ask.
 
-<LinkCard title="Verify Vera yourself" href="/dev/verify-vera/" description="Read the agent card, recover the signer of a plan, and confirm it equals agentSigner()." />
-<LinkCard title="The stack behind a trade" href="/how/the-stack/" description="Robinhood Chain, Arcus, Virtuals, your sign-in, the relayer, and Chainlink, each mapped to what it does." />
+<Transcript>
+  <Turn who="you">Show me your track record</Turn>
+  <Turn who="vera">Here is every plan I have signed on-chain, with the risk I assessed at the time and a link to each transaction.</Turn>
+</Transcript>
+
+## Why the two signatures are separate
+
+Vera's signature answers "who made this risk call". Yours answers "whose money moves". They are produced by different keys, held by different parties, and they are never interchangeable.
+
+Vera signs with her agent key, which lives server-side and never touches your account. That signature is an authorship claim: this agent, this plan, this risk score, before this expiry. You sign the user operation with the key in your own wallet, and only that authorizes dollars to leave. Monvera cannot produce your signature, and Vera's signature cannot spend anything.
+
+## One transaction, or none
+
+The buys and the record are batched into a single gas-sponsored transaction. There is no window where the trades exist without the assessment, or the assessment without the trades. If the record fails, the buys revert with it:
+
+| Failure | What it means |
+| --- | --- |
+| `PlanAlreadyRecorded` | This plan id was already recorded. Ids are single-use, so a record cannot be written twice |
+| `InferenceExpired` | The assessment is past its expiry. A stale risk call cannot be attached to a fresh trade |
+| `RiskCeilingBreached` | The assessed risk exceeds the ceiling the plan was built under |
+| `BadSigner` | The recovered signer is not the live agent signer. Nobody else can write to Vera's record |
+
+That last one is the load-bearing guard. The contract checks the recovered signer against `agentSigner()` on-chain, so a forged assessment does not get quietly filed next to a real trade.
+
+<Aside type="caution">
+A signature proves Vera authored that exact risk call at that time. It does not prove the call was right, and it promises nothing about returns. Accountability cuts both ways here: a bad call stays on the record too, permanently, next to the good ones.
+</Aside>
+
+## What this does and does not buy you
+
+What it buys you is a track record that cannot be curated after the fact. Vera cannot delete the plans that went badly, revise a risk score once the market disagrees with it, or claim a call she did not make. You can hold each assessment against what actually happened.
+
+What it does not buy you is correctness. The record is honest, not clairvoyant, and reading it is the point: see [how Vera picks and weights a plan](/how/how-vera-decides/) for what goes into an assessment and where it can be wrong.

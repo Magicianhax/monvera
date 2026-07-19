@@ -1,0 +1,63 @@
+---
+title: "Talk to Vera"
+description: "Say what you want in plain words — Vera builds plans, places trades, sets alerts, or answers."
+---
+
+import { Aside } from '@astrojs/starlight/components';
+import Transcript from '../../../components/Transcript.astro';
+import Turn from '../../../components/Turn.astro';
+
+Monvera is a conversation. You say what you want in your own words, and Vera does it: builds a plan, buys or sells a company, sets an alert, checks your balance, or just answers the question. There is nothing to navigate and no form to fill in. Anything that costs money stops and waits for you to confirm it.
+
+<Transcript>
+  <Turn who="you">Put $200 into AI companies</Turn>
+  <Turn who="vera">Here's a plan — six names, about $33 each. Nothing moves until you confirm.</Turn>
+  <Turn who="you">Drop the riskiest one and give its share to the index</Turn>
+  <Turn who="vera">Done. Five names now, and the S&P 500 takes the extra $33.</Turn>
+</Transcript>
+
+## What you can ask for
+
+Vera resolves around two dozen kinds of request. You do not need the right wording or a ticker — plain English is the interface.
+
+| What you want | Say something like |
+| --- | --- |
+| A plan for a goal | "Grow my money steadily for five years" · "Put $200 into AI companies" |
+| A theme or a ready-made strategy | "What themes are there?" · "Show me your strategies" |
+| To buy or sell one company | "Buy $20 of Tesla" · "Sell half my Nvidia" |
+| To check something before you act | "How's Nvidia doing?" · "Apple vs Microsoft over a year" · "Rank everything by 1-year return" · "How much can I move in one go?" |
+| To see what you own | "What do I hold?" · "Review my portfolio" · "Make it less tech-heavy" |
+| Your money and your history | "What's my balance?" · "Show my activity" · "Any messages for me?" |
+| To keep track of something | "Watch Palantir" · "Tell me when NVDA drops below $150" · "What alerts do I have?" · "Cancel the Apple one" |
+| To invest on a schedule | "Invest $20 a week for me" · "Is Autopilot on?" · "Stop Autopilot" |
+| To check her own record | "What's your track record?" · "How's the buyback going?" |
+| Anything else | "What is Monvera?" · "What does this cost?" · "Switch to dark mode" |
+
+## Panels open beside the chat
+
+When an answer is better shown than described, Vera opens a panel next to the conversation — your portfolio, the market list, your wallet, $MONVERA, Autopilot, her track record, Scan, your activity, your alerts, insights, a single holding, send, deposit, or settings. You can also just ask for one: "open my portfolio" does exactly that.
+
+The panel is a view, not a place you get stuck in. The conversation keeps running beside it, so you can keep talking while you read.
+
+## How a goal becomes a plan
+
+You give Vera a goal and an amount. She picks real companies and funds from the 95 listed on Monvera, decides how much of your amount goes into each, writes one line on why each one is there and one honest line on what could go wrong with it, and names the basket. The example these docs use throughout is called **Steady Growth**: Apple, Nvidia, the S&P 500, and US Treasuries.
+
+What comes back is a draft. You read it, change it by saying so, and confirm it when it reads the way you want — covered in full on [read, change, and invest a plan](/use/your-plan/).
+
+Two numbers shape what she can build. You can start from $1, but each company in a plan needs about $11 because of the trading venue's minimum. So a $20 plan holds one or two names, and a $200 plan can spread across a handful. If you ask for more names than your amount supports, Vera says so and builds the widest plan the money allows instead of quietly making the legs too small to fill.
+
+## What she will not do
+
+- **Invent a number.** Prices, returns, and your balances come from live data. If the data is missing, she says "I don't have that" rather than filling the gap.
+- **Move money on her own.** Building a plan, opening a ticket, opening a panel — all of it is a handoff to you. The signature is always yours. Autopilot is the one exception, and it runs only inside limits you set in advance and can stop at any time.
+- **Quietly change her story.** The risk assessment behind a plan is signed and recorded on-chain as the trade happens, so what she told you cannot be edited afterwards. How that works, and how to check it yourself, is on [accountable AI](/how/accountable-ai/).
+- **Give you advice.** She gives you options with reasons and honest risk reads. Deciding is yours.
+
+<Aside type="note" title="Private conversation, public record">
+Your messages are stored privately with your account. What is public is the other half: the plans and invests Vera signs on-chain, which anyone can check without ever seeing your chat.
+</Aside>
+
+## When she gets it wrong
+
+Vera misreads things sometimes — the wrong company with a similar name, an amount she rounded oddly, a plan aimed at a goal you did not mean. Say so and she redoes it. Correcting her costs nothing, because nothing has been bought at that point. The only irreversible moment is the one where you confirm a spend, and that moment always belongs to you.

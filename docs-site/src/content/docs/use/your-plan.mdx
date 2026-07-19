@@ -1,0 +1,73 @@
+---
+title: "Read, change, and invest a plan"
+description: "Judge each row by its reason and risk read, change it by saying so, and confirm before anything is bought."
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components';
+import Transcript from '../../../components/Transcript.astro';
+import Turn from '../../../components/Turn.astro';
+
+A plan is a draft until you say otherwise. Vera hands back a named basket of real companies, each with a reason it is there, an honest line on what could go wrong, and its share of your money. You read it, change anything you do not like by saying so, and confirm when it reads the way you want. **Nothing is bought until you confirm.** Up to that moment, no money has left your account.
+
+## The Steady Growth example
+
+Ask for steady growth over five years with $200, and Vera comes back with something like this.
+
+| Holding | Why it's there | What could go wrong | Share |
+| --- | --- | --- | --- |
+| Apple (AAPL) | A large, profitable company that has weathered several downturns | Even big companies fall, and a bad year is a bad year | $60 |
+| Nvidia (NVDA) | Faster growth, the highest-return name in the basket | Swings hardest of the four; it can drop 30% in a bad month | $40 |
+| S&P 500 | One fund holding 500 large US companies, so no single company sinks you | The whole market still falls in a downturn | $60 |
+| US Treasuries | Short-term government debt, the calm part of the basket | Grows slowly — it steadies the rest, it does not drive returns | $40 |
+
+The four together are more spread out than any one of them alone, and that spread is the entire point of a basket: a bad month for Nvidia does not have to be a bad month for the plan.
+
+## How to judge a row
+
+Every row gives you the same four things.
+
+- **The company and its live price.** Apple shows as Apple, at Apple's real price, with a chart — the live market price any buyer pays.
+- **Vera's reason.** One line on why this company is in this basket, in plain words. If the reason does not make sense to you, that is a good reason to drop the row — not to trust it harder.
+- **The risk read.** One honest line on what could go wrong with that specific holding. Vera writes this for every row, including the ones she likes, so you are never sold on the upside alone.
+- **Its share.** How much of your money goes into it. This is where concentration hides: four names split evenly is a very different plan from four names where one holds 70%.
+
+A reason and a risk read are not a promise. Every company here can lose value, and a $200 basket can be worth $160 next month. Read [can I lose money?](/safety/can-i-lose-money/) before you confirm anything.
+
+## Change it by saying so
+
+You do not edit a plan. You tell Vera what you want different and she rebuilds it.
+
+<Transcript>
+  <Turn who="you">Drop Nvidia, that risk read worries me</Turn>
+  <Turn who="vera">Dropped. Three names now — I've moved its $40 into Treasuries, which lowers the swing on the whole basket.</Turn>
+  <Turn who="you">Actually put $100 in the S&P instead and make the total $300</Turn>
+  <Turn who="vera">Updated: $300 across Apple, the S&P 500 at $100, and Treasuries. Still nothing bought.</Turn>
+</Transcript>
+
+Three things are yours to change: how much goes into any one company, whether it is in the plan at all, and the total amount. Change them as often as you like — the reasons and risk reads stay attached to every row you keep.
+
+The floor is the same as everywhere else: you can invest from $1, but each company needs about $11 because of the trading venue's minimum. Push a leg below that and Vera says so rather than building a plan that cannot fill.
+
+<Aside type="caution">
+Dropping every spread-out holding and putting the whole amount into one company removes the protection a basket gives you. A plan of one name falls exactly as hard as that name does.
+</Aside>
+
+## What happens when you confirm
+
+<Steps>
+
+1. **You approve the spend.** This is the one thing you sign, and nothing moves without it. Vera separately signs the risk assessment — see [accountable AI](/how/accountable-ai/) for why those are two different signatures.
+
+2. **Each company is bought on its own.** Monvera prices and buys one leg at a time, because a quote taken up front for the whole basket goes stale before the last leg runs. You watch each one land as it fills.
+
+3. **The network cost is covered.** Every buy is sponsored, so you never hold a gas token and never fund a separate fee to make a trade happen. You pay the market price on each company and nothing on top from Monvera.
+
+4. **The plan is recorded.** Vera's signed risk assessment goes on-chain in the same transaction that buys the stocks, so her track record for this plan cannot be edited afterwards.
+
+</Steps>
+
+## Settling, and legs that do not land
+
+Some fills arrive as a **settling** holding: already bought, already yours, already counted in your balance — it just cannot be sold for about one to fifteen minutes while it lands. Nothing is stuck, and it resolves on its own.
+
+If a leg cannot fill on its first venue, Monvera retries it on the other one. If it still cannot fill, Vera tells you which company did not land. The rest of the plan is unaffected, and you can buy the missing name on its own later.

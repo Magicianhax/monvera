@@ -1,0 +1,12 @@
+---
+// One side of a Transcript exchange. `who` is "you" or "vera".
+interface Props {
+  who?: 'you' | 'vera';
+}
+const { who = 'you' } = Astro.props;
+---
+
+<div class="turn" data-who={who}>
+  <span class="who">{who === 'vera' ? 'Vera' : 'You'}</span>
+  <div class="said"><slot /></div>
+</div>

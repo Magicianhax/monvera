@@ -1,38 +1,38 @@
 ---
 title: "Your account and recovery"
-description: "Your money stays in your own non-custodial account, and you recover it by signing in again. Monvera never asks for or shows a private key."
+description: "Your money sits in a wallet you own, and you get it back by signing in again, not from a seed phrase."
 ---
 
 import { Aside, Steps } from '@astrojs/starlight/components';
 
-Your money stays in your own account, and if you lose your phone you get it back by signing in again the same way you first signed in. Your account is non-custodial, which means Monvera cannot move your money without your approval, and it is a smart account tied to your sign-in, not to one device.
+Your money sits in a wallet that belongs to you, and if you lose your phone you get it back by signing in again the same way you signed in the first time. The catch is at the front door: whoever can get into that email or social login can approve spends from your account.
 
 ## Whose money it is
 
-Your money is yours, not Monvera's. When you invest, the holdings in the "Steady Growth" plan over Apple (AAPL), Nvidia (NVDA), the S&P 500 (SPY), and US Treasuries (SGOV) sit in an account that only you can spend from. Monvera builds the plan and shows you the account, but it cannot take the money out. Every spend is approved by you.
+Yours. The wallet is non-custodial. Monvera builds plans, shows balances and routes trades, but it cannot move a cent without you approving the spend. The wallet is created for you when you first sign in, and it belongs to the sign-in rather than to a device.
 
-Because the account is non-custodial, it also keeps working even if Monvera does not. Your holdings live on Robinhood Chain at an account address you can look up on the public block explorer, so they do not depend on Monvera staying online. You can [take your money out](/use/withdraw-your-money/) at any time.
+It also keeps working if Monvera does not. Your holdings sit on Robinhood Chain at an address you can look up on the public block explorer, so they do not depend on this app staying online.
 
 ## If you lose your phone
-
-You recover the same account by signing in again with the same method you used the first time.
 
 <Steps>
 
 1. Open [monvera.best](https://monvera.best) on any device.
 
-2. Sign in with the same email or social login you first used.
+2. Sign in with the same email or social login you used the first time.
 
-3. Your account, your plans, and your holdings are there. Nothing was stored only on the lost phone.
+3. Everything is there: the same wallet, the same holdings, the same history.
 
 </Steps>
 
-Your account is tied to your sign-in, not to the phone, so a new device sees the same account. There is nothing written on paper to lose and no secret code to type back in.
+Nothing was stored only on the lost phone. There is no seed phrase you should have written down and no recovery code to type back in, because the account was never anchored to the hardware.
 
-<Aside type="caution" title="Protect the login you signed in with">
-Your account is only as safe as the email or social login you used to sign in. Keep that login secure, turn on its own two-step verification, and do not let anyone else into it. Whoever can sign in as you can approve spends from your account.
+<Aside type="caution" title="Your login is the account">
+Monvera cannot be more secure than the email or social account you sign in with. Turn on two-step verification there, and treat anyone with access to that inbox as someone who can spend your money.
 </Aside>
 
-## What Monvera never does
+## What Monvera never asks for
 
-Monvera never asks for or shows a private key. There is no seed phrase to write down, and no page on Monvera will ever ask you to enter or reveal a private key. Anyone who does ask for one is not Monvera. See [staying safe from scams](/safety/staying-safe-from-scams/) for how to tell the difference.
+Monvera will never ask you for a private key, a seed phrase, or a password, and no screen in the app will ever ask you to type one in. You do not need a key to use Monvera at all — the wallet signs your trades for you.
+
+You can [export the key](/safety/export-your-private-key/) if you want to carry the account into another wallet, but that is a deliberate thing you go looking for in settings. Nothing will ever prompt you to do it, and nobody will ever need you to. Anyone who asks is [running a scam](/safety/scams-and-support/).

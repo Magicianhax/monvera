@@ -1,14 +1,25 @@
 {
-  // Monvera docs — a static Astro/Starlight site served from Cloudflare Workers
-  // static assets (assets-only Worker, no server script). Deploy: `npm run deploy`.
-  // Custom domain docs.monvera.best is attached via the Cloudflare dashboard/API.
+  // Monvera docs — the static Astro/Starlight build, plus a small Worker that
+  // serves the MCP endpoint at /mcp (src/worker.ts) and hands everything else
+  // to the asset binding untouched.
+  //
+  // `run_worker_first` is scoped to /mcp so asset requests never invoke the
+  // Worker: they stay free and behave exactly as they did before. The Worker's
+  // env.ASSETS.fetch() fallthrough is what actually preserves 404 handling and
+  // _redirects, so the scoping is a cost/blast-radius choice, not a correctness
+  // one. Deploy: `npm run deploy`.
+  // Rollback: drop "main" + "binding" + "run_worker_first" and redeploy — the
+  // assets are byte-identical.
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "monvera-docs",
   "compatibility_date": "2026-07-07",
+  "main": "./src/worker.ts",
   "assets": {
     "directory": "./dist",
     // serve Starlight's built 404.html for unknown paths
-    "not_found_handling": "404-page"
+    "not_found_handling": "404-page",
+    "binding": "ASSETS",
+    "run_worker_first": ["/mcp", "/mcp/*"]
   },
   // wrangler provisions the DNS record + cert for this custom domain on deploy
   "routes": [{ "pattern": "docs.monvera.best", "custom_domain": true }]

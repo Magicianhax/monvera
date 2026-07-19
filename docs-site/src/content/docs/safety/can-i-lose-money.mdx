@@ -4,30 +4,34 @@ description: "Yes. A $100 basket can be worth $80 next week, because these are r
 ---
 
 import { Aside } from '@astrojs/starlight/components';
+import Transcript from '../../../components/Transcript.astro';
+import Turn from '../../../components/Turn.astro';
 
-Yes. A $100 basket can be worth $80 next week. Every holding in a Monvera plan is a real company or fund, and the price of a real company goes down as well as up.
+Yes. A $100 basket can be worth $80 next week, and nobody makes up the difference. Every holding Vera puts in a plan is a real company or a real fund, bought at the real market price, and real prices fall.
 
 ## Why the value moves
 
-The value moves because you own real companies, not a fixed savings balance. When you invest the "Steady Growth" plan over Apple (AAPL), Nvidia (NVDA), the S&P 500 (SPY), and US Treasuries (SGOV), you own a share of each of those at its live market price. If Apple falls 10% tomorrow, your Apple holding falls with it. You can see the same live prices anyone else sees on the [explore page](/use/explore-whats-available/).
+You own companies, not a savings balance. A plan like Steady Growth holds Apple, Nvidia, the S&P 500 and US Treasuries at their live prices. If Apple drops 10% tomorrow, your Apple holding drops with it. There is no cushion sitting between the market and your balance.
 
-A mix of several companies and funds tends to swing less than a single stock, which is why Vera builds a basket rather than a bet. It does not remove loss. A basket can still be worth less than you put in.
+Holding several names tends to swing less than holding one. That is why Vera builds a basket rather than a bet. It changes how violently the number moves. It does not stop the number going down, and a basket of four good companies in a bad month is still a loss.
+
+Ask her directly and she will say so:
+
+<Transcript>
+  <Turn who="you">Is this one safe?</Turn>
+  <Turn who="vera">Steadier than a single stock, not safe. The Treasuries barely move; the Nvidia slice can fall hard in a week. You can lose money on this.</Turn>
+</Transcript>
 
 ## What Monvera is not
 
-Monvera is not a bank and your money is not insured. There is no deposit protection, no guaranteed return, and nobody who covers your losses. If a plan drops in value, that loss is real and it is yours.
+Monvera is not a bank. Your money is not insured, there is no deposit protection, there is no guaranteed return, and there is nobody who covers your losses. The code has also not been through an external security audit. If a plan falls, the loss is real and it is yours.
 
 <Aside type="caution" title="Only invest money you can afford to lose">
-Prices can fall the day after you invest and stay down for a long time. Put in an amount that would not hurt your rent or your bills if it dropped by a third.
+Prices can fall the day after you invest and stay down for years. Put in an amount that would not touch your rent or your bills if it lost a third of its value.
 </Aside>
 
-## What is actually true here
+## What actually protects you
 
-You keep control of your money the whole time, and you can sell back to dollars at any point. Your money sits in [your own account](/safety/your-account-and-recovery/), Monvera cannot move it without your approval, and you can [take it out](/use/withdraw-your-money/) whenever you want. That is a real protection. It protects you from Monvera, not from the market.
+One thing, and it is worth being precise about what it covers. Your money sits in a wallet you own, Monvera cannot move it without your approval, and you can sell back to dollars whenever you want.
 
-Two more honest reads worth knowing before you invest:
-
-- Vera's plans are options with reasons and a risk read, not [investment advice](/safety/is-this-investment-advice/).
-- Any past performance you see is a [backtest, which is history and not a promise](/safety/backtests-are-history-not-promises/).
-
-For where Monvera is and is not available, see [where it works](/start/where-its-available/).
+That protects you from Monvera. It does not protect you from the market, and the market is what takes money off people. The reasons behind a plan are [not investment advice](/safety/is-this-investment-advice/), and any past return you see is a [backtest](/safety/backtests-are-history-not-promises/) — history, not a promise.

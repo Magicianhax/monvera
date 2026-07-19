@@ -1,47 +1,36 @@
 ---
 title: "Get market history for charts"
-description: "GET /api/market returns a per-asset day summary with sparklines, or a full price series with metadata for one symbol and range."
+description: "Per-asset day summary with sparklines, or a full close series for one symbol and range."
 ---
 
-import { Tabs, TabItem, Aside, LinkCard } from '@astrojs/starlight/components';
+import { Aside } from '@astrojs/starlight/components';
 
 `GET /api/market` returns real market history for charts. With no `symbol` it returns a one-day change and sparkline for every asset. With a `symbol` it returns the full closing-price series for one range, plus asset-level metadata.
 
-- **Method and path**: `GET https://monvera.best/api/market`
-- **Auth**: none (public)
-- **Rate limit**: 60 requests per 60 seconds per IP
+> `GET /api/market` · public, no token required · 60 requests per 60 seconds per IP. Base URL, response envelope, and error shapes: [conventions](/dev/conventions/).
 
 ## Parameters
 
 | Name | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- |
-| `symbol` | string | No | (none) | A ticker in the universe, for example `AAPL`. Omit it to get the day summary for every asset. |
-| `range` | string | No | `1M` | One of `1D`, `1W`, `1M`, `1Y`, `All`. Only used in symbol mode. |
+| `symbol` | string | No | (none) | A ticker in the universe, for example `AAPL`. Omit it for the day summary of every asset. |
+| `range` | string | No | `1M` | One of `1D`, `1W`, `1M`, `1Y`, `All`. Symbol mode only. |
 
-An unknown `symbol` returns `400 {"error":"Unknown symbol."}`. An unrecognized `range` returns `400 {"error":"Unknown range."}`.
+## Response
 
-## Returns
-
-**Summary mode** (no `symbol`): `{ summary, asOf }`. `summary` maps each asset symbol to `{ dayChangePct, spark }`, where `spark` is a downsampled 1-day close series (up to 20 points) for row sparklines. Assets with no live source have no entry in `summary`.
+**Summary mode** (no `symbol`): `{ summary, asOf }`. `summary` maps each asset symbol to `{ dayChangePct, spark }`, where `spark` is a downsampled 1-day close series (up to 20 points) for row sparklines. Assets with no live source have no entry.
 
 **Symbol mode**: `{ series, timestamps, changePct, meta, asOf }`.
 
 | Field | Type | Description |
 | --- | --- | --- |
 | `series` | number[] \| null | Closing prices in USD, oldest to newest. `null` when no source exists or the upstream failed. |
-| `timestamps` | number[] \| null | Unix-seconds per close, aligned to `series`, when available. |
+| `timestamps` | number[] \| null | Unix seconds per close, aligned to `series`. |
 | `changePct` | number \| null | Percent change across the range. `1D` is measured against the previous session close. |
-| `meta` | object \| null | Asset facts: `fiftyTwoWeekHigh`, `fiftyTwoWeekLow`, `dayHigh`, `dayLow`, `volume`, `exchange`. Any field is omitted when the source did not provide it. |
+| `meta` | object \| null | Asset facts: `fiftyTwoWeekHigh`, `fiftyTwoWeekLow`, `dayHigh`, `dayLow`, `volume`, `exchange`. Fields the source did not provide are omitted. |
 | `asOf` | string | ISO timestamp of the response. |
 
-<Aside type="note" title="Honest gaps">
-Some assets have no honest public series (tokenized private companies, thin listings). In symbol mode those return `series: null` rather than a faked line, and in summary mode they are absent from `summary`. See [Where prices come from](/how/where-prices-come-from/).
-</Aside>
-
-## Example request
-
-<Tabs>
-<TabItem label="curl">
+## Example
 
 ```bash
 # Day summary for every asset
@@ -51,39 +40,19 @@ curl "https://monvera.best/api/market"
 curl "https://monvera.best/api/market?symbol=AAPL&range=1Y"
 ```
 
-</TabItem>
-<TabItem label="fetch">
-
-```javascript
-// Day summary for every asset
-const summary = await fetch("https://monvera.best/api/market").then((r) => r.json());
-
-// One-year series for Apple
-const aapl = await fetch(
-  "https://monvera.best/api/market?symbol=AAPL&range=1Y",
-).then((r) => r.json());
-```
-
-</TabItem>
-</Tabs>
-
-## Example response
-
-Summary mode (`GET /api/market`):
+Summary mode:
 
 ```json
 {
   "summary": {
     "AAPL": { "dayChangePct": 0.82, "spark": [228.4, 228.9, 229.1, 230.2, 231.0] },
-    "NVDA": { "dayChangePct": -1.14, "spark": [174.2, 173.6, 172.9, 172.1, 171.8] },
-    "SPY": { "dayChangePct": 0.31, "spark": [612.1, 612.7, 613.0, 613.6, 614.0] },
-    "SGOV": { "dayChangePct": 0.01, "spark": [100.4, 100.4, 100.4, 100.4, 100.4] }
+    "NVDA": { "dayChangePct": -1.14, "spark": [174.2, 173.6, 172.9, 172.1, 171.8] }
   },
   "asOf": "2026-07-08T14:03:11.204Z"
 }
 ```
 
-Symbol mode (`GET /api/market?symbol=AAPL&range=1Y`):
+Symbol mode:
 
 ```json
 {
@@ -102,4 +71,13 @@ Symbol mode (`GET /api/market?symbol=AAPL&range=1Y`):
 }
 ```
 
-<LinkCard title="Get live prices" href="/dev/api/prices/" description="Current on-chain USD spot for every asset, separate from this chart history." />
+## Errors
+
+| Status | Body | Cause |
+| --- | --- | --- |
+| 400 | `{"error":"Unknown symbol."}` | `symbol` is not in the universe. |
+| 400 | `{"error":"Unknown range."}` | `range` is not one of the five accepted values. |
+
+<Aside type="note" title="Honest gaps">
+Some assets have no honest public series (tokenized private companies, thin listings). Symbol mode returns `series: null` for those rather than a faked line, and summary mode omits them. See [Where prices come from](/how/where-prices-come-from/).
+</Aside>

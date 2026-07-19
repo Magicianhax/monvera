@@ -1,0 +1,130 @@
+/* Cards, link cards, screenshots, and the chat transcript block.
+   Link cards become rows with a hairline under each — a list of destinations
+   reads faster than a grid of boxes. */
+
+.sl-link-card {
+  border: 0;
+  border-bottom: 1px solid var(--sl-color-hairline);
+  border-radius: 0;
+  box-shadow: none;
+  padding: 0.9rem 0.25rem;
+  background: none;
+}
+.sl-link-card:hover {
+  background: color-mix(in srgb, var(--sl-color-accent) 5%, transparent);
+}
+.sl-link-card .title {
+  font-weight: 600;
+  font-size: 1rem;
+  color: var(--sl-color-white);
+}
+.sl-link-card .description {
+  color: var(--sl-color-gray-3);
+  font-size: 0.875rem;
+}
+.card-grid {
+  gap: 0 1.75rem;
+}
+
+.card {
+  border: 1px solid var(--sl-color-hairline-light);
+  border-radius: var(--mv-radius);
+  background: var(--sl-color-gray-6);
+  padding: 1.15rem;
+}
+.card .icon {
+  color: var(--sl-color-text-accent);
+  background: var(--sl-color-accent-low);
+  border-radius: 0.5rem;
+  padding: 0.35rem;
+}
+.card .title {
+  font-size: 0.95rem;
+  font-weight: 650;
+}
+
+/* ── page title block (PageTitle.astro) ───────────────────────────────── */
+.mv-eyebrow {
+  font-family: var(--sl-font-mono);
+  font-size: 0.6875rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  color: var(--sl-color-text-accent);
+  margin-bottom: 0.55rem;
+}
+.mv-subtitle {
+  font-size: 1.05rem;
+  line-height: 1.6;
+  color: var(--sl-color-gray-3);
+  max-width: var(--mv-measure);
+  margin: 0.6rem 0 0;
+  text-wrap: pretty;
+}
+
+/* ── screenshots ──────────────────────────────────────────────────────── */
+/* Desktop-width captures, not phone frames: the product is a chat app you use
+   on a wide screen. */
+figure.shot {
+  margin: 1.75rem 0;
+  max-width: var(--sl-content-width);
+}
+figure.shot img {
+  width: 100%;
+  border-radius: 0.75rem;
+  border: 1px solid var(--sl-color-gray-5);
+  box-shadow: 0 1px 2px hsl(160 30% 4% / 0.3);
+}
+figure.shot figcaption {
+  margin-top: 0.55rem;
+  font-size: 0.8125rem;
+  color: var(--sl-color-gray-3);
+  border-left: 2px solid var(--sl-color-hairline);
+  padding-left: 0.6rem;
+}
+
+/* ── transcript ───────────────────────────────────────────────────────── */
+/* What you say to Vera and what she says back, as text. Replaces screenshots
+   of the old UI: searchable, theme-aware, lands in llms-full.txt, and cannot
+   silently go stale when the interface moves. */
+.mv-transcript {
+  border: 1px solid var(--sl-color-hairline-light);
+  border-radius: var(--mv-radius);
+  background: var(--sl-color-gray-6);
+  padding: 0.85rem;
+  margin: 1.5rem 0;
+  max-width: var(--mv-measure);
+}
+.mv-transcript .turn {
+  display: grid;
+  grid-template-columns: 3.5rem 1fr;
+  gap: 0.75rem;
+  padding: 0.5rem 0;
+  font-size: 0.9rem;
+}
+.mv-transcript .turn + .turn {
+  border-top: 1px solid var(--sl-color-hairline);
+}
+.mv-transcript .who {
+  font-size: 0.6875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--sl-color-gray-3);
+  font-family: var(--sl-font-mono);
+  padding-top: 0.15rem;
+}
+.mv-transcript .turn[data-who='vera'] .who {
+  color: var(--sl-color-text-accent);
+}
+.mv-transcript .said > :first-child {
+  margin-top: 0;
+}
+.mv-transcript .said > :last-child {
+  margin-bottom: 0;
+}
+.mv-transcript .said {
+  color: var(--sl-color-gray-2);
+}
+.mv-transcript .turn[data-who='you'] .said {
+  color: var(--sl-color-white);
+}

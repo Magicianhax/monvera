@@ -1,0 +1,72 @@
+/* The index page. One screen: what this is, the facts that matter, and four
+   ways in. The hero sits on a soft emerald wash so the landing reads as the
+   same material as monvera.best without importing the whole glass system. */
+
+.hero {
+  padding-block: 3rem 2rem;
+  position: relative;
+}
+.hero h1 {
+  font-family: var(--font-fraunces);
+  font-weight: 600;
+  font-size: clamp(2.2rem, 1.4rem + 3.2vw, 3.6rem);
+  letter-spacing: -0.028em;
+  text-wrap: balance;
+}
+.hero .tagline {
+  max-width: 34ch;
+  font-size: 1.075rem;
+  color: var(--sl-color-gray-2);
+  text-wrap: pretty;
+}
+.hero img {
+  max-width: 168px;
+  filter: drop-shadow(0 8px 30px hsl(155 60% 40% / 0.22));
+}
+.hero .actions a.action.primary {
+  border-radius: 999px;
+  font-weight: 600;
+}
+.hero::before {
+  content: '';
+  position: absolute;
+  inset: 0 -2rem;
+  z-index: -1;
+  border-radius: 1.5rem;
+  background: radial-gradient(
+    80% 120% at 70% 0%,
+    color-mix(in srgb, var(--sl-color-accent) 14%, transparent),
+    transparent 70%
+  );
+  border: 1px solid var(--sl-color-hairline);
+  backdrop-filter: blur(20px);
+}
+
+/* the fact rail: the six things worth knowing before you read anything */
+.mv-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 2rem;
+  font-family: var(--sl-font-mono);
+  font-size: 0.78rem;
+  color: var(--sl-color-gray-3);
+  border-block: 1px solid var(--sl-color-hairline);
+  padding: 0.7rem 0;
+  margin: 2rem 0;
+}
+.mv-facts b {
+  color: var(--sl-color-white);
+  font-weight: 500;
+}
+
+@media (max-width: 50em) {
+  .hero {
+    padding-block: 1.5rem 1rem;
+  }
+  .hero::before {
+    inset: 0 -1rem;
+  }
+  .mv-facts {
+    gap: 0.35rem 1.25rem;
+  }
+}

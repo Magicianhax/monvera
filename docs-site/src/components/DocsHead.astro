@@ -1,7 +1,12 @@
 ---
 // Starlight's Head, plus the og:image it does not emit. The key is derived from
 // the pathname so it always matches the key used in src/pages/og/[...route].ts.
+//
+// This is also where the <Font> components go: configuring `fonts` in
+// astro.config downloads the files but does NOT define the CSS variables —
+// without these tags the whole site silently falls back to system-ui.
 import Default from "@astrojs/starlight/components/Head.astro";
+import { Font } from "astro:assets";
 
 const path = Astro.url.pathname.replace(/^\/+|\/+$/g, "");
 const key = path === "" ? "index" : path;
@@ -9,6 +14,10 @@ const ogImage = new URL(`/og/${key}.png`, Astro.site ?? Astro.url.origin).href;
 ---
 
 <Default><slot /></Default>
+
+<Font cssVariable="--font-hanken" preload />
+<Font cssVariable="--font-fraunces" preload />
+<Font cssVariable="--font-jetbrains" />
 
 <meta property="og:image" content={ogImage} />
 <meta property="og:image:type" content="image/png" />

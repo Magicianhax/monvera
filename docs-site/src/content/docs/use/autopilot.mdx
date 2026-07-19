@@ -1,49 +1,64 @@
 ---
-title: "Invest on a schedule with Autopilot"
-description: "Autopilot invests a set amount on a schedule you choose, and can never step outside the four hard limits you set."
+title: "Autopilot"
+description: "Invest a set amount on a schedule, inside four hard limits you set and can stop by saying so."
 ---
 
-import { Steps, Aside } from '@astrojs/starlight/components';
+import { Aside, Steps } from '@astrojs/starlight/components';
+import Transcript from '../../../components/Transcript.astro';
+import Turn from '../../../components/Turn.astro';
 
-Autopilot invests a set amount on a schedule you choose, and it can never step outside four hard limits you set. It is for people who want to invest a little at a regular pace, like $20 every week, without opening the app each time. You set the limits once, and every run has to stay inside them.
+Autopilot invests a set amount on a schedule you choose, and it cannot step outside four limits you set in advance. It is the one part of Monvera that acts without asking you each time — which is exactly why the limits are hard, checked before every single run, and revocable the moment you say stop.
 
-<div class="shot-row">
-  <figure class="shot"><img src="/screens/autopilot-setup.webp" alt="The Autopilot setup with templates, a goal, an amount, a cadence, and a risk ceiling" class="phone-shot" /><figcaption>Set the four limits, or start from a template.</figcaption></figure>
-  <figure class="shot"><img src="/screens/autopilot-config.webp" alt="Autopilot configured to invest fifty dollars a week into big tech" class="phone-shot" /><figcaption>A configured plan: $50 a week, bolder risk.</figcaption></figure>
-</div>
+<Transcript>
+  <Turn who="you">Invest $20 a week for me</Turn>
+  <Turn who="vera">$20 weekly. What's the most you'll let it spend in total, and how bold should the plans be?</Turn>
+  <Turn who="you">Cap it at $500, keep it moderate</Turn>
+  <Turn who="vera">$20 a week, moderate risk, stopping at $500 total. Authorize it and the first run is next Monday.</Turn>
+</Transcript>
 
+## The four limits
 
-## The four limits Autopilot cannot cross
+Autopilot checks all four before every run and skips the run rather than break any of them.
 
-Autopilot checks all four of these before every single run, and skips the run rather than break any of them.
+| Limit | What it does | Example |
+| --- | --- | --- |
+| Amount per run | The most it may spend each time. No run goes above it. | $20 |
+| Cadence | How often it runs. It never runs more often than this. | Once a week |
+| Risk ceiling | The most risk you accept. Vera assesses each scheduled plan, and a plan above your ceiling is skipped, not trimmed. | Moderate |
+| Total spend cap | The most it may ever invest across all runs. On reaching it, Autopilot stops itself. | $500 |
 
-- **Amount per run.** How much to invest each time, for example $20. No run can spend more than this.
-- **Cadence.** How often it runs, for example once a week or once a month. It never runs more often than you set.
-- **Risk ceiling.** The most risk you will accept. Vera assesses the risk of each scheduled buy, and if that assessment comes back above your ceiling, Autopilot skips the run instead of investing.
-- **Total spend cap.** The most Autopilot may ever invest in total across all runs. Once the running total reaches this cap, Autopilot stops on its own.
+Because all four are checked every time, Autopilot cannot quietly spend more, run more often, run longer, or take more risk than you allowed. The worst case is that it does nothing.
 
-Because all four are checked every run, Autopilot cannot quietly spend more, run more often, or take more risk than you allowed.
+## Turning it on
+
+Say what you want — "invest $20 a week for me" — and Vera asks for whatever she still needs, then opens Autopilot with your numbers filled in. You read them and authorize once. That authorization is the standing permission that lets scheduled runs happen without your signature each week; it is bounded by the four limits above and by nothing else.
+
+The amount per run is where most people get the floor wrong. Each company inside a plan needs about $11, so a $20 run buys one or two names, not a spread of six. If you want a genuinely diversified basket every run, set the per-run amount higher.
 
 ## What each run does
 
 <Steps>
 
-1. When a scheduled time arrives, Autopilot asks Vera for a plan for the amount per run.
+1. The scheduled time arrives and Autopilot asks Vera for a plan for the amount per run.
 
-2. Vera builds the basket and assesses its risk, the same way she does when you [make a plan yourself](/use/make-your-first-plan/).
+2. Vera builds the basket and assesses its risk, exactly as she does when you ask for a plan yourself.
 
-3. Autopilot checks the four limits. If the risk is above your ceiling, or the spend cap is reached, it skips the run.
+3. Autopilot checks the four limits. If the risk is above your ceiling or the spend cap is reached, it skips the run and records why.
 
-4. If every limit passes, Autopilot invests the amount and records the run.
+4. If every limit passes, it invests, and Vera's signed risk assessment goes on-chain with the trade — same accountability as a plan you confirm by hand.
 
 </Steps>
 
-Every run shows up in your Autopilot history with its date, amount, and the basket it bought, so you can check each buy against the limits you set. Each run is a real invest, recorded on-chain the same way as a plan you invest by hand.
+## Checking on it
+
+"Is Autopilot on?" gets you the current state: your four limits, when the next run is due, how much has been spent against the cap, and the history of past runs with their dates, amounts, and baskets. Skipped runs appear too, with the reason, so a quiet week is never a mystery.
+
+## Changing it, and stopping it
+
+"Make it $50 a month instead" or "lower the cap to $200" updates the limits from that point on. Past runs are unchanged. Setting the spend cap below what has already been invested stops future runs, since the total is already at the cap.
+
+"Stop Autopilot" ends it. That revokes the standing permission, so no further run can happen — not paused, revoked. Stopping does not sell anything: everything Autopilot bought stays yours, and you can sell it or take it out whenever you like. You can turn Autopilot back on later by setting limits and authorizing again.
 
 <Aside type="caution">
-Autopilot invests real money on its own schedule, and you can still lose money because prices fall. It does not promise a profit, and it is not advice. See [can I lose money?](/safety/can-i-lose-money/) before you switch it on, and [what it costs](/safety/what-it-costs/) for the market spread you pay on each run.
+Autopilot invests real money on its own schedule. Prices fall, so a running Autopilot can lose you money week after week without anyone intervening — that is the trade-off for not being asked each time. It is not a promise of a profit and it is not advice. Read [can I lose money?](/safety/can-i-lose-money/) before the first run.
 </Aside>
-
-## Turn it on, and off
-
-You start Autopilot by setting those four limits and giving it standing permission to invest for you, and you can switch it off at any time. Switching it off stops every future run at once. That is covered in [set and switch off Autopilot limits](/use/set-and-revoke-autopilot-limits/).

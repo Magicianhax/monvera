@@ -1,51 +1,43 @@
 ---
 title: "Monvera documentation"
-description: "An AI broker for real tokenized stocks and funds on Robinhood Chain. Tell Vera a goal, she builds a basket of real companies, one tap invests it. Gasless, non-custodial, from $1."
+description: "How to use Monvera: talk to Vera, read the plan she builds, invest it, and check every part of it yourself."
 template: splash
 hero:
-  tagline: Tell Vera a goal in plain words. She builds a basket of real companies, each with a reason and a plain risk read, and one tap invests it. Gasless, non-custodial, from one dollar.
+  tagline: Tell Vera what you want in plain words. She builds a basket of real companies, shows you every dollar before it moves, and one tap invests it.
   image:
     file: ../../assets/monvera-icon.png
   actions:
-    - text: What Monvera is
+    - text: Start here
       link: /start/what-monvera-is/
       icon: right-arrow
-    - text: Try the demo
+    - text: Try it with no money
       link: https://monvera.best/demo
       icon: external
       variant: minimal
 ---
 
-import { Card, CardGrid, LinkCard } from '@astrojs/starlight/components';
+import { LinkCard, CardGrid } from '@astrojs/starlight/components';
 
-Monvera is an AI broker for real tokenized stocks and funds on Robinhood Chain. You tell Vera a goal and an amount, she builds a named basket of real companies (Apple, Nvidia, the S&P 500, US Treasuries), each with a one-line reason and a plain read on the risk, and one tap invests it. You own the result, and you can check every part of it.
-
-Not available in the US, Canada, the UK, or Switzerland. Nothing here is investment advice. Backtests are history, not promises.
-
-## Find your way
-
-<CardGrid>
-	<LinkCard title="Start here" href="/start/what-monvera-is/" description="New to Monvera or to investing. What it is, where it works, and the no-money demo." />
-	<LinkCard title="Using Monvera" href="/use/make-your-first-plan/" description="Make a plan, invest it, add money, set Autopilot, and take your money out." />
-	<LinkCard title="Money and safety" href="/safety/can-i-lose-money/" description="What it costs, whether you can lose money, custody and recovery, and the honest bits." />
-	<LinkCard title="How Monvera works" href="/how/accountable-ai/" description="Why the AI is accountable: Vera signs a risk assessment that is recorded on-chain with every trade." />
-	<LinkCard title="Developers" href="/dev/quickstart/" description="Build on Monvera: authentication, conventions, the network and addresses, and how to verify Vera yourself." />
-	<LinkCard title="API reference" href="/dev/api/" description="Every route in one place: public market data, the open strategy and theme books, and the authed user routes." />
-</CardGrid>
-
-## What makes Monvera different
+<div class="mv-facts">
+  <span><b>95</b> real assets</span>
+  <span><b>Robinhood Chain</b></span>
+  <span><b>gasless</b></span>
+  <span><b>non-custodial</b></span>
+  <span>settles in <b>USDG</b></span>
+  <span><b>no platform fee</b></span>
+</div>
 
 <CardGrid>
-	<Card title="Real companies, not a black box" icon="approve-check">
-		Every holding is a real tokenized stock or fund with a live price, a chart, and a reason it is in your plan. You judge the basket before you commit a cent.
-	</Card>
-	<Card title="An AI you can check" icon="seti:crystal">
-		Vera is registered on-chain agent #1. She signs the risk assessment behind each plan, and that signature is recorded in the same transaction that buys your stocks, so her track record cannot be edited later.
-	</Card>
-	<Card title="Yours, not ours" icon="setting">
-		Your account is a non-custodial smart account. Monvera cannot move your money without your approval, and you can sell back to dollars at any time.
-	</Card>
-	<Card title="Free to invest" icon="rocket">
-		There is no platform fee and no account fee, and Monvera covers the network cost of every trade. You start from one dollar.
-	</Card>
+	<LinkCard title="Start here" href="/start/what-monvera-is/" description="What Monvera is, what you need, and where it works." />
+	<LinkCard title="Using Monvera" href="/use/talk-to-vera/" description="Ask for a plan, read it, invest it, and get your money back out." />
+	<LinkCard title="Money and safety" href="/safety/what-it-costs/" description="What it costs, what you can lose, and who holds your keys." />
+	<LinkCard title="Developers" href="/dev/quickstart/" description="The REST API, authentication, and how to verify Vera's record yourself." />
 </CardGrid>
+
+## Why you can check it
+
+Vera signs a risk assessment for every plan, and that signature is recorded on Robinhood Chain in the same transaction that buys your stocks. Her track record cannot be edited afterwards, and you can [reproduce it yourself](/dev/verify-vera/) from public chain data.
+
+Your money sits in a wallet only you control. Monvera cannot move it without your approval, and you can sell back to dollars whenever you want.
+
+Not available in the US, Canada, the UK, or Switzerland. Nothing here is investment advice, and backtests are history rather than a promise.

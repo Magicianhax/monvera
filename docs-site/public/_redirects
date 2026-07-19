@@ -1,0 +1,68 @@
+# Retired URLs from the 2026-07-20 restructure (68 pages -> 52).
+#
+# Cloudflare matches the source EXACTLY, so every rule needs both the slashed
+# and unslashed form — html_handling cannot rescue a path whose asset is gone.
+# Rules also default to 302 and override existing assets, so the status is
+# always explicit and no live path may appear on the left. scripts/
+# verify-build.mjs asserts all of this at build time, because Cloudflare treats
+# a malformed rule as a warning and ships the 404.
+
+# ── start/ (5 -> 3) ──────────────────────────────────────────────────────
+/start/where-its-available   /start/before-you-invest/   301
+/start/where-its-available/  /start/before-you-invest/   301
+/start/what-you-need         /start/what-monvera-is/     301
+/start/what-you-need/        /start/what-monvera-is/     301
+/start/try-the-demo          /start/what-monvera-is/     301
+/start/try-the-demo/         /start/what-monvera-is/     301
+
+# ── use/ (16 -> 8) ───────────────────────────────────────────────────────
+/use/ask-vera-anything             /use/talk-to-vera/          301
+/use/ask-vera-anything/            /use/talk-to-vera/          301
+/use/make-your-first-plan          /use/talk-to-vera/          301
+/use/make-your-first-plan/         /use/talk-to-vera/          301
+/use/read-your-plan                /use/your-plan/             301
+/use/read-your-plan/               /use/your-plan/             301
+/use/tweak-a-plan-before-you-invest   /use/your-plan/          301
+/use/tweak-a-plan-before-you-invest/  /use/your-plan/          301
+/use/invest-in-one-tap             /use/your-plan/             301
+/use/invest-in-one-tap/            /use/your-plan/             301
+/use/explore-whats-available       /use/find-and-trade/        301
+/use/explore-whats-available/      /use/find-and-trade/        301
+/use/use-the-screener              /use/find-and-trade/        301
+/use/use-the-screener/             /use/find-and-trade/        301
+/use/buy-or-sell-a-single-stock    /use/find-and-trade/        301
+/use/buy-or-sell-a-single-stock/   /use/find-and-trade/        301
+/use/build-a-watchlist             /use/watchlist-and-alerts/  301
+/use/build-a-watchlist/            /use/watchlist-and-alerts/  301
+/use/set-a-price-alert             /use/watchlist-and-alerts/  301
+/use/set-a-price-alert/            /use/watchlist-and-alerts/  301
+/use/review-your-portfolio         /use/your-portfolio/        301
+/use/review-your-portfolio/        /use/your-portfolio/        301
+/use/add-money                     /use/money-in-and-out/      301
+/use/add-money/                    /use/money-in-and-out/      301
+/use/withdraw-your-money           /use/money-in-and-out/      301
+/use/withdraw-your-money/          /use/money-in-and-out/      301
+/use/set-and-revoke-autopilot-limits   /use/autopilot/         301
+/use/set-and-revoke-autopilot-limits/  /use/autopilot/         301
+
+# ── safety/ (9 -> 8) ─────────────────────────────────────────────────────
+/safety/staying-safe-from-scams   /safety/scams-and-support/   301
+/safety/staying-safe-from-scams/  /safety/scams-and-support/   301
+/safety/get-help                  /safety/scams-and-support/   301
+/safety/get-help/                 /safety/scams-and-support/   301
+
+# ── dev/ (8 -> 6) ────────────────────────────────────────────────────────
+/dev/authenticated-quickstart   /dev/quickstart/     301
+/dev/authenticated-quickstart/  /dev/quickstart/     301
+/dev/errors                     /dev/conventions/    301
+/dev/errors/                    /dev/conventions/    301
+
+# ── dev/api/ ─────────────────────────────────────────────────────────────
+# /invest-plan documented a route that does not exist; autopilot run/runs fold
+# into the autopilot page.
+/dev/api/invest-plan       /dev/api/                 301
+/dev/api/invest-plan/      /dev/api/                 301
+/dev/api/autopilot-run     /dev/api/autopilot/       301
+/dev/api/autopilot-run/    /dev/api/autopilot/       301
+/dev/api/autopilot-runs    /dev/api/autopilot/       301
+/dev/api/autopilot-runs/   /dev/api/autopilot/       301

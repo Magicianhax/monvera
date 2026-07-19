@@ -1,149 +1,71 @@
 ---
-title: "Price alerts API"
-description: "GET, POST, and DELETE /api/alerts to list, create, and remove the signed-in account's price alerts, up to 20 active."
+title: "Create and remove price alerts"
+description: "List, create, and remove price alerts. Up to 20 active per account."
 ---
 
-import { Aside, Tabs, TabItem } from '@astrojs/starlight/components';
+`GET` lists your alerts, newest first, active and triggered alike. `POST` arms one. `DELETE ?id=N` removes one by id, idempotently. A cron sweep evaluates active alerts and fires each once, [notifying you](/dev/api/notifications/) when the price crosses your threshold.
 
-`GET /api/alerts` lists your price alerts, `POST /api/alerts` creates one, and `DELETE /api/alerts?id=N` removes one. All three require a Privy bearer token. An account can hold at most 20 active alerts at once.
-
-<Aside type="note" title="Token required">
-Every request needs `Authorization: Bearer <privy-token>`. A missing or bad token returns `401 {"error":"Please sign in to continue."}`. See [Authentication](/dev/authentication/) for how to obtain the token and the full public-versus-gated matrix.
-</Aside>
-
-Base URL: `https://monvera.best`.
-
-## List your alerts
-
-`GET /api/alerts` returns your alerts, newest first, active and already-triggered alike.
-
-<Tabs>
-<TabItem label="curl">
-```bash
-curl https://monvera.best/api/alerts \
-  -H "Authorization: Bearer $MONVERA_TOKEN"
-```
-</TabItem>
-<TabItem label="fetch">
-```js
-const res = await fetch("https://monvera.best/api/alerts", {
-  headers: { Authorization: `Bearer ${token}` },
-});
-const { alerts } = await res.json();
-```
-</TabItem>
-</Tabs>
-
-Response:
-
-```json
-{
-  "alerts": [
-    {
-      "id": 42,
-      "symbol": "AAPL",
-      "direction": "above",
-      "threshold": 250,
-      "active": true,
-      "createdAt": 1751884800,
-      "triggeredAt": null
-    }
-  ]
-}
-```
-
-## Create an alert
-
-`POST /api/alerts` with `{ "symbol", "direction", "threshold" }` arms one alert and returns `{ "ok": true }`. Monvera notifies you (see [notifications](/dev/api/notifications/)) when the asset's price crosses the threshold in the direction you set. A cron sweep evaluates active alerts and fires each one once.
-
-<Tabs>
-<TabItem label="curl">
-```bash
-curl -X POST https://monvera.best/api/alerts \
-  -H "Authorization: Bearer $MONVERA_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"symbol":"NVDA","direction":"below","threshold":120}'
-```
-</TabItem>
-<TabItem label="fetch">
-```js
-const res = await fetch("https://monvera.best/api/alerts", {
-  method: "POST",
-  headers: {
-    Authorization: `Bearer ${token}`,
-    "Content-Type": "application/json",
-  },
-  body: JSON.stringify({ symbol: "NVDA", direction: "below", threshold: 120 }),
-});
-const { ok } = await res.json();
-```
-</TabItem>
-</Tabs>
-
-Response:
-
-```json
-{ "ok": true }
-```
-
-## Delete an alert
-
-`DELETE /api/alerts?id=N` removes one alert by its numeric `id` and returns `{ "ok": true }`. The delete is idempotent, so removing an id that is already gone still returns `ok`.
-
-<Tabs>
-<TabItem label="curl">
-```bash
-curl -X DELETE "https://monvera.best/api/alerts?id=42" \
-  -H "Authorization: Bearer $MONVERA_TOKEN"
-```
-</TabItem>
-<TabItem label="fetch">
-```js
-const res = await fetch("https://monvera.best/api/alerts?id=42", {
-  method: "DELETE",
-  headers: { Authorization: `Bearer ${token}` },
-});
-const { ok } = await res.json();
-```
-</TabItem>
-</Tabs>
+`GET`, `POST`, `DELETE /api/alerts` · requires a Privy bearer token, `401` without one. Base URL, rate limits, and error shapes: [conventions](/dev/conventions/).
 
 ## Request body (POST)
 
 | Field | Type | Required | Description |
 | --- | --- | --- | --- |
-| `symbol` | string (1 to 12 chars) | yes | A ticker from the 95-asset catalog. Must match a symbol from [`GET /api/market`](/dev/api/market/), for example `AAPL`, `NVDA`, `SPY`, `SGOV`. |
-| `direction` | `"above"` or `"below"` | yes | Fire when the price rises above (`above`) or falls below (`below`) `threshold`. |
-| `threshold` | number (> 0, ≤ 10000000) | yes | The USD price that arms the alert. |
+| `symbol` | string (1 to 12 chars) | yes | A ticker from the 95-asset catalog, per [`GET /api/market`](/dev/api/market/). |
+| `direction` | `"above"` or `"below"` | yes | Fire when the price rises above or falls below `threshold`. |
+| `threshold` | number (> 0, ≤ 10000000) | yes | The USD price that arms it. |
 
-## Query parameters (DELETE)
-
-| Name | Type | Required | Description |
-| --- | --- | --- | --- |
-| `id` | positive integer | yes | The `id` of the alert to remove, from the `GET` response. |
+`DELETE` takes one query parameter, `id`, a positive integer from `GET`.
 
 ## Alert fields
 
 | Field | Type | Description |
 | --- | --- | --- |
-| `id` | number | Stable id for delete. |
+| `id` | number | Stable id, used for delete. |
 | `symbol` | string | The ticker the alert watches. |
-| `direction` | `"above"` \| `"below"` | Which crossing fires the alert. |
+| `direction` | `"above"` \| `"below"` | Which crossing fires it. |
 | `threshold` | number | The USD price that arms it. |
-| `active` | boolean | `true` until the alert fires, then `false`. |
-| `createdAt` | number | Unix seconds when the alert was created. |
-| `triggeredAt` | number \| null | Unix seconds when it fired, or `null` if it has not. |
+| `active` | boolean | `true` until it fires, then `false`. |
+| `createdAt` | number | Unix seconds when created. |
+| `triggeredAt` | number \| null | Unix seconds when it fired, else `null`. |
 
-## Errors you can hit
+## Example
+
+```bash
+# list
+curl https://monvera.best/api/alerts -H "Authorization: Bearer $MONVERA_TOKEN"
+
+# arm: notify when NVDA falls below $120
+curl -X POST https://monvera.best/api/alerts \
+  -H "Authorization: Bearer $MONVERA_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"symbol":"NVDA","direction":"below","threshold":120}'
+
+# remove
+curl -X DELETE "https://monvera.best/api/alerts?id=42" \
+  -H "Authorization: Bearer $MONVERA_TOKEN"
+```
+
+`POST` and `DELETE` return `{"ok":true}`. `GET` returns:
+
+```json
+{
+  "alerts": [
+    { "id": 42, "symbol": "AAPL", "direction": "above", "threshold": 250,
+      "active": true, "createdAt": 1751884800, "triggeredAt": null }
+  ]
+}
+```
+
+## Errors
 
 | Status | Body | When |
 | --- | --- | --- |
-| 401 | `{"error":"Please sign in to continue."}` | Missing or invalid bearer token. |
-| 400 | `{"error":"Invalid alert."}` | POST body fails validation (bad `direction`, non-positive `threshold`, or `symbol` over 12 chars). |
-| 400 | `{"error":"Unknown symbol."}` | `symbol` is not one of the 95 assets in the catalog. |
-| 400 | `{"error":"Alert limit reached (20)."}` | You already hold 20 active alerts. Delete one before creating another. |
+| 400 | `{"error":"Invalid alert."}` | POST body fails validation: bad `direction`, non-positive `threshold`, or `symbol` over 12 chars. |
+| 400 | `{"error":"Unknown symbol."}` | `symbol` is not one of the 95 catalog assets. |
+| 400 | `{"error":"Alert limit reached (20)."}` | You already hold 20 active alerts. |
 | 400 | `{"error":"Invalid id."}` | DELETE `id` is missing or not a positive integer. |
-| 429 | `{"error":"Too many requests. Please slow down a moment."}` | More than 20 POSTs in 60 seconds per account. Read the `Retry-After` header for the wait in seconds. |
-| 500 | `{"error":"Something went wrong. Please try again."}` | Store read or write failed. |
 
-The 20-active-alerts cap counts only alerts where `active` is `true`; a triggered alert frees a slot. Related routes: [notifications](/dev/api/notifications/) and [watchlist](/dev/api/watchlist/).
+## Notes
+
+The 20-alert cap counts only alerts where `active` is `true`, so a triggered alert frees a slot.

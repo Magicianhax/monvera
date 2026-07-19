@@ -1,0 +1,14 @@
+---
+// Default sidebar plus a footer pointing at the machine-readable entry points.
+// Vera reads /llms.txt on a schedule; third-party agents connect to /mcp. Both
+// are part of the product, so both are documented where people look.
+import Default from '@astrojs/starlight/components/Sidebar.astro';
+---
+
+<Default><slot /></Default>
+
+<div class="mv-sidebar-foot">
+  <p>For agents</p>
+  <a href="/llms.txt">/llms.txt</a> · <a href="/dev/mcp-server/">/mcp</a>
+  <p class="note">Not available in the US, Canada, the UK, or Switzerland.</p>
+</div>

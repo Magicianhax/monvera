@@ -1,0 +1,85 @@
+/* Monvera docs — "Ledger room" tokens.
+   Warm paper in light, the app's deep-emerald room in dark. Green is ink and
+   rule, never fill: one green per page at full strength (the active sidebar
+   item), everything else a tint or a hairline. Starlight's own custom
+   properties are the API — we override them rather than fighting the cascade,
+   so nothing here needs !important. */
+
+:root {
+  /* ── DARK (Starlight's default theme) ───────────────────────────────── */
+  --sl-font: var(--font-hanken);
+  --sl-font-mono: var(--font-jetbrains);
+
+  --sl-color-white: hsl(150 30% 98%);
+  --sl-color-gray-1: hsl(150 20% 93%);
+  --sl-color-gray-2: hsl(150 10% 79%); /* body text */
+  --sl-color-gray-3: hsl(152 8% 57%); /* muted, captions, table headers */
+  --sl-color-gray-4: hsl(156 8% 35%);
+  --sl-color-gray-5: hsl(158 12% 19%); /* card borders */
+  --sl-color-gray-6: hsl(160 16% 11%); /* card + raised surface */
+  --sl-color-black: hsl(162 22% 6%); /* the room itself */
+
+  --sl-color-accent-low: hsl(160 34% 14%);
+  --sl-color-accent: #2f9d67;
+  --sl-color-accent-high: hsl(155 55% 82%);
+  --sl-color-text-accent: #43ba85;
+
+  --sl-color-bg-inline-code: hsl(160 18% 13%);
+  --sl-color-hairline-light: hsl(158 14% 22%);
+  --sl-color-hairline: hsl(158 14% 16%);
+  --sl-color-hairline-shade: hsl(160 20% 10%);
+  --sl-color-bg-sidebar: var(--sl-color-black);
+  --sl-color-bg-nav: hsl(162 22% 6% / 0.72);
+}
+
+:root[data-theme='light'] {
+  /* ── LIGHT (warm paper, matching the app's cream) ───────────────────── */
+  --sl-color-white: hsl(162 25% 9%);
+  --sl-color-gray-1: hsl(158 18% 15%);
+  --sl-color-gray-2: hsl(155 12% 26%);
+  --sl-color-gray-3: hsl(152 8% 44%);
+  --sl-color-gray-4: hsl(150 8% 63%);
+  --sl-color-gray-5: hsl(150 12% 87%);
+  --sl-color-gray-6: hsl(150 16% 94%);
+  --sl-color-gray-7: hsl(44 30% 97.5%);
+  --sl-color-black: hsl(42 33% 99%);
+
+  --sl-color-accent-low: hsl(152 40% 92%);
+  --sl-color-accent: #2f9d67;
+  --sl-color-accent-high: hsl(160 45% 18%);
+  /* the brand green fails AA on paper at body size — darken for text only */
+  --sl-color-text-accent: #227f52;
+
+  --sl-color-bg-inline-code: hsl(150 22% 95%);
+  --sl-color-hairline-light: hsl(150 14% 91%);
+  --sl-color-hairline: hsl(150 14% 88%);
+  --sl-color-hairline-shade: hsl(150 14% 84%);
+  --sl-color-bg-nav: hsl(42 33% 99% / 0.75);
+}
+
+:root {
+  /* ── scale + measure, both themes ───────────────────────────────────── */
+  --sl-content-width: 48rem;
+  --sl-sidebar-width: 17.25rem;
+  --sl-sidebar-pad-x: 1.15rem;
+  --sl-nav-height: 3.75rem;
+  --sl-line-height: 1.7;
+  --sl-line-height-headings: 1.22;
+
+  --sl-text-body: 1rem;
+  --sl-text-code: 0.855rem;
+  --sl-text-h1: 2.45rem;
+  --sl-text-h2: 1.6rem;
+  --sl-text-h3: 1.175rem;
+  --sl-text-h4: 1rem;
+
+  /* prose stays readable even when the column grows for tables and code */
+  --mv-measure: 68ch;
+  --mv-radius: 0.7rem;
+}
+
+@media (min-width: 72rem) {
+  :root {
+    --sl-content-width: 50rem;
+  }
+}

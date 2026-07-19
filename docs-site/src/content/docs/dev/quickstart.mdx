@@ -1,86 +1,93 @@
 ---
-title: "Your first live result with no token"
-description: "Call GET /api/market for the catalog of 95 assets, then GET /api/screener to rank them, with no account and no token."
+title: "Your first Monvera API call"
+description: "Two public GETs need no token; two authenticated POSTs build and commit a plan."
 ---
 
-import { Steps, Tabs, TabItem, Aside, LinkCard } from '@astrojs/starlight/components';
+import { Aside } from '@astrojs/starlight/components';
+import Transcript from '../../../components/Transcript.astro';
+import Turn from '../../../components/Turn.astro';
 
-Two public GET requests get you a live result without a token: `GET /api/market` returns the catalog of 95 tokenized assets (86 stocks and 9 ETFs) with live prices, and `GET /api/screener` ranks that same catalog by four metrics from real price history. Both read from the production app at `https://monvera.best`, so the numbers you see are the numbers the app shows.
+Run this now. No account, no key, no header:
 
-<Aside type="note">
-Public read routes need no `Authorization` header. Rate limits apply per IP: `market` and `screener` each allow 60 requests per 60 seconds. See [conventions](/dev/conventions/) for the full table.
-</Aside>
-
-## Read the catalog of 95 assets
-
-`GET /api/market` returns every tradable asset with its symbol, name, live price, and metadata. Pass `symbol` to fetch one asset and `range` to control the price-history window.
-
-<Tabs>
-<TabItem label="curl">
 ```bash
 curl "https://monvera.best/api/market"
 ```
-</TabItem>
-<TabItem label="fetch">
-```js
-const res = await fetch("https://monvera.best/api/market");
-const market = await res.json();
-console.log(market);
-```
-</TabItem>
-</Tabs>
 
-To pull a single asset with a one-year price window, add the query parameters. This example reads Apple (AAPL), one of the four holdings in the canonical "Steady Growth" plan:
+That returns the catalog of 95 real tokenized stocks and ETFs with live prices — the same numbers the app shows. Reads are public. Anything that builds a plan or spends money needs a Privy bearer token, and this page walks both halves in four calls.
 
-<Tabs>
-<TabItem label="curl">
+## Public reads, no token
+
+`GET /api/market` is the source of truth for symbols, names, live prices, and token addresses on chain 4663. Pass `symbol` for one asset and `range` for a price window:
+
 ```bash
 curl "https://monvera.best/api/market?symbol=AAPL&range=1y"
 ```
-</TabItem>
-<TabItem label="fetch">
-```js
-const res = await fetch("https://monvera.best/api/market?symbol=AAPL&range=1y");
-const aapl = await res.json();
-console.log(aapl);
-```
-</TabItem>
-</Tabs>
 
-The catalog is the source of truth for token addresses. On chain 4663, AAPL is the 18-decimal ERC-20 token at `0xaF3D76f1834A1d425780943C99Ea8A608f8a93f9`, and every asset settles in USDG (6 decimals) at `0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168`. Assets with no Chainlink feed yet are flagged in the response, not faked.
+`GET /api/screener` ranks that same catalog by four figures computed from real price history — one-year return (`ret1yPct`), three-month return (`ret3mPct`), volatility (`volPct`), and maximum drawdown (`maxDrawdownPct`). Assets with no history are flagged, not scored:
 
-## Rank the catalog by four real metrics
-
-`GET /api/screener` returns the same 95 assets ranked by four figures computed from real price history: one-year return (`ret1yPct`), three-month return (`ret3mPct`), volatility (`volPct`), and maximum drawdown (`maxDrawdownPct`). Assets with no data are flagged, not scored.
-
-<Tabs>
-<TabItem label="curl">
 ```bash
 curl "https://monvera.best/api/screener"
 ```
-</TabItem>
-<TabItem label="fetch">
-```js
-const res = await fetch("https://monvera.best/api/screener");
-const ranked = await res.json();
-// Each row carries ret1yPct, ret3mPct, volPct, maxDrawdownPct
-console.log(ranked);
+
+Sort and filter the rows client-side. A ranking you compute from this response matches what a user sees in the app.
+
+<Aside type="note">
+Public routes are rate limited per IP; `market` and `screener` allow 60 requests per 60 seconds each. Every limit, body shape, and error code lives in [conventions](/dev/conventions/).
+</Aside>
+
+## What the API is underneath
+
+Monvera is a conversation. Nobody in the app calls an endpoint — they say what they want, and Vera's router resolves it into one of 26 intents and opens a panel beside the chat:
+
+<Transcript>
+  <Turn who="you">Put $250 into something steady for the long run</Turn>
+  <Turn who="vera">Here's a plan — Apple, Nvidia, the S&P 500, and US Treasuries, about $62 each. Nothing moves until you confirm.</Turn>
+</Transcript>
+
+`POST /api/allocate` is that same step over HTTP. The rest of this page uses that plan, "Steady Growth", as its worked example.
+
+## Get a token
+
+Sign in at `https://monvera.best`, then read the Privy access token from the client SDK and export it:
+
+```bash
+export PRIVY_TOKEN="<your-privy-access-token>"
 ```
-</TabItem>
-</Tabs>
 
-Sort or filter these rows client-side to build your own view. The four columns are the same ones the in-app screener ranks by, so a ranking you compute here matches what a user sees.
+[Authentication](/dev/authentication/) covers where the token comes from and which routes require it.
 
-## What to read next
+## Turn a goal into a draft plan
 
-<Steps>
+`POST /api/allocate` takes a plain-language goal and a USDG amount and returns a named draft: legs with an asset, a weight, a one-line reason, and a plain risk read, plus a `planId`, an `assessedRisk`, and a `maxRisk` ceiling.
 
-1. To turn a goal into a signed, executable plan, you need a Privy bearer token. See the [authenticated quickstart](/dev/authenticated-quickstart/).
+```bash
+curl -X POST "https://monvera.best/api/allocate" \
+  -H "Authorization: Bearer $PRIVY_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"goal":"grow my money steadily for five years","amountUsdg":"250"}'
+```
 
-2. To learn which routes are public and which are token-gated, read [authentication](/dev/authentication/).
+Nothing is signed or spent at this point. You can start from $1, but each leg needs roughly $11 to clear the trading venue's minimum, so a four-name plan wants about $44 or more. Amounts are strings of 6-decimal USDG units.
 
-3. To verify Vera's on-chain identity and recover the signer of a plan yourself, read [verify Vera](/dev/verify-vera/).
+## Commit it
 
-</Steps>
+`POST /api/commit-plan` executes the plan and records Vera's signed EIP-712 risk assessment on-chain in the same transaction that buys the stocks, so her track record cannot be edited afterwards. Gas is sponsored through ERC-4337 — the account never holds a gas token.
 
-Monvera is not available in the US, Canada, the UK, or Switzerland, and nothing here is investment advice. See [where Monvera is available](/start/where-its-available/) for the full statement. Public market and screener reads are not geo-gated; the account and trading routes are.
+```bash
+curl -X POST "https://monvera.best/api/commit-plan" \
+  -H "Authorization: Bearer $PRIVY_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"planId":"0x9f2c...a41b","address":"0xYourSmartAccountAddress"}'
+```
+
+You get a transaction hash back. Open it on `https://robinhoodchain.blockscout.com` and you will find a `RecommendationCommitted` log and an `AllocationExecuted` log emitted by `0x7ff1a5ee19330c165146488a7ad8af6cb41da1df`. That is the checkable record; [verify Vera](/dev/verify-vera/) reproduces the signature from it yourself.
+
+Allocate and commit close together. The on-chain verify path reverts the whole transaction if the assessment has expired, if `assessedRisk` exceeds `maxRisk`, if the recovered signer is not the current `agentSigner()`, or if the same `planId` was already recorded — a failed commit spends nothing.
+
+## What settlement looks like
+
+A leg may fill through the router's RFQ venue, in which case the position arrives as a wrapped token that unwraps in about 1 to 15 minutes. It is already bought and already the holder's, and it counts in the balance the whole time — it just cannot be sold until it lands. Nothing is stuck.
+
+There is no route that quotes a whole plan at once. Firm per-leg quotes come from [`POST /api/quote`](/dev/api/quote/), one leg at a time as you execute it — quote the whole plan upfront and the tail legs go stale before they settle.
+
+Every route, request body, and response shape is in the [API reference](/dev/api/). Nothing here is investment advice, and backtests are history, not promises.

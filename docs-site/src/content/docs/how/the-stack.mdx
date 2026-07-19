@@ -1,35 +1,70 @@
 ---
 title: "The stack behind a Monvera trade"
-description: "Each piece maps to what it does for you: Robinhood Chain settles, Arcus prices and routes in USDG, Virtuals runs Vera, your sign-in holds your account, a relayer covers gas, Chainlink supplies prices."
+description: "Robinhood Chain settles, the venues price and route, Privy holds your keys, Pimlico pays gas, Virtuals runs Vera."
 ---
 
-import { LinkCard } from '@astrojs/starlight/components';
+import { Aside } from '@astrojs/starlight/components';
+import Transcript from '../../../components/Transcript.astro';
+import Turn from '../../../components/Turn.astro';
 
-Six pieces carry a Monvera trade, and each maps to one job. Robinhood Chain is where trades settle, Arcus prices and routes them, Virtuals runs Vera and holds her identity, your sign-in holds your account, a relayer covers the gas, and Chainlink supplies the price data. This page names each piece with its plain twin and points to where it is documented in depth.
+Six pieces carry a Monvera trade, and each one does a single job for you. Robinhood Chain settles it, the trading venues price and route it, Privy holds the keys, Pimlico pays the gas so you never hold a gas token, Virtuals runs Vera and carries her identity, and Chainlink supplies reference prices. Nothing here is Monvera holding your money, because at no point does Monvera hold your money.
 
-## Robinhood Chain: where trades settle
+| Piece | What it does for you |
+| --- | --- |
+| Robinhood Chain (4663) | Settles every trade and stores your holdings and Vera's record |
+| The trading venues | Give a real, executable price and route the order |
+| Privy | Holds the keys to an account only you can spend from |
+| Pimlico | Sponsors the gas, so investing costs you no network fee |
+| Virtuals | Runs Vera's reasoning and carries her canonical identity |
+| Chainlink | Supplies the on-chain reference price where a feed exists |
 
-Robinhood Chain (chain id 4663, an Ethereum L2) is the network your trades settle on. Your holdings and Vera's signed records live here, at addresses you can open on the Blockscout explorer. The full list of chain values and contract addresses is on [network and addresses](/dev/network-and-addresses/).
+## Robinhood Chain: where it settles
 
-## Arcus: today's real price and route
+Robinhood Chain, chain id 4663, is an Ethereum L2, and it is where your trades actually settle. Your tokenized stocks sit there, in your wallet, at an address you can open on the Blockscout explorer. Vera's signed assessments land there too, in the same transactions as the buys.
 
-Arcus spot RFQ is the trade venue that gives today's real price and the route to fill it, quoted in USDG (the dollar-value currency every trade settles in). Only firm Arcus quotes execute, and each carries an expiry, so a plan re-quotes right before it commits. See [where prices come from](/how/where-prices-come-from/).
+Everything is denominated in USDG, the dollar-value currency the chain settles in. Dollars in, dollars out, no second conversion in the middle. Every chain value and contract address is listed on [network and addresses](/dev/network-and-addresses/).
 
-## Virtuals: where Vera thinks and holds her identity
+## The venues: what your order actually fills against
 
-Virtuals provides Vera's inference (her reasoning) and her canonical on-chain identity. Her ERC-8004 identity is registered on Base (`8453:58228`) via Virtuals ACP, and she is also agent #1 in Monvera's own `IdentityRegistry` on chain 4663. Both identities are documented on [Verify Vera](/dev/verify-vera/).
+Tokenized stocks on this chain have no deep pool of their own, so orders route through a spot router that quotes real market makers. Each quote comes back with up to two ways to fill it: one your wallet submits directly, and one the router settles on your behalf after you sign the order. Monvera takes whichever one can actually fill, and if the direct route fails on a given name, the leg retries through the router-settled one rather than dropping out of your plan.
 
-## Your sign-in: your account, held by you
+Legs are quoted and settled one at a time, immediately before each fill, because a quote taken for the whole plan up front goes stale by the time the last leg runs.
 
-Your sign-in provider (Privy) is how you get an account without a seed phrase, using email or a social login. The account itself is a non-custodial smart account: Monvera cannot move your money without your approval. If you lose your phone, you recover the same account by signing in again the same way. See [your account and recovery](/safety/your-account-and-recovery/).
+<Aside type="note">
+A router-settled fill can arrive as a wrapped token that unwraps within about 1 to 15 minutes. It is already bought, already yours, and already counted in your balance. It just cannot be sold until it lands. Nothing is stuck.
+</Aside>
 
-## The relayer: why investing is free to you
+Each name needs about $11 per leg to clear the makers' minimum, which is why you can start from $1 but a small amount buys fewer names rather than more, smaller ones.
 
-The relayer (Pimlico) sponsors the gas for the ERC-4337 user operation (the batched transaction), which is why investing costs you no network fee. The trade and the record are batched into that one sponsored user operation, so Vera's signed assessment lands in the same transaction as the buys. See [how the plan is signed and recorded](/how/accountable-ai/). What Monvera does and does not charge is on [what it costs](/safety/what-it-costs/).
+## Privy: who holds the keys
 
-## Chainlink: the price data
+Privy gives you a wallet from an email or social sign-in, with no seed phrase to write down and lose. The keys are yours. Monvera cannot move your funds without your approval, and there is no Monvera account balance sitting behind the scenes, because there is no custody.
 
-Chainlink supplies the reference price data, through 8-decimal feeds adjusted for corporate actions where a feed is published. Assets with no Chainlink feed are shown as such rather than given a faked number. See [where prices come from](/how/where-prices-come-from/).
+Losing your phone loses nothing: sign in the same way on a new device and it is the same wallet, holding the same stocks.
 
-<LinkCard title="How the plan is signed and recorded" href="/how/accountable-ai/" description="One gas-sponsored transaction trades via Arcus and records Vera's signed assessment via VeraRecord." />
-<LinkCard title="Network and addresses" href="/dev/network-and-addresses/" description="Chain 4663, the RPC and explorer, USDG, and every contract address, each Blockscout-linked." />
+## Pimlico: why gas is free to you
+
+Every action goes out as an ERC-4337 user operation, and Pimlico sponsors it. That is the whole reason you never hold a gas token, never top up a balance to make a trade work, and never see a network fee. The buys and Vera's record ride in one sponsored operation together.
+
+If the bundler is throttled, the client backs off and retries, and router-settled legs bypass the bundler entirely, so a busy moment slows a trade rather than losing it.
+
+## Virtuals: where Vera thinks
+
+Virtuals provides the inference behind Vera's reasoning and carries her canonical ERC-8004 agent identity, registered on Base as `8453:58228`. On Robinhood Chain she is agent #1 in Monvera's own identity registry, which is the id recorded with every plan she signs. Both are documented on [Verify Vera](/dev/verify-vera/).
+
+Her reasoning runs on inference; her accountability does not. The signed assessment on chain 4663 is what makes her track record checkable, whatever model is answering.
+
+## Chainlink: the reference price
+
+Chainlink feeds supply the on-chain reference price for the assets that have one: 8 decimals, already adjusted for splits and other corporate actions. Assets without a feed fall back to a live venue quote or the last real market close, and anything nothing can price is shown as unpriced. The full order of precedence is on [where prices come from](/how/where-prices-come-from/).
+
+## What you actually touch
+
+None of this is something you operate. You say what you want, and the pieces arrange themselves behind one confirmation.
+
+<Transcript>
+  <Turn who="you">Put $150 into the semiconductor basket</Turn>
+  <Turn who="vera">Four names, about $37 each. Gas is covered, it settles in USDG on Robinhood Chain, and I will record the risk assessment in the same transaction as the buys.</Turn>
+</Transcript>
+
+The one place the stack becomes visible is when a fill lands wrapped and takes a few minutes to unwrap, and even then it is already counted as yours.

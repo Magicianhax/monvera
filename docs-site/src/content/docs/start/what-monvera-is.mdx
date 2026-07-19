@@ -1,58 +1,54 @@
 ---
 title: "What Monvera is"
-description: "Monvera is an AI broker for real tokenized stocks and funds. Tell Vera a goal, she builds a basket of real companies, one tap invests it, from $1."
+description: "An AI broker you talk to: tell Vera a goal and she buys real tokenized stocks into a wallet you own."
 ---
 
-import { Aside, Card, CardGrid, LinkCard } from '@astrojs/starlight/components';
+import Transcript from '../../../components/Transcript.astro';
+import Turn from '../../../components/Turn.astro';
 
-Monvera is an AI broker for real tokenized stocks and funds. You tell Vera a goal and an amount, she builds a named basket of real companies each with a reason and a plain risk read, and one tap invests it. You own the result from $1, and you can check every part of it.
+Monvera is an AI broker you talk to. You tell Vera, the agent behind it, what you want in plain words, and she buys real tokenized stocks and ETFs into a wallet that belongs to you.
 
-<figure class="shot">
-  <img src="/screens/plan.webp" alt="An example investment plan Vera built for a $300 goal" class="phone-shot" />
-  <figcaption>An example plan Vera built for a $300 goal.</figcaption>
-</figure>
+The whole product is one conversation. There is nothing to tap through — you say what you want, Vera answers, and she opens a panel beside the chat when there is something to show you: a plan, your portfolio, a price chart, your wallet.
 
+<Transcript>
+  <Turn who="you">Put $200 into AI companies</Turn>
+  <Turn who="vera">Here's a plan — six names, about $33 each. Nvidia and Broadcom for the chips, Microsoft and Alphabet for the platforms, and two smaller names for the swing.</Turn>
+  <Turn who="you">Swap the small ones for the S&P 500</Turn>
+  <Turn who="vera">Done — four names now, about $50 each.</Turn>
+</Transcript>
 
-## What Vera does for you
+## What you can ask her for
 
-Vera turns a goal in plain words into a named basket of real companies. You type something like "grow my money steadily for five years" and an amount, and she returns a basket with each company chosen for a reason and a one-line read on what could go wrong.
+Everything happens by saying it. There is no menu to learn.
 
-Here is the example this documentation uses throughout. The plan is named **Steady Growth**, and it holds four things:
-
-- **Apple (AAPL)**, a large, steady company, with the plain read that even big companies fall.
-- **Nvidia (NVDA)**, faster growth and larger swings, so it can drop hard in a bad month.
-- **The S&P 500**, a fund holding 500 large US companies, so no single company sinks you.
-- **US Treasuries**, short-term government debt, the calm part of the basket that barely moves.
-
-Each row is a real company or fund with a live price and a chart. You can read the whole basket before you commit a cent.
-
-<Aside type="note">
-A basket is not a recommendation. Vera gives you options with reasons and a risk read, not advice. See [Is this investment advice?](/safety/is-this-investment-advice/).
-</Aside>
+| What you want | Say something like |
+| --- | --- |
+| A basket built for a goal | "Put $500 into clean energy for five years" |
+| One name, bought or sold | "Buy $50 of Apple" · "Sell half my Nvidia" |
+| A read on what you hold | "How's my portfolio doing?" · "Rebalance me" |
+| Prices and comparisons | "What's Tesla done this year?" · "Compare AMD and Intel" |
+| Something to watch | "Watch Costco" · "Tell me if Apple drops below $180" |
+| Investing on a schedule | "Put $100 in every Monday" |
+| Proof of her record | "Show me your track record" |
 
 ## What you actually own
 
-You own real holdings in a Monvera account that belongs to you. When you invest, your money buys real tokenized stocks and funds, and they sit in your own account. Monvera cannot move them without your approval, and you can sell back to dollars at any time. More on this in [Your account and recovery](/safety/your-account-and-recovery/).
+There are 95 real tokenized stocks and ETFs to buy. When you invest, they land in a wallet that is yours — Monvera cannot move anything out of it without your approval, and you can sell back to dollars whenever you want.
 
-There are 95 companies and funds to choose from: 86 stocks and 9 funds. You can browse them all, buy or sell one on its own, or let Vera build a basket for you.
+Everything settles in USDG, a dollar-value currency, on Robinhood Chain. Vera also signs a risk assessment that is recorded on-chain in the same transaction that buys your stocks, so her record cannot be edited after the fact. [How that works](/how/accountable-ai/).
 
-## Why the AI is one you can check
+## What you need to start
 
-Vera is a registered on-chain agent, and the risk read behind every plan is signed by her and recorded permanently when your trade happens. Vera signs the risk assessment, which proves she authored it. You separately approve the spend, which authorizes the money. The two are different actions with different meanings, and the record of hers cannot be edited afterward.
+| You need | Detail |
+| --- | --- |
+| A browser | Phone or computer. Nothing to install, no app store. |
+| A sign-in | An email address or an existing wallet. No seed phrase to write down — your wallet is created for you. |
+| Some USDG | From $1 to start, though a multi-name plan needs about $11 per name. See [Before you invest](/start/before-you-invest/). |
 
-This is the part that makes Monvera different from a chatbot that gives stock tips and forgets them. Her track record is kept honest because it is written down where anyone can read it. See [Accountable AI](/how/accountable-ai/) for how that works and what it does and does not prove.
+You do not need a gas token. Monvera sponsors the network cost of every transaction, so you never have to hold or top up a second currency to trade. There is no platform fee and no account fee either; Monvera earns a referral fee from the trading venue.
 
-## What it costs and what you risk
+## Try it with no money
 
-Monvera charges no platform fee, no account fee, and no subscription, and it covers the network cost of every trade. You pay the live market price on each trade, the same spread any buyer pays. Full detail on [What it costs](/safety/what-it-costs/).
+Open [monvera.best/demo](https://monvera.best/demo). You can talk to Vera, ask for a plan, and walk the whole flow without an account and without spending anything. Real companies, live prices, no money moved.
 
-You can lose money. These are real companies, and real prices fall, so a $100 basket can be worth $80 next week. Monvera is not a bank, is not insured, and promises no return. Read [Can I lose money?](/safety/can-i-lose-money/) before you invest.
-
-## Where to go next
-
-<CardGrid>
-	<LinkCard title="Try the demo" href="/start/try-the-demo/" description="See the whole flow with no money and no account first." />
-	<LinkCard title="Where it works" href="/start/where-its-available/" description="Check that Monvera is available where you are before anything else." />
-	<LinkCard title="What you need" href="/start/what-you-need/" description="A phone and a few dollars, and nothing to install." />
-	<LinkCard title="Make your first plan" href="/use/make-your-first-plan/" description="Tell Vera a goal and get a named basket back." />
-</CardGrid>
+The demo saves nothing. When you want the real thing, sign in at [monvera.best](https://monvera.best) and start fresh.

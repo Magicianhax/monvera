@@ -1,40 +1,43 @@
 ---
-title: "Notifications API"
-description: "GET /api/notifications to read the signed-in account's inbox and unread count, POST to mark everything read."
+title: "Read the inbox and mark it read"
+description: "Read the signed-in account's inbox and unread count, or mark everything read."
 ---
 
-import { Aside, Tabs, TabItem } from '@astrojs/starlight/components';
+`GET` returns the signed-in account's notifications (newest first, up to 50) and the current unread count in one response. `POST` marks every unread notification read, takes no body, and returns `{"ok":true}` — after it runs, `unread` on the next `GET` is `0`. Notifications come from price alerts firing, Autopilot runs, and completed trades.
 
-`GET /api/notifications` returns the signed-in account's inbox and unread count, and `POST /api/notifications` marks every notification read. Both require a Privy bearer token. Notifications come from price alerts firing, Autopilot runs, and completed trades.
+`GET`, `POST /api/notifications` · requires a Privy bearer token, `401` without one. Base URL, rate limits, and error shapes: [conventions](/dev/conventions/).
 
-<Aside type="note" title="Token required">
-Every request needs `Authorization: Bearer <privy-token>`. A missing or bad token returns `401 {"error":"Please sign in to continue."}`. See [Authentication](/dev/authentication/) for how to obtain the token and the full public-versus-gated matrix.
-</Aside>
+## Returns (GET)
 
-Base URL: `https://monvera.best`.
+| Field | Type | Description |
+| --- | --- | --- |
+| `notifications` | array | Up to 50 notifications, newest first. |
+| `unread` | number | Count of notifications with `readAt` still null. |
 
-## Read your inbox
+Each notification:
 
-`GET /api/notifications` returns your notifications (newest first, up to 50) and the current unread count in one response.
+| Field | Type | Description |
+| --- | --- | --- |
+| `id` | number | Stable id. |
+| `kind` | `"alert"` \| `"autopilot"` \| `"trade"` \| `"system"` | What produced it. |
+| `title` | string | One-line summary. |
+| `body` | string \| undefined | Optional detail line. |
+| `symbol` | string \| undefined | The related ticker, when there is one. |
+| `txHash` | string \| undefined | The settling transaction hash, when there is one. |
+| `createdAt` | number | Unix seconds when created. |
+| `readAt` | number \| undefined | Unix seconds when marked read, absent while unread. |
 
-<Tabs>
-<TabItem label="curl">
+## Example
+
 ```bash
+# read the inbox
 curl https://monvera.best/api/notifications \
   -H "Authorization: Bearer $MONVERA_TOKEN"
-```
-</TabItem>
-<TabItem label="fetch">
-```js
-const res = await fetch("https://monvera.best/api/notifications", {
-  headers: { Authorization: `Bearer ${token}` },
-});
-const { notifications, unread } = await res.json();
-```
-</TabItem>
-</Tabs>
 
-Response:
+# mark everything read
+curl -X POST https://monvera.best/api/notifications \
+  -H "Authorization: Bearer $MONVERA_TOKEN"
+```
 
 ```json
 {
@@ -61,59 +64,6 @@ Response:
 }
 ```
 
-## Mark everything read
+## Notes
 
-`POST /api/notifications` marks all of your unread notifications read and returns `{ "ok": true }`. It takes no body. After it runs, `unread` on the next `GET` is `0`.
-
-<Tabs>
-<TabItem label="curl">
-```bash
-curl -X POST https://monvera.best/api/notifications \
-  -H "Authorization: Bearer $MONVERA_TOKEN"
-```
-</TabItem>
-<TabItem label="fetch">
-```js
-const res = await fetch("https://monvera.best/api/notifications", {
-  method: "POST",
-  headers: { Authorization: `Bearer ${token}` },
-});
-const { ok } = await res.json();
-```
-</TabItem>
-</Tabs>
-
-Response:
-
-```json
-{ "ok": true }
-```
-
-## Response fields (GET)
-
-| Field | Type | Description |
-| --- | --- | --- |
-| `notifications` | array | Up to 50 notifications, newest first. |
-| `unread` | number | Count of notifications with `readAt` still null. |
-
-Each notification:
-
-| Field | Type | Description |
-| --- | --- | --- |
-| `id` | number | Stable id. |
-| `kind` | `"alert"` \| `"autopilot"` \| `"trade"` \| `"system"` | What produced the notification. |
-| `title` | string | One-line summary. |
-| `body` | string \| undefined | Optional detail line. |
-| `symbol` | string \| undefined | The related ticker, when there is one. |
-| `txHash` | string \| undefined | The settling transaction hash, when there is one. Open it on [Blockscout](https://robinhoodchain.blockscout.com) to check the on-chain trade. |
-| `createdAt` | number | Unix seconds when the notification was created. |
-| `readAt` | number \| undefined | Unix seconds when it was marked read, or absent while unread. |
-
-## Errors you can hit
-
-| Status | Body | When |
-| --- | --- | --- |
-| 401 | `{"error":"Please sign in to continue."}` | Missing or invalid bearer token. |
-| 500 | `{"error":"Something went wrong. Please try again."}` | Store read or write failed. |
-
-A `txHash` is the checkable end of an autopilot or trade notification: it names the exact transaction on Robinhood Chain (chain 4663) that settled the trade. Related routes: [alerts](/dev/api/alerts/) and [autopilot](/dev/api/autopilot/).
+`txHash` is the checkable end of an autopilot or trade notification: it names the exact transaction on Robinhood Chain (4663) that settled it. Open it at `https://robinhoodchain.blockscout.com/tx/<txHash>`. Neither method is rate limited. See also [alerts](/dev/api/alerts/) and [autopilot](/dev/api/autopilot/).

@@ -1,53 +1,40 @@
 ---
 title: "Export your private key"
-description: "Your account is truly yours, so you can export its private key and use it in another wallet. This is the most dangerous action in the app, and here is exactly what it means before you do it."
+description: "You can export it and take the account elsewhere, and anyone who sees it can take everything."
 ---
 
 import { Aside, Steps } from '@astrojs/starlight/components';
 
-Monvera is self-custody: the account is yours, held by a key that only you control, and Monvera can never move your money. Because it is genuinely yours, you can export the private key and carry the account into another wallet like MetaMask. This is also the single most dangerous thing you can do in the app, so it sits behind a warning and a checkbox you have to tick on purpose.
-
-<figure class="shot">
-  <img src="/screens/export-key-warning.webp" alt="The export private key warning: what the key controls, that it cannot be recovered, and a checkbox to confirm you understand" class="phone-shot" />
-  <figcaption>The warning you confirm before the key is revealed. The key itself is shown by your wallet provider in a secure window, never by Monvera.</figcaption>
-</figure>
+Exporting your private key is the most dangerous thing you can do in Monvera. It is also the proof that the account is genuinely yours: the key exists, you can take it, and you can carry the whole account into another wallet like MetaMask. Nothing about using Monvera requires you to touch it.
 
 ## What a private key is
 
-Your private key is the one password to your whole account. It is not a login you can reset. Anyone who has it can take everything in the account, instantly and permanently, and no one can undo that or get the money back. Think of it as the key to a safe: useful in your hands, ruinous in anyone else's.
-
-## Before you export, understand this
+One string of characters that controls the entire account. It is not a login you can reset and it is not tied to your identity. Anyone holding it can empty the account in a single transaction, from anywhere, and nothing can be undone afterwards. There is no fraud department and no reversal.
 
 <Aside type="danger" title="These cannot be undone">
-  - **Anyone who sees the key can take everything.** A screenshot, a screen-share, a phishing site, a person looking over your shoulder. That is all it takes.
-  - **It cannot be recovered.** If you lose the key, no one, including Monvera, can restore it or the money behind it.
-  - **Monvera never stores it and can never reset it.** There is no support line for a stolen or lost key. Nobody can help after the fact.
-  - **No real staff will ever ask for it.** Anyone who does, in a chat, a DM, an email, or a form, is trying to rob you. See [Staying safe from scams](/safety/staying-safe-from-scams/).
+- **Anyone who sees the key can take everything.** A screenshot, a screen-share, a phishing form, a person behind you on a train. That is the whole attack.
+- **Lose it and it is gone.** Monvera does not store it and cannot restore it, or the money behind it.
+- **No real staff will ever ask for it.** Anyone asking — in a DM, an email, a support form, a "verification" page — is robbing you.
 </Aside>
 
 ## How to export
 
-<figure class="shot">
-  <img src="/screens/export-key-settings.webp" alt="The Export private key row under Security in Settings" class="phone-shot" />
-  <figcaption>You will find it in Settings, under Security.</figcaption>
-</figure>
-
 <Steps>
 
-1. Open **Settings** and, under **Security**, tap **Export private key**.
+1. Ask Vera to open your settings. "Open settings" is enough.
 
-2. Read the warning in full. Tick the box to confirm you understand that anyone with the key controls your money, that it cannot be recovered, and that no one from Monvera will ever ask you for it.
+2. Under Security, choose **Export private key**.
 
-3. Tap **I understand, reveal my key**. A secure window from your wallet provider opens and shows the key. Monvera's own code, servers, and logs never see it.
+3. Read the warning, then tick the box confirming you understand that anyone with the key controls your money, that it cannot be recovered, and that no one from Monvera will ever ask you for it.
 
-4. Move it somewhere safe offline, or import it straight into your other wallet. Never paste it into a website, a message, or a shared screen.
+4. Confirm. A secure window from the wallet provider reveals the key. Monvera's own code, servers and logs never see it.
+
+5. Move it straight into the wallet you are importing to, or store it offline. Never paste it into a website, a message, or anything visible on a shared screen.
 
 </Steps>
 
 ## When you would actually do this
 
-You do not need to export anything to use Monvera. The key lives safely inside your account and signs your trades for you. Exporting is for one thing: taking the same account into another wallet you control. If that is not what you are doing, there is no reason to reveal the key, and every reason not to.
+One reason: you want to use the same account somewhere other than Monvera. That is a legitimate thing to want, and it is why the export exists at all.
 
-<Aside type="note">
-  You do not have to write anything down to keep using Monvera. Your account is created and secured for you when you sign in. Export the key only if you specifically want to use the account elsewhere.
-</Aside>
+Every other reason is a bad one. You do not need the key to invest, to sell, to withdraw, or to prove the account is yours. Support will never need it. No fix requires it. If you are exporting because a message or a person told you to, stop — that is exactly how people lose everything, and the right move is to [check who you are actually talking to](/safety/scams-and-support/).

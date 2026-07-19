@@ -1,84 +1,18 @@
 ---
-title: "Autopilot config API"
-description: "GET, POST, and DELETE /api/autopilot to read, set, and revoke the four bounds and session signer that gate autonomous investing."
+title: "Autopilot API"
+description: "Set the bounds Autopilot invests inside, trigger a run, and read the run history."
 ---
 
-import { Aside, Tabs, TabItem } from '@astrojs/starlight/components';
+Autopilot invests a set amount on a schedule without you signing each run, but only ever inside four bounds you set. `/api/autopilot` holds the config, `/api/autopilot/run` fires one run now, `/api/autopilot/runs` is the audit trail.
 
-`GET /api/autopilot` reads your current Autopilot config, `POST /api/autopilot` creates or updates it, and `DELETE /api/autopilot` turns it off. All three require a Privy bearer token. Autopilot invests a set amount on a schedule without you signing each run, but only ever within four hard bounds you set, driven by a Privy session signer (`walletId`) you grant and can revoke.
+`GET`/`POST`/`DELETE /api/autopilot` · `POST /api/autopilot/run` · `GET /api/autopilot/runs` — all require a Privy bearer token, all are geo-restricted (`451`). Base URL, rate limits, and error shapes: [conventions](/dev/conventions/).
 
-<Aside type="note" title="Token required">
-Every request needs `Authorization: Bearer <privy-token>`. A missing or bad token returns `401 {"error":"Please sign in to continue."}`. See [Authentication](/dev/authentication/) for how to obtain the token and the full public-versus-gated matrix.
-</Aside>
+The four bounds are `amountUsd`, `cadence`, `riskCeilingBps`, and `maxPerPeriodUsd` (defined below); every run is checked against all four before anything is signed. `walletId` is your Privy embedded-wallet id — granting it lets Monvera's server sign each run's spend, and `DELETE` revokes it along with the config. Vera signs the RiskInference risk assessment; the delegated signer signs the spend.
 
-<Aside type="caution" title="Region-gated">
-The `/api/autopilot` routes are geo-restricted. A request from a blocked region returns `451 {"error":"Monvera is not available in your region."}`. Availability is covered in full at [Where Monvera is available](/start/where-its-available/).
-</Aside>
+## Read, set, and revoke the config
 
-Base URL: `https://monvera.best`.
+`GET` returns your config or `{"autopilot": null}`. `POST` creates or updates it, resets the schedule, and returns the stored config plus `cadenceSeconds` (`daily` 86400, `weekly` 604800, `biweekly` 1209600, `monthly` 2592000); limited to 20 POSTs per 60 seconds. `DELETE` removes it and returns `{"ok": true}`.
 
-## The four bounds and the session signer
-
-Autopilot can never step outside four limits you set, and every run is checked against them before anything is signed:
-
-1. `amountUsd` is the amount invested per run.
-2. `cadence` is how often a run happens (`daily`, `weekly`, `biweekly`, or `monthly`).
-3. `riskCeilingBps` is a risk ceiling in basis points; Vera's assessed risk for a run must stay at or under it.
-4. `maxPerPeriodUsd` is a hard spend cap per cadence period; a run that would exceed it is skipped.
-
-`walletId` is your Privy embedded-wallet id. Granting it lets Monvera's server sign each run's spend on your behalf. Revoking it (see [Turn Autopilot off](#turn-autopilot-off)) removes the config so nothing more can run. Vera signs the RiskInference risk assessment for each run; the delegated signer signs the spend, always inside these bounds.
-
-## Read your config
-
-`GET /api/autopilot` returns your current config, or `{"autopilot": null}` if you have none.
-
-<Tabs>
-<TabItem label="curl">
-```bash
-curl https://monvera.best/api/autopilot \
-  -H "Authorization: Bearer $MONVERA_TOKEN"
-```
-</TabItem>
-<TabItem label="fetch">
-```js
-const res = await fetch("https://monvera.best/api/autopilot", {
-  headers: { Authorization: `Bearer ${token}` },
-});
-const { autopilot } = await res.json();
-```
-</TabItem>
-</Tabs>
-
-Response:
-
-```json
-{
-  "autopilot": {
-    "id": "ap_did:privy:abc123",
-    "userId": "did:privy:abc123",
-    "walletId": "wlt_9f2c…",
-    "owner": "0x1111111111111111111111111111111111111111",
-    "smartAccount": "0x2222222222222222222222222222222222222222",
-    "goal": "grow my money steadily for five years",
-    "amountUsd": 25,
-    "cadence": "weekly",
-    "riskCeilingBps": 6000,
-    "maxPerPeriodUsd": 50,
-    "active": true,
-    "createdAt": 1751884800,
-    "nextRunAt": 1752489600,
-    "runs": 3,
-    "spentThisPeriod": 0
-  }
-}
-```
-
-## Set or update your config
-
-`POST /api/autopilot` with the config body creates Autopilot or updates it, resets the schedule, and returns the stored config plus `cadenceSeconds`. The `walletId` must be your own embedded wallet; the route rejects delegating a wallet that is not yours.
-
-<Tabs>
-<TabItem label="curl">
 ```bash
 curl -X POST https://monvera.best/api/autopilot \
   -H "Authorization: Bearer $MONVERA_TOKEN" \
@@ -94,107 +28,79 @@ curl -X POST https://monvera.best/api/autopilot \
     "maxPerPeriodUsd": 50
   }'
 ```
-</TabItem>
-<TabItem label="fetch">
-```js
-const res = await fetch("https://monvera.best/api/autopilot", {
-  method: "POST",
-  headers: {
-    Authorization: `Bearer ${token}`,
-    "Content-Type": "application/json",
-  },
-  body: JSON.stringify({
-    walletId: "wlt_9f2c…",
-    owner: "0x1111111111111111111111111111111111111111",
-    smartAccount: "0x2222222222222222222222222222222222222222",
-    goal: "grow my money steadily for five years",
-    amountUsd: 25,
-    cadence: "weekly",
-    riskCeilingBps: 6000,
-    maxPerPeriodUsd: 50,
-  }),
-});
-const { autopilot, cadenceSeconds } = await res.json();
-```
-</TabItem>
-</Tabs>
 
-Response:
-
-```json
-{
-  "autopilot": { "…": "the stored config, as shown above" },
-  "cadenceSeconds": 604800
-}
-```
-
-## Turn Autopilot off
-
-`DELETE /api/autopilot` deletes your config and returns `{ "ok": true }`. Removing the config removes the delegation, so no further scheduled run can execute until you post a new config.
-
-<Tabs>
-<TabItem label="curl">
-```bash
-curl -X DELETE https://monvera.best/api/autopilot \
-  -H "Authorization: Bearer $MONVERA_TOKEN"
-```
-</TabItem>
-<TabItem label="fetch">
-```js
-const res = await fetch("https://monvera.best/api/autopilot", {
-  method: "DELETE",
-  headers: { Authorization: `Bearer ${token}` },
-});
-const { ok } = await res.json();
-```
-</TabItem>
-</Tabs>
-
-## Request body (POST)
-
-| Field | Type | Required | Description |
+| Field | Type | POST | Description |
 | --- | --- | --- | --- |
-| `walletId` | string | yes | Your Privy embedded-wallet id. The server signs each run's spend for this wallet. Must belong to your account. |
-| `owner` | address | yes | The embedded EOA that owns the smart account and holds the USDG. |
-| `smartAccount` | address | yes | The smart-account address that executes the sponsored transaction. |
-| `goal` | string (1 to 600 chars) | yes | The plain-language goal Vera re-allocates against each run. |
-| `amountUsd` | number (> 0, ≤ 100000) | yes | Bound 1: the USD amount invested per run. |
-| `cadence` | `"daily"` \| `"weekly"` \| `"biweekly"` \| `"monthly"` | yes | Bound 2: how often a run happens. |
-| `riskCeilingBps` | integer (0 to 10000) | no | Bound 3: the risk ceiling in basis points. Defaults to `6000`. |
-| `maxPerPeriodUsd` | number (> 0, ≤ 1000000) | no | Bound 4: the hard spend cap per period. Defaults to `amountUsd * 2`. |
+| `walletId` | string | required | Embedded-wallet id the server signs each run's spend with. Must be yours. |
+| `owner` | address | required | Embedded EOA that owns the smart account and holds the USDG. |
+| `smartAccount` | address | required | Smart account that executes the sponsored transaction. |
+| `goal` | string (1–600 chars) | required | Plain-language goal Vera re-allocates against each run. |
+| `amountUsd` | number (> 0, ≤ 100000) | required | Bound 1: USD invested per run. |
+| `cadence` | `daily` \| `weekly` \| `biweekly` \| `monthly` | required | Bound 2: how often a run happens. |
+| `riskCeilingBps` | integer (0–10000) | optional | Bound 3: assessed risk must stay at or under it. Defaults to `6000`. |
+| `maxPerPeriodUsd` | number (> 0, ≤ 1000000) | optional | Bound 4: spend cap per period; a run over it is skipped. Defaults to `amountUsd * 2`. |
 
-## Config fields (GET and POST responses)
-
-| Field | Type | Description |
-| --- | --- | --- |
-| `id` | string | Config id, `ap_<userId>`. |
-| `userId` | string | Your Privy user id. |
-| `walletId` | string | The delegated embedded-wallet id. |
-| `owner` | address | The funded embedded EOA. |
-| `smartAccount` | address | The executing smart account. |
-| `goal` | string | The saved goal. |
-| `amountUsd` | number | Bound 1: amount per run. |
-| `cadence` | string | Bound 2: run frequency. |
-| `riskCeilingBps` | number | Bound 3: risk ceiling in basis points. |
-| `maxPerPeriodUsd` | number | Bound 4: spend cap per period. |
-| `active` | boolean | Whether Autopilot is on. |
-| `createdAt` | number | Unix seconds when created. |
-| `nextRunAt` | number | Unix seconds of the next scheduled run. |
-| `lastRunAt` | number \| undefined | Unix seconds of the most recent run. |
-| `runs` | number | Count of completed runs. |
-| `spentThisPeriod` | number | USD deployed in the current period, which enforces `maxPerPeriodUsd`. |
-
-`cadenceSeconds` (POST response only) is the cadence length in seconds: `daily` 86400, `weekly` 604800, `biweekly` 1209600, `monthly` 2592000.
-
-## Errors you can hit
+The stored config echoes those fields and adds server-managed ones: `id` (`ap_<userId>`), `userId`, `active`, `runs`, Unix seconds `createdAt` / `nextRunAt` / `lastRunAt`, and `spentThisPeriod` — USD deployed this period, which enforces `maxPerPeriodUsd`.
 
 | Status | Body | When |
 | --- | --- | --- |
-| 401 | `{"error":"Please sign in to continue."}` | Missing or invalid bearer token. |
-| 451 | `{"error":"Monvera is not available in your region."}` | Request from a blocked region. See [Where Monvera is available](/start/where-its-available/). |
-| 400 | `{"error":"Invalid autopilot settings."}` | Body fails validation (bad `cadence`, non-positive `amountUsd`, malformed address, `goal` over 600 chars). |
-| 400 | `{"error":"That wallet does not belong to your account."}` | `walletId` or `owner` is not the caller's own embedded wallet. |
-| 429 | `{"error":"Too many requests. Please slow down a moment."}` | More than 20 POSTs in 60 seconds per account. Read the `Retry-After` header for the wait in seconds. |
-| 500 | `{"error":"Something went wrong. Please try again."}` | Store read or write failed. |
+| 400 | `{"error":"Invalid autopilot settings."}` | Bad `cadence`, non-positive `amountUsd`, malformed address, or `goal` over 600 chars. |
+| 400 | `{"error":"That wallet does not belong to your account."}` | `walletId` or `owner` is not your own embedded wallet. |
 
-To trigger one run now within these bounds, use [POST /api/autopilot/run](/dev/api/autopilot-run/). To read the run history, use [GET /api/autopilot/runs](/dev/api/autopilot-runs/).
+## Trigger a run
+
+`POST /api/autopilot/run` takes no body. It runs your saved config now and submits a real on-chain transaction, counting the spend against the current period rather than starting a new one.
+
+**Only one run per account can be in flight, and the route is tight-limited to 6 calls per 60 seconds.** A run can take up to two minutes; do not retry on timeout, the in-flight lock will refuse it.
+
+```bash
+curl -X POST https://monvera.best/api/autopilot/run \
+  -H "Authorization: Bearer $MONVERA_TOKEN"
+```
+
+Returns `{"ok": true, "txHash": "0xabc…"}` when the run settles on chain 4663, or `{"ok": false, "reason": "…"}` when it was skipped or failed. If the transaction reverts after signing, `reason` is `Run reverted (tx 0x…)` and carries the reverting hash.
+
+Bound checks that return `ok: false` before anything is signed:
+
+| `reason` | Meaning |
+| --- | --- |
+| `Not enough cash for this run.` | USDG balance below `amountUsd`. |
+| `Period spend cap reached.` | Would push `spentThisPeriod` past `maxPerPeriodUsd`. |
+| `Plan exceeds your risk ceiling.` | Assessed risk above `riskCeilingBps`. |
+| `Autopilot is paused.` | Config is not active. |
+| `Amount too small to split across the plan's holdings.` | A leg falls below the minimum tradable size. |
+
+| Status | Body | When |
+| --- | --- | --- |
+| 400 | `{"error":"No autopilot is configured."}` | No config; POST one first. |
+| 429 | `{"error":"Too many requests. Please slow down a moment."}` | Over 6 calls in 60 seconds, or a run is already in flight — that case returns `Retry-After: 30`. |
+
+## List runs
+
+`GET /api/autopilot/runs` returns your last 20 runs, newest first. The trail is append-only and records every run — settled, skipped, or errored — so you can reconcile what Autopilot did against what you authorized.
+
+```bash
+curl https://monvera.best/api/autopilot/runs \
+  -H "Authorization: Bearer $MONVERA_TOKEN"
+```
+
+```json
+{
+  "runs": [
+    {
+      "ranAt": 1751884800,
+      "amountUsd": 25,
+      "assessedRiskBps": 4200,
+      "status": "success",
+      "txHash": "0xabc123…",
+      "holdings": [
+        { "symbol": "AAPL", "weightPct": 30, "amountUsd": 7.5 },
+        { "symbol": "SGOV", "weightPct": 15, "amountUsd": 3.75 }
+      ]
+    },
+    { "ranAt": 1751280000, "amountUsd": 25, "status": "skipped", "reason": "Not enough cash for this run." }
+  ]
+}
+```
+
+Each record also carries `userId`. `status` is `success`, `skipped`, or `error`; `txHash` and `holdings` appear only on `success`. That `txHash` is the checkable end of the record: one transaction on chain 4663 that both bought the holdings and recorded Vera's signed risk assessment. Open it on [Blockscout](https://robinhoodchain.blockscout.com).

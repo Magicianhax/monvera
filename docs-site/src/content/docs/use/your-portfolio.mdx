@@ -1,0 +1,53 @@
+---
+title: "Review your portfolio"
+description: "Ask what you own and Vera reads it back: value, day moves, concentration, and what is settling."
+---
+
+import { Aside } from '@astrojs/starlight/components';
+import Transcript from '../../../components/Transcript.astro';
+import Turn from '../../../components/Turn.astro';
+
+Ask "what do I hold?" and Vera reads your account back to you: every holding, what it is worth right now, what moved today, and how much cash is sitting there uninvested. Ask "review my portfolio" and she goes further — how concentrated you are, which of your names move together, and how your exact mix has behaved over the last twelve months against the S&P 500. Nothing is bought or sold by either. Both are a read, not an action.
+
+<Transcript>
+  <Turn who="you">How am I doing?</Turn>
+  <Turn who="vera">$412 across six holdings, up $7.20 today. Nvidia carries most of it — $148, more than a third.</Turn>
+  <Turn who="you">Review it properly</Turn>
+  <Turn who="vera">A solid core, but three of your six are semiconductor names. That's 61% of your money riding one cycle.</Turn>
+</Transcript>
+
+## What you own, and what it's worth
+
+Your holdings show as real companies with live prices: what you hold, what each position is worth now, and what it has done today. Your uninvested cash sits alongside them, because cash is part of the picture — a portfolio that is half cash behaves very differently from one that is fully invested.
+
+"What moved today?" narrows it to the day's action across your own names rather than the whole market. "Show my activity" walks back through what you have bought and sold, and when.
+
+## What "settling" means
+
+A holding marked **settling** has already been bought. It is already yours and it is already counted in your total. It just cannot be sold for about one to fifteen minutes while the fill lands. Nothing is stuck, nothing is pending your attention, and nothing needs chasing — it clears on its own and then behaves like any other holding.
+
+## The full review
+
+"Review my portfolio" reads what you already own the same honest way Vera reads a new plan:
+
+- **A one-line verdict** — the shape of your portfolio in one sentence, including the unflattering part.
+- **How concentrated you are** — your largest position, what your top three add up to, and how many holdings you have. A high top-three number means a few names decide your outcome.
+- **Ideas that move together** — when several holdings belong to the same theme, they rise and fall together. She names each cluster and how much of your money sits in it, which is usually where people find they are less diversified than the count of holdings suggested.
+- **This mix's last twelve months** — a backtest of your exact weights against the S&P 500, with the mix's return, the benchmark's, and the worst dip along the way.
+- **What she noticed** — a few plain observations, each tied to one of the numbers above.
+
+<Aside type="caution" title="The backtest is the mix's history, not your return">
+The twelve-month line is how a portfolio with your current weights would have behaved over the past year. It is not your personal profit, and past behaviour is never a promise. See [backtests are history, not promises](/safety/backtests-are-history-not-promises/).
+</Aside>
+
+## Asking what to sell
+
+You can ask Vera directly: "what should I sell?", "am I too concentrated in chips?", "what's my worst holding?". She answers from your real positions and live prices, points at the concentration or the loss, and says why. Then she stops. Selling is a separate thing you ask for — "sell half my Nvidia" — and it still needs your confirmation.
+
+She will not tell you a holding is going to fall. She will tell you that three of your six names ride the same cycle, which is a fact about your portfolio rather than a forecast about the market. Deciding what to do with that is yours, and none of it is investment advice.
+
+## Rebalancing
+
+"Rebalance me" or "make it less tech-heavy" gets you a plan that works out which of your holdings sit furthest under where they should be and tops them up with your cash. It comes back as a normal plan — rows with reasons and risk reads — and nothing is bought until you confirm it, exactly like [any other plan](/use/your-plan/).
+
+Rebalancing proposes buys only. Vera does not sell your holdings to rebalance you, because selling is a decision with tax and timing consequences she should not be making on your behalf. If the right answer is to trim something, she will say so and leave the sell to you.

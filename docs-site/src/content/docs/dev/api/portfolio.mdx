@@ -1,23 +1,17 @@
 ---
 title: "Read an account's holdings and value"
-description: "GET /api/portfolio returns cash, positions, and total value for any account address, fully priced on the server."
+description: "Cash, positions, and total value for any address, priced server-side."
 ---
 
-import { Aside, Tabs, TabItem, Badge, LinkCard } from '@astrojs/starlight/components';
+Returns the fully valued holdings for any account address: USDG cash, every non-zero position with its live price and 1-day move, and the totals. One server-side multicall reads the balances, and prices come from the same spot source as `/api/prices`, so the response needs no client-side math.
 
-<Badge text="GET" variant="tip" /> <Badge text="Public" variant="note" /> `https://monvera.best/api/portfolio`
-
-GET the fully valued holdings for any account address: its USDG cash, each asset position with its live price and 1-day move, and the totals. One server-side multicall reads every balance and the prices come from the same spot source as `/api/prices`, so the response needs no client-side math. Public chain data, no token. Rate limited to 30 requests per 60 seconds per IP.
-
-## What it returns
-
-A cash figure, an invested figure, a total, and a `holdings` array sorted by value (largest first, unpriced last). Positions of zero are omitted. A single unreadable token is skipped rather than failing the whole response, and its `priceUsd` fields are `null` when no price is available.
+`GET /api/portfolio` · public, no token required. Base URL, rate limits, and error shapes: [conventions](/dev/conventions/).
 
 ## Parameters
 
-| Name | Type | Required | Default | Description |
-| --- | --- | --- | --- | --- |
-| `address` | address | yes | none | The account to value. A missing or invalid address returns 400. |
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `address` | address | yes | The account to value. Missing or invalid returns 400. |
 
 ## Returns
 
@@ -26,41 +20,21 @@ A cash figure, an invested figure, a total, and a `holdings` array sorted by val
 | `cashUsd` | number | USDG balance (6-decimal), as a number. |
 | `investedUsd` | number | Sum of priced holding values. |
 | `totalUsd` | number | `cashUsd + investedUsd`. |
-| `holdings` | array | Non-zero positions, largest value first. |
+| `holdings` | array | Non-zero positions, largest value first, unpriced last. |
 | `holdings[].symbol` | string | Registry symbol, for example `AAPL`. |
 | `holdings[].raw` | string | Raw token balance as a decimal string (bigint-safe). |
-| `holdings[].qty` | number | Human quantity (token decimals applied). |
-| `holdings[].priceUsd` | number \| null | Live spot price, or null when unpriced. |
-| `holdings[].valueUsd` | number \| null | `qty * priceUsd`, or null when unpriced. |
-| `holdings[].dayChangePct` | number \| null | 1-day move for the row, or null. |
-| `holdings[].spark` | number[] \| null | Intraday sparkline points, or null. |
+| `holdings[].qty` | number | Human quantity, token decimals applied. |
+| `holdings[].priceUsd` | number \| null | Live spot price, `null` when unpriced. |
+| `holdings[].valueUsd` | number \| null | `qty * priceUsd`, `null` when unpriced. |
+| `holdings[].dayChangePct` | number \| null | 1-day move for the row. |
+| `holdings[].spark` | number[] \| null | Intraday sparkline points. |
 | `asOf` | string | ISO timestamp the snapshot was built. |
 
-## Example request
-
-The canonical example account holds Apple (AAPL) and Nvidia (NVDA).
-
-<Tabs>
-<TabItem label="curl">
+## Example
 
 ```bash
 curl "https://monvera.best/api/portfolio?address=0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045"
 ```
-
-</TabItem>
-<TabItem label="fetch">
-
-```javascript
-const res = await fetch(
-  "https://monvera.best/api/portfolio?address=0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045"
-);
-const { cashUsd, investedUsd, totalUsd, holdings } = await res.json();
-```
-
-</TabItem>
-</Tabs>
-
-## Example response
 
 ```json
 {
@@ -91,13 +65,12 @@ const { cashUsd, investedUsd, totalUsd, holdings } = await res.json();
 }
 ```
 
-## Failure paths
+## Errors
 
-- A missing or invalid `address` returns 400 `{"error":"Valid ?address required."}`.
-- Over 30 requests in 60 seconds from one IP returns 429 `{"error":"Too many requests. Please slow down a moment."}` with a `Retry-After` header.
-- An account with no assets returns `cashUsd`/`investedUsd`/`totalUsd` of 0 and an empty `holdings` array.
+| Status | Body | When |
+| --- | --- | --- |
+| 400 | `{"error":"Valid ?address required."}` | `address` missing or not a valid address. |
 
-## Related
+## Notes
 
-<LinkCard title="An account's transfers" href="/dev/api/transactions/" description="Incoming and outgoing token transfers for any address." />
-<LinkCard title="An account's Monvera activity" href="/dev/api/activity/" description="AI invests recorded on-chain for any address." />
+An account holding nothing returns zeros and an empty `holdings` array, not an error. A single unreadable token is skipped rather than failing the whole response, and its `priceUsd` and `valueUsd` come back `null`.

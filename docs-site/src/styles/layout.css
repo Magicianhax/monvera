@@ -1,0 +1,133 @@
+/* Chrome: header, search, sidebar, on-this-page rail.
+   The sidebar is the main scannability lever — dense, uppercase micro-cap group
+   labels, and one green rail marking where you are. */
+
+.header {
+  backdrop-filter: blur(14px) saturate(1.6);
+  -webkit-backdrop-filter: blur(14px) saturate(1.6);
+  border-bottom: 1px solid var(--sl-color-hairline);
+}
+
+.site-title {
+  font-family: var(--font-fraunces);
+  font-weight: 600;
+  letter-spacing: -0.015em;
+}
+
+/* search reads as a field you can type in, not a button */
+site-search button {
+  width: 100%;
+  max-width: 15rem;
+  border-radius: 999px;
+  background: var(--sl-color-gray-6);
+  border: 1px solid var(--sl-color-hairline-light);
+}
+.pagefind-ui {
+  --pagefind-ui-primary: var(--sl-color-text-accent);
+  --pagefind-ui-text: var(--sl-color-gray-2);
+  --pagefind-ui-background: var(--sl-color-black);
+  --pagefind-ui-border: var(--sl-color-hairline-light);
+  --pagefind-ui-border-radius: 0.6rem;
+  --pagefind-ui-font: var(--sl-font);
+}
+
+/* ── sidebar ──────────────────────────────────────────────────────────── */
+.sidebar-content {
+  font-size: 0.8125rem;
+}
+.sidebar-content summary,
+.sidebar-content > ul > li > span {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--sl-color-gray-3);
+}
+.sidebar-content a {
+  padding: 0.28rem 0.6rem;
+  border-radius: 0.4rem;
+  line-height: 1.45;
+  border-left: 2px solid transparent;
+}
+.sidebar-content a:hover {
+  background: var(--sl-color-gray-6);
+}
+.sidebar-content a[aria-current='page'] {
+  background: var(--sl-color-accent-low);
+  border-left-color: var(--sl-color-accent);
+  color: var(--sl-color-white);
+  font-weight: 600;
+}
+.sidebar-content ul ul {
+  border-left: 1px solid var(--sl-color-hairline);
+  padding-left: 0.55rem;
+}
+
+/* auth/status badges sit quiet next to the route name */
+.sidebar-content .sl-badge {
+  font-size: 0.625rem;
+  padding: 0.05rem 0.3rem;
+  font-family: var(--sl-font-mono);
+  font-weight: 500;
+  border-radius: 0.25rem;
+}
+
+/* footer under the nav tree — where an agent (or a curious human) finds the
+   machine-readable entry points */
+.mv-sidebar-foot {
+  margin-top: 1.5rem;
+  padding-top: 0.9rem;
+  border-top: 1px solid var(--sl-color-hairline);
+  font-size: 0.75rem;
+  line-height: 1.6;
+  color: var(--sl-color-gray-3);
+}
+.mv-sidebar-foot p {
+  margin: 0 0 0.4rem;
+}
+.mv-sidebar-foot a {
+  color: var(--sl-color-gray-3);
+  font-family: var(--sl-font-mono);
+  font-size: 0.72rem;
+  text-decoration: none;
+  border-bottom: 1px solid var(--sl-color-hairline-light);
+}
+.mv-sidebar-foot a:hover {
+  color: var(--sl-color-text-accent);
+}
+.mv-sidebar-foot .note {
+  margin-top: 0.6rem;
+  font-size: 0.7rem;
+  color: var(--sl-color-gray-4);
+}
+
+/* ── on this page ─────────────────────────────────────────────────────── */
+#starlight__on-this-page + ul a {
+  font-size: 0.8125rem;
+  color: var(--sl-color-gray-3);
+  border-left: 2px solid var(--sl-color-hairline);
+  padding-left: 0.7rem;
+}
+#starlight__on-this-page + ul a[aria-current='true'] {
+  color: var(--sl-color-text-accent);
+  border-left-color: var(--sl-color-accent);
+}
+
+/* ── topic tabs (starlight-utils multiSidebar switcher) ───────────────── */
+#starlight__sidebar ul[role='tablist'] {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.1rem 0.9rem;
+  border-bottom: 1px solid var(--sl-color-hairline);
+  padding-bottom: 0.35rem;
+  margin-bottom: 0.85rem;
+}
+#starlight__sidebar ul[role='tablist'] .tab {
+  margin: 0;
+}
+#starlight__sidebar ul[role='tablist'] a[role='tab'] {
+  white-space: nowrap;
+  padding: 0.15rem 0;
+  font-size: var(--sl-text-sm);
+  font-weight: 600;
+}

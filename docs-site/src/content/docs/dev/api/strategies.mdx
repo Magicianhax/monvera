@@ -1,21 +1,19 @@
 ---
 title: "Get the open strategies and backtests"
-description: "GET /api/strategies returns Monvera's deterministic rule-based baskets with their weights and a walk-forward backtest for each, as JSON."
+description: "Deterministic rule-based baskets with their weights and a walk-forward backtest each."
 ---
 
-import { Tabs, TabItem, Aside, LinkCard } from '@astrojs/starlight/components';
+import { Aside } from '@astrojs/starlight/components';
 
 `GET /api/strategies` returns Monvera's public strategy book: rule-based baskets computed from real 12-month price data, each with its plain-language rule, its current weights, and a walk-forward backtest. No AI is in this loop, so the same data always produces the same weights and anyone can reproduce them. This is the raw JSON behind [monvera.best/strategies](https://monvera.best/strategies).
 
-- **Method and path**: `GET https://monvera.best/api/strategies`
-- **Auth**: none (public)
-- **Rate limit**: 30 requests per 60 seconds per IP
+> `GET /api/strategies` · public, no token required · 30 requests per 60 seconds per IP. Base URL, response envelope, and error shapes: [conventions](/dev/conventions/).
 
 ## Parameters
 
-This route takes no parameters.
+None.
 
-## Returns
+## Response
 
 `{ asOf, refreshedEvery, note, strategies }`.
 
@@ -39,81 +37,25 @@ Each strategy:
 
 Each `backtest`: `period` (`"6M"`), `methodology` (`"walk-forward"`), `rebalance` (`"monthly"`), `portfolio`, and `benchmark` (a `BacktestSeries` with `symbol: "SPY"`). A `BacktestSeries` carries `returnPct`, `volPct`, `maxDrawdownPct`, `sharpe`, and a downsampled `curve` normalized to start at 100.
 
-<Aside type="caution" title="Backtests are history, not promises">
-Each backtest is walk-forward: at every monthly rebalance the rule re-runs using only the data it would have had at that moment, then holds out-of-sample until the next rebalance, measured against buy-and-hold SPY over the same window. It shows what the rule did on past prices. It is not a forecast, and nothing here is investment advice. See [Backtests are history, not promises](/safety/backtests-are-history-not-promises/) and [Where it is available](/start/where-its-available/).
-</Aside>
-
-## Example request
-
-<Tabs>
-<TabItem label="curl">
+## Example
 
 ```bash
 curl "https://monvera.best/api/strategies"
 ```
 
-</TabItem>
-<TabItem label="fetch">
-
-```javascript
-const { strategies } = await fetch(
-  "https://monvera.best/api/strategies",
-).then((r) => r.json());
-
-const momentum = strategies.find((s) => s.id === "momentum-leaders");
-console.log(momentum.allocations);
-```
-
-</TabItem>
-</Tabs>
-
-## Example response
+The live response carries all three strategies; one is shown here. Weights and backtest figures are illustrative of the shape — call the route for the current book.
 
 ```json
 {
   "asOf": "2026-07-08T14:03:11.204Z",
   "refreshedEvery": "6h",
-  "note": "Deterministic rules over real daily closes (real underlying tickers). Backtests are WALK-FORWARD: each month the rule re-runs using only the data it would have had at that moment, then holds out-of-sample, monthly rebalance, vs buy-and-hold SPY over the same window. History, not a promise: markets change.",
+  "note": "Deterministic rules over real daily closes. Backtests are WALK-FORWARD, monthly rebalance, vs buy-and-hold SPY over the same window. History, not a promise: markets change.",
   "strategies": [
-    {
-      "id": "steady-foundation",
-      "name": "Steady Foundation",
-      "tagline": "The calm core: every fund, sized by how steady it actually is.",
-      "method": "Universe: all tokenized ETFs with 12 months of public history. Weights: inverse to each fund's annualized daily volatility, capped at 30% per fund (excess redistributes). Rebalanced monthly. Refreshed from market data every 6 hours.",
-      "allocations": [
-        { "symbol": "SGOV", "weightPct": 30 },
-        { "symbol": "SPY", "weightPct": 22 },
-        { "symbol": "XLK", "weightPct": 14 },
-        { "symbol": "SPMO", "weightPct": 12 },
-        { "symbol": "QQQ", "weightPct": 11 },
-        { "symbol": "SOXX", "weightPct": 11 }
-      ],
-      "backtest": {
-        "period": "6M",
-        "methodology": "walk-forward",
-        "rebalance": "monthly",
-        "portfolio": {
-          "returnPct": 6.42,
-          "volPct": 9.18,
-          "maxDrawdownPct": 4.71,
-          "sharpe": 1.32,
-          "curve": [100, 101.2, 102.8, 103.1, 104.9, 106.42]
-        },
-        "benchmark": {
-          "symbol": "SPY",
-          "returnPct": 5.11,
-          "volPct": 12.44,
-          "maxDrawdownPct": 6.83,
-          "sharpe": 0.86,
-          "curve": [100, 100.8, 102.1, 101.4, 103.9, 105.11]
-        }
-      }
-    },
     {
       "id": "momentum-leaders",
       "name": "Momentum Leaders",
       "tagline": "The 8 strongest uptrends, sized so no single name can sink it.",
-      "method": "Universe: all tokenized stocks with 12 months of public history. Filter: 1-year AND 3-month returns both positive. Rank: 0.7 x 1-year return + 0.3 x annualized 3-month return, take the top 8. Weights: inverse volatility, capped at 20% per stock. Rebalanced monthly. Refreshed every 6 hours.",
+      "method": "Universe: all tokenized stocks with 12 months of public history. Filter: 1-year AND 3-month returns both positive. Rank: 0.7 x 1-year return + 0.3 x annualized 3-month return, take the top 8. Weights: inverse volatility, capped at 20% per stock. Rebalanced monthly.",
       "allocations": [
         { "symbol": "NVDA", "weightPct": 20 },
         { "symbol": "AAPL", "weightPct": 14 },
@@ -144,51 +86,11 @@ console.log(momentum.allocations);
           "curve": [100, 100.8, 102.1, 101.4, 103.9, 105.11]
         }
       }
-    },
-    {
-      "id": "balanced-growth",
-      "name": "Balanced Growth",
-      "tagline": "A market core with a momentum engine bolted on.",
-      "method": "55% core: all index/sector ETFs (treasuries excluded), inverse-vol weighted, 40% cap. 45% growth: the Momentum Leaders sleeve. Blended, then rounded to whole percents. Rebalanced monthly. Refreshed every 6 hours.",
-      "allocations": [
-        { "symbol": "SPY", "weightPct": 18 },
-        { "symbol": "NVDA", "weightPct": 12 },
-        { "symbol": "QQQ", "weightPct": 11 },
-        { "symbol": "XLK", "weightPct": 10 },
-        { "symbol": "AAPL", "weightPct": 9 },
-        { "symbol": "MSFT", "weightPct": 8 },
-        { "symbol": "SOXX", "weightPct": 8 },
-        { "symbol": "AVGO", "weightPct": 8 },
-        { "symbol": "META", "weightPct": 8 },
-        { "symbol": "GOOGL", "weightPct": 8 }
-      ],
-      "backtest": {
-        "period": "6M",
-        "methodology": "walk-forward",
-        "rebalance": "monthly",
-        "portfolio": {
-          "returnPct": 8.93,
-          "volPct": 14.02,
-          "maxDrawdownPct": 6.51,
-          "sharpe": 1.11,
-          "curve": [100, 101.6, 103.7, 102.9, 106.4, 108.93]
-        },
-        "benchmark": {
-          "symbol": "SPY",
-          "returnPct": 5.11,
-          "volPct": 12.44,
-          "maxDrawdownPct": 6.83,
-          "sharpe": 0.86,
-          "curve": [100, 100.8, 102.1, 101.4, 103.9, 105.11]
-        }
-      }
     }
   ]
 }
 ```
 
-<Aside type="note" title="Example figures">
-The weights and backtest numbers above are illustrative of the response shape. The live values are rebuilt from real market data every six hours, so call the route to read the current book.
+<Aside type="caution" title="Backtests are history, not promises">
+Each backtest is walk-forward: at every monthly rebalance the rule re-runs using only the data it would have had at that moment, then holds out-of-sample until the next rebalance, measured against buy-and-hold SPY over the same window. It shows what the rule did on past prices. It is not a forecast, and nothing here is investment advice. See [Backtests are history, not promises](/safety/backtests-are-history-not-promises/) and [Before you invest](/start/before-you-invest/).
 </Aside>
-
-<LinkCard title="Rank the whole universe" href="/dev/api/screener/" description="The per-asset 12-month figures these strategy rules are built from." />

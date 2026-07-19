@@ -38,8 +38,10 @@ async function docsIndex(): Promise<string | null> {
     });
     if (!res.ok) return docsCache?.text ?? null;
     const raw = await res.text();
-    // Keep it prompt-sized: the index is small; hard-cap defensively.
-    const text = raw.length > 16_000 ? raw.slice(0, 16_000) : raw;
+    // Keep it prompt-sized. Cut on a line boundary so a clipped index can never
+    // end mid-URL and hand her a half-written path to cite. (The docs build
+    // fails above 14KB, so this is a belt-and-braces guard.)
+    const text = raw.length > 16_000 ? raw.slice(0, raw.lastIndexOf("\n", 16_000)) : raw;
     docsCache = { text, at: Date.now() };
     return text;
   } catch {
@@ -65,6 +67,14 @@ export async function veraKnowledgeBlock(): Promise<string> {
     "",
     "FAQ (answer in this same voice):",
     ...FAQ.map((f) => `Q: ${f.q}\nA: ${f.a}`),
-    ...(docs ? ["", "DOCS INDEX (docs.monvera.best — point users at relevant pages):", docs] : []),
+    ...(docs
+      ? [
+          "",
+          "DOCS INDEX (docs.monvera.best — point users at relevant pages).",
+          "Treat this as a closed list: cite only URLs that appear below, never invent a path.",
+          "If nothing fits, say so and point at docs.monvera.best.",
+          docs,
+        ]
+      : []),
   ].join("\n");
 }
