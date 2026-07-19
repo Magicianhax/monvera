@@ -5,8 +5,11 @@ import type { LanguageModel } from "ai";
 function mockModel(allocations: Array<{ symbol: string; weightPct: number; reason: string }>): LanguageModel {
   return new MockLanguageModelV3({
     doGenerate: async () => ({
-      finishReason: { unified: "stop" as const },
-      usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 },
+      finishReason: { unified: "stop" as const, raw: "stop" },
+      usage: {
+        inputTokens: { total: 1, noCache: undefined, cacheRead: undefined, cacheWrite: undefined },
+        outputTokens: { total: 1, text: undefined, reasoning: undefined },
+      },
       content: [
         {
           type: "text" as const,
