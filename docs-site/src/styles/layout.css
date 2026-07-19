@@ -2,11 +2,22 @@
    The sidebar is the main scannability lever — dense, uppercase micro-cap group
    labels, and one green rail marking where you are. */
 
-.header {
+/* The fixed bar is two stacked rows: the title row, then the category strip.
+   Starlight's inner .header is height:100%, which would eat the whole bar and
+   push the strip out over the page content — so the outer becomes a column and
+   the inner row sizes to its content. */
+header.header {
+  display: flex;
+  flex-direction: column;
+  padding-bottom: 0;
   backdrop-filter: blur(14px) saturate(1.6);
   -webkit-backdrop-filter: blur(14px) saturate(1.6);
-  /* the strip below carries the rule now */
+  /* the strip carries the bottom rule now */
   border-bottom: 0;
+}
+header.header > .header {
+  height: auto;
+  flex: none;
 }
 
 /* ── category strip ───────────────────────────────────────────────────── */
@@ -62,10 +73,19 @@
   }
 }
 
+/* Plain sans, plain ink. Starlight ships the title in the accent colour, which
+   reads as decoration in a header whose job is orientation. */
 .site-title {
-  font-family: var(--font-fraunces);
   font-weight: 600;
-  letter-spacing: -0.015em;
+  font-size: 1rem;
+  letter-spacing: -0.01em;
+  color: var(--sl-color-white);
+}
+/* Starlight sizes the mark as (nav-height - padding); our header is two rows
+   tall, which would scale the logo with it. Pin it instead. */
+.site-title img {
+  height: 1.75rem;
+  width: auto;
 }
 
 /* search reads as a field you can type in, not a button */

@@ -1,8 +1,27 @@
 ---
-// Default sidebar plus a footer pointing at the machine-readable entry points.
-// Vera reads /llms.txt on a schedule; third-party agents connect to /mcp. Both
-// are part of the product, so both are documented where people look.
+// Sidebar scoped to the category you are in, plus the agent entry points.
+//
+// The header strip picks a category; the sidebar shows only that category's
+// pages, so the left rail is never a wall of every section at once. The group
+// header is dropped because the strip already names where you are.
+//
+// This does the filtering directly rather than via starlight-utils' hidden
+// multiSidebar mode: that mode renders one div per group and mutates shared
+// route state once per group, so every div ends up containing the LAST group's
+// links. One assignment here, no race.
 import Default from '@astrojs/starlight/components/Sidebar.astro';
+import { categoryFor } from '../lib/categories';
+
+const route = Astro.locals.starlightRoute;
+const category = categoryFor(Astro.url.pathname);
+const group = category
+  ? route.sidebar.find((entry) => entry.type === 'group' && entry.label === category.label)
+  : undefined;
+
+// Reference (the glossary) has no category of its own — leave it whole.
+if (group && group.type === 'group') {
+  route.sidebar = group.entries;
+}
 ---
 
 <Default><slot /></Default>

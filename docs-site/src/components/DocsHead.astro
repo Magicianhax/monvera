@@ -16,7 +16,6 @@ const ogImage = new URL(`/og/${key}.png`, Astro.site ?? Astro.url.origin).href;
 <Default><slot /></Default>
 
 <Font cssVariable="--font-hanken" preload />
-<Font cssVariable="--font-fraunces" preload />
 <Font cssVariable="--font-jetbrains" />
 
 <meta property="og:image" content={ogImage} />

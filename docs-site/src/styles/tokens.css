@@ -10,26 +10,28 @@
   --sl-font: var(--font-hanken);
   --sl-font-mono: var(--font-jetbrains);
 
-  --sl-color-white: hsl(150 30% 98%);
-  --sl-color-gray-1: hsl(150 20% 93%);
-  --sl-color-gray-2: hsl(150 10% 79%); /* body text */
-  --sl-color-gray-3: hsl(152 8% 57%); /* muted, captions, table headers */
-  --sl-color-gray-4: hsl(156 8% 35%);
-  --sl-color-gray-5: hsl(158 12% 19%); /* card borders */
-  --sl-color-gray-6: hsl(160 16% 11%); /* card + raised surface */
-  --sl-color-black: hsl(162 22% 6%); /* the room itself */
+  /* Neutral dark. The green is an accent, not the room — a tinted canvas makes
+     long documentation pages tiring and reads as a theme rather than a page. */
+  --sl-color-white: hsl(150 8% 98%);
+  --sl-color-gray-1: hsl(150 6% 93%);
+  --sl-color-gray-2: hsl(150 4% 80%); /* body text */
+  --sl-color-gray-3: hsl(150 4% 59%); /* muted, captions, table headers */
+  --sl-color-gray-4: hsl(150 3% 37%);
+  --sl-color-gray-5: hsl(150 4% 21%); /* card borders */
+  --sl-color-gray-6: hsl(150 5% 12%); /* card + raised surface */
+  --sl-color-black: hsl(150 6% 7%); /* the page itself */
 
-  --sl-color-accent-low: hsl(160 34% 14%);
+  --sl-color-accent-low: hsl(158 26% 15%);
   --sl-color-accent: #2f9d67;
   --sl-color-accent-high: hsl(155 55% 82%);
   --sl-color-text-accent: #43ba85;
 
-  --sl-color-bg-inline-code: hsl(160 18% 13%);
-  --sl-color-hairline-light: hsl(158 14% 22%);
-  --sl-color-hairline: hsl(158 14% 16%);
-  --sl-color-hairline-shade: hsl(160 20% 10%);
+  --sl-color-bg-inline-code: hsl(150 5% 14%);
+  --sl-color-hairline-light: hsl(150 4% 23%);
+  --sl-color-hairline: hsl(150 4% 17%);
+  --sl-color-hairline-shade: hsl(150 5% 11%);
   --sl-color-bg-sidebar: var(--sl-color-black);
-  --sl-color-bg-nav: hsl(162 22% 6% / 0.72);
+  --sl-color-bg-nav: hsl(150 6% 7% / 0.78);
 }
 
 :root[data-theme='light'] {
@@ -62,8 +64,8 @@
   --sl-content-width: 48rem;
   --sl-sidebar-width: 17.25rem;
   --sl-sidebar-pad-x: 1.15rem;
-  /* two rows: the title bar plus the category strip (see Header.astro) */
-  --sl-nav-height: 6.1rem;
+  /* two rows: the title row plus the category strip (see Header.astro) */
+  --sl-nav-height: 6.25rem;
   --sl-line-height: 1.7;
   --sl-line-height-headings: 1.22;
 

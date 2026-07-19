@@ -3,7 +3,6 @@ import { defineConfig, fontProviders } from 'astro/config';
 import starlight from '@astrojs/starlight';
 import sitemap from '@astrojs/sitemap';
 import starlightLlmsTxt from 'starlight-llms-txt';
-import starlightUtils from '@lorenzo_lewis/starlight-utils';
 
 const SITE = 'https://docs.monvera.best';
 const TAGLINE =
@@ -14,8 +13,9 @@ const DETAILS =
 // https://astro.build/config
 export default defineConfig({
   site: SITE,
-  // The app's typefaces, self-hosted: Fraunces for display, Hanken Grotesk for
-  // UI and body, JetBrains Mono for anything that is a value.
+  // Two typefaces, self-hosted: Hanken Grotesk for everything you read, and
+  // JetBrains Mono for anything that is a value. Documentation is meant to be
+  // read straight — no display serif.
   fonts: [
     {
       name: 'Hanken Grotesk',
@@ -25,15 +25,6 @@ export default defineConfig({
       styles: ['normal'],
       subsets: ['latin'],
       fallbacks: ['system-ui', 'sans-serif'],
-    },
-    {
-      name: 'Fraunces',
-      cssVariable: '--font-fraunces',
-      provider: fontProviders.fontsource(),
-      weights: [500, 600],
-      styles: ['normal'],
-      subsets: ['latin'],
-      fallbacks: ['Georgia', 'serif'],
     },
     {
       name: 'JetBrains Mono',
@@ -92,10 +83,9 @@ export default defineConfig({
       // no "edit this page" link: the docs repo is private
       lastUpdated: true,
       plugins: [
-        // Scope the sidebar to one top-level group at a time. The switcher is
-        // hidden because src/components/Header.astro renders that choice as the
-        // category strip in the header instead.
-        starlightUtils({ multiSidebar: { switcherStyle: 'hidden' } }),
+        // (sidebar scoping is done directly in src/components/Sidebar.astro —
+        // starlight-utils' hidden multiSidebar mode renders every group with
+        // the last group's links)
         // Bulk text for agents that need whole pages. The INDEX Vera reads is
         // not this plugin's llms.txt — it cannot list pages (it never reads the
         // content collection), so src/pages/llms.txt.ts owns that route and

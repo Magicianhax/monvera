@@ -7,9 +7,8 @@
   position: relative;
 }
 .hero h1 {
-  font-family: var(--font-fraunces);
-  font-weight: 600;
-  font-size: clamp(2.2rem, 1.4rem + 3.2vw, 3.6rem);
+  font-weight: 650;
+  font-size: clamp(2.1rem, 1.4rem + 2.8vw, 3.1rem);
   letter-spacing: -0.028em;
   text-wrap: balance;
 }
@@ -27,19 +26,16 @@
   border-radius: 999px;
   font-weight: 600;
 }
+/* A flat panel, not a wash. A gradient behind the first thing you read is
+   decoration competing with the words. */
 .hero::before {
   content: '';
   position: absolute;
   inset: 0 -2rem;
   z-index: -1;
-  border-radius: 1.5rem;
-  background: radial-gradient(
-    80% 120% at 70% 0%,
-    color-mix(in srgb, var(--sl-color-accent) 14%, transparent),
-    transparent 70%
-  );
+  border-radius: 1rem;
+  background: var(--sl-color-gray-6);
   border: 1px solid var(--sl-color-hairline);
-  backdrop-filter: blur(20px);
 }
 
 /* the fact rail: the six things worth knowing before you read anything */
