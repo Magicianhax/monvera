@@ -104,6 +104,7 @@ export default defineConfig({
             'dev/conventions',
             'dev/errors',
             'dev/verify-vera',
+            'dev/vera-on-okx-ai',
             'dev/network-and-addresses',
           ],
         },
