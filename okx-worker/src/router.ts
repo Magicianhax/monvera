@@ -23,6 +23,7 @@ export async function route(request: Request, env: Env, ctx: ExecutionContext): 
         "AI research and allocation plans over real tokenized stocks (xStocks on Solana). Pay per call in USDT0 on X Layer. Non-custodial: your own wallet executes every trade.",
       universe: UNIVERSE.length,
       services: [
+        { path: "GET /v1/universe", priceUsd: 0, what: "Full tradable universe: symbol, name, underlying, Solana mint" },
         { path: "GET /v1/quote/:symbol", priceUsd: 0, what: "Live quote + liquidity snapshot for one xStock" },
         { path: "POST /v1/plan", priceUsd: PRICES.plan, what: "Goal + budget + risk -> weighted allocation with rationale and 1Y backtest", body: { goal: "string", amountUsd: "number", riskTolerance: "conservative|balanced|aggressive (optional)" } },
         { path: "POST /v1/research", priceUsd: PRICES.research, what: "Research note on one tokenized stock", body: { symbol: "string" } },
@@ -34,8 +35,34 @@ export async function route(request: Request, env: Env, ctx: ExecutionContext): 
         { path: "POST /v1/compare", priceUsd: PRICES.compare, what: "Head-to-head note on two stocks", body: { symbolA: "string", symbolB: "string", goal: "string (optional)" } },
         { path: "POST /v1/rebalance", priceUsd: PRICES.rebalance, what: "Holdings + target -> minimal diff legs", body: { holdings: [{ symbol: "string", usdValue: "number" }], target: [{ symbol: "string", weightPct: "number" }], cashUsd: "number (optional)" } },
       ],
+      payment: {
+        protocol: "x402 v2",
+        how: "Call a paid endpoint without payment and it returns HTTP 402 with the full challenge (base64 JSON) in the PAYMENT-REQUIRED response header. Sign the EIP-3009 authorization for the accepted entry, retry the same request with the PAYMENT-SIGNATURE header, and the result is returned in that response.",
+        network: "eip155:196 (X Layer)",
+        assets: ["USDT0 0x779ded0c9e1022225f8e0630b35a9b54be713736 (6 decimals)"],
+        payTo: env.PAY_TO_ADDRESS,
+        scheme: "exact",
+        gasless: "EIP-3009 transfer-with-authorization; the buyer pays no gas.",
+        okxTooling: "onchainos: `payment quote <url> --method POST` then `payment pay --payment-id <id>` handles this automatically.",
+      },
+      agent: {
+        id: "6711",
+        name: "Vera by Monvera",
+        marketplace: "okx.ai",
+        trackRecordContract: "0xd97cd1a25484252bf234ab384c3818b05e6594e0 (X Layer)",
+      },
+      docs: "https://docs.monvera.best/dev/vera-on-okx-ai/",
       trust:
-        "Every paid plan is committed on-chain (X Layer) with a signature binding the payer, spend and legs. Track record is publicly auditable.",
+        "Every paid plan is committed on-chain (X Layer) with a signature binding the payer, spend and legs. Track record is publicly auditable at the contract above.",
+    });
+  }
+
+  if (request.method === "GET" && p === "/v1/universe") {
+    return json({
+      count: UNIVERSE.length,
+      note: "Every listed name is verified executable against the OKX DEX aggregator on Solana (names that quote but cannot execute are excluded).",
+      baskets: Object.keys(BASKETS),
+      assets: UNIVERSE,
     });
   }
 
