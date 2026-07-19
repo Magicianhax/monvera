@@ -41,6 +41,14 @@ export async function route(request: Request, env: Env, ctx: ExecutionContext): 
     return handleQuote(symbol, env, ctx);
   }
 
+  if (request.method === "POST" && p === "/v1/quote") {
+    // Free body-form variant (ASP listings need a concrete parameterless URL).
+    const body = (await request.json().catch(() => null)) as { symbol?: unknown } | null;
+    if (typeof body?.symbol !== "string") return errorJson(400, "Body must be { symbol: string }.");
+    const { handleQuote } = await import("./handlers/quote");
+    return handleQuote(body.symbol, env, ctx);
+  }
+
   // ── paid routes (the x402 route table decides price; unknown paths fall out) ─
   const basketMatch = /^\/v1\/basket\/([a-z-]+)$/.exec(p);
   if (basketMatch && request.method === "POST" && !(basketMatch[1] in BASKETS)) {
