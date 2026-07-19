@@ -10,4 +10,6 @@ export interface Env {
   RECORD_COMMITTER_PRIVATE_KEY: string;
   PAY_TO_ADDRESS: string;
   VERA_RECORD_V2_ADDRESS?: string;
+  /** X Layer builder code (ERC-8021) — suffixes record() calldata when set. */
+  BUILDER_CODE?: string;
 }

@@ -4,12 +4,14 @@
 // worker runs before the contract is deployed.
 import {
   createWalletClient,
+  encodeFunctionData,
   http,
   keccak256,
   toBytes,
   defineChain,
   type Hex,
 } from "viem";
+import { Attribution } from "ox/erc8021";
 import { privateKeyToAccount } from "viem/accounts";
 import type { Allocation } from "./allocation-schema";
 import type { Env } from "./env";
@@ -139,24 +141,30 @@ export async function commitRecord(
   const committer = privateKeyToAccount(env.RECORD_COMMITTER_PRIVATE_KEY as Hex);
   const wallet = createWalletClient({ account: committer, chain: xlayerChain, transport: http() });
 
+  // ERC-8021 builder-code suffix (X Layer attribution) — the EVM ignores
+  // trailing calldata, so record() executes identically with or without it.
+  let data = encodeFunctionData({
+    abi: VERA_RECORD_V2_ABI,
+    functionName: "record",
+    args: [
+      message.planId,
+      message.recHash,
+      message.assessedRisk,
+      message.maxRisk,
+      message.expiry,
+      message.payer,
+      message.usdSpent,
+      message.legCount,
+      signature,
+    ],
+  });
+  if (env.BUILDER_CODE) {
+    data = (data + Attribution.toDataSuffix({ codes: [env.BUILDER_CODE] }).slice(2)) as Hex;
+  }
+
   ctx.waitUntil(
     wallet
-      .writeContract({
-        address: contract,
-        abi: VERA_RECORD_V2_ABI,
-        functionName: "record",
-        args: [
-          message.planId,
-          message.recHash,
-          message.assessedRisk,
-          message.maxRisk,
-          message.expiry,
-          message.payer,
-          message.usdSpent,
-          message.legCount,
-          signature,
-        ],
-      })
+      .sendTransaction({ to: contract, data })
       .then((hash) => console.log("record committed", message.planId, hash))
       .catch((err) => console.error("record commit failed", message.planId, err))
   );
