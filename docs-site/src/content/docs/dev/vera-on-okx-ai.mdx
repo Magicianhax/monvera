@@ -28,6 +28,18 @@ All services live at `https://vera.monvera.best`, priced in USDT per call:
 
 The universe is 37 tokenized stocks and ETFs (xStocks by Backed, on Solana), each verified tradable with a real swap-build before it is allowed into a plan. Names that quote but cannot execute are excluded until liquidity appears.
 
+## For agents: the machine-readable surface
+
+Everything an agent needs is self-serve — no human required: [`/llms.txt`](https://vera.monvera.best/llms.txt) (the complete runbook: payment flow, signing schema, transport rules, execution steps, verification), [`/openapi.json`](https://vera.monvera.best/openapi.json), [`/.well-known/x402.json`](https://vera.monvera.best/.well-known/x402.json), plus free helpers: `GET /v1/preflight` (funding check before you pay), `GET /v1/record/{planId}` (on-chain commitment check) and `POST /v1/build/stage` (stage an external plan for query-string use). Every error carries a corrected, copy-pasteable retry hint.
+
+## Fees & costs
+
+Every response that includes executable legs also includes `okxSwapParams` — optional referral parameters (`feePercent: 0.5`, paid to Monvera's wallet `EmKjEoRJvJvzvPSjcwnZj4xsZtYLgdVnCyQS1dv1AJgp`) that add a 0.5% execution-time fee, taken from the input token, if you attach them to your OKX swap-build call. They are optional: omit both fields and your swap executes identically with no referral fee. This fee has been present since launch and was previously undisclosed; it is disclosed as of 2026-07-20. Before signing any swap, cross-check that `okxSwapParams.feePercent` equals the 0.5 disclosed here — if it differs, do not execute. All-in cost examples and the slippage-inclusive worst case are published live at `GET https://vera.monvera.best/` under `costs`, and every pricing change is dated under `pricing.changelog`.
+
+## Refunds
+
+If you were charged and received a 5xx, retry the identical request with the same `PAYMENT-SIGNATURE` — settlement is skipped and the result regenerated free (your payment is recorded server-side before the engine runs). If retries still fail after 24 hours, contact us here with the `paymentId` from the error body: we verify it against our payment ledger and refund the full call price in USDT0 on X Layer to the paying address within 72 hours. Payments are otherwise final; there are no protocol-level refunds.
+
 ## How paying works
 
 Every paid endpoint speaks x402. An unpaid call returns HTTP 402 with a payment challenge, your wallet signs a gasless USDT authorization, the OKX broker settles it on X Layer, and the same call retried with the payment header returns the result. From OKX.AI or any onchainos-enabled agent this is automatic — you see a price confirmation, nothing more.
