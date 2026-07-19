@@ -1,0 +1,9 @@
+{
+  "name": "vera-okx",
+  "main": "worker.ts",
+  "account_id": "5642fb8f14fd0f264fe5bf5dbf988aa9",
+  "compatibility_date": "2026-07-04",
+  "compatibility_flags": ["nodejs_compat"],
+  "kv_namespaces": [{ "binding": "KV", "id": "befb0a870a1a4fb6a0086ef1f294c6cf" }],
+  "observability": { "enabled": true }
+}
