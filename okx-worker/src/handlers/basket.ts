@@ -1,16 +1,15 @@
 import { z } from "zod";
 import type { Env } from "../env";
-import { json, errorJson } from "../respond";
+import { json, errorJson, requestInput, DISCLAIMER, PREREQUISITES, BASE_URL } from "../respond";
 import { BASKETS, resolveBasket, type BasketId } from "../baskets";
-import { commitRecord } from "../record";
+import { commitRecord, notRecorded } from "../record";
 import { SOL_MIN_LEG_USD } from "../legMath";
-import { DISCLAIMER } from "./plan";
+import { buildLegs, referralDisclosure, EXECUTION_BLOCK, OKX_SWAP_PARAMS } from "../legs";
+import { PRICES } from "../x402";
 
 const RequestSchema = z.object({
   // coerce: A2MCP callers (e.g. the onchainos payment CLI) send params as strings
-  amountUsd: z.coerce.number().positive().max(1_000_000),
-  // Body-level basket id, used by the path-less "POST /v1/basket" form
-  // (ASP listings need a concrete endpoint URL without path parameters).
+  amountUsd: z.coerce.number().min(1).max(1_000_000),
   basket: z.string().optional(),
 });
 
@@ -21,10 +20,7 @@ export async function handleBasket(
   idFromPath: string,
   payer: string
 ): Promise<Response> {
-  // A2MCP callers vary: params may arrive as JSON body or as query string.
-  const query = Object.fromEntries(new URL(request.url).searchParams);
-  const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
-  const parsed = RequestSchema.safeParse({ ...query, ...(body ?? {}) });
+  const parsed = RequestSchema.safeParse(await requestInput(request));
   if (!parsed.success) {
     return errorJson(400, "Provide { amountUsd: number, basket?: string } (body or query).");
   }
@@ -36,16 +32,38 @@ export async function handleBasket(
     return errorJson(400, `Minimum amount is $${SOL_MIN_LEG_USD}.`);
   }
   const plan = await resolveBasket(id as BasketId, parsed.data.amountUsd);
-  const record = await commitRecord(env, ctx, plan, payer, parsed.data.amountUsd).catch(() => undefined);
-  const { buildLegs, OKX_SWAP_PARAMS } = await import("../legs");
+  const record = (await commitRecord(env, ctx, plan, payer, parsed.data.amountUsd).catch(() => undefined)) ??
+    notRecorded("record contract not configured");
+
+  // Synchronous plan storage: /v1/build?planId=... must work immediately.
+  if (record.planId) {
+    await env.KV.put(
+      `plan:${record.planId}`,
+      JSON.stringify({ v: 1, source: "basket", plan, payer, createdAt: Date.now() }),
+      { expirationTtl: 30 * 24 * 60 * 60 }
+    ).catch(() => undefined);
+  }
+
   return json({
     basket: BASKETS[id as BasketId],
     plan,
-    // Executable legs included at no extra cost — one purchase, one product.
     legs: buildLegs(plan.allocations, parsed.data.amountUsd),
-    execution: "sequential — quote, approve and execute each leg in order",
+    execution: EXECUTION_BLOCK,
     okxSwapParams: OKX_SWAP_PARAMS,
+    costs: referralDisclosure(PRICES.basket),
+    prerequisites: PREREQUISITES,
     record,
+    next: record.planId
+      ? [
+          {
+            what: "Re-size this basket into fresh legs without re-paying",
+            method: "POST",
+            url: `${BASE_URL}/v1/build?planId=${record.planId}&amountUsd=<newUsd>`,
+            priceUsd: PRICES.build,
+            note: "If called within ~60 s of purchase, storage propagation may 404 briefly — retry per retryAfterSeconds.",
+          },
+        ]
+      : [],
     disclaimer: DISCLAIMER,
   });
 }

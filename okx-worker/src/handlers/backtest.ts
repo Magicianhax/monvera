@@ -1,21 +1,23 @@
 // Paid: 1-year backtest of any weighted basket vs SPY.
 import { z } from "zod";
-import { json, errorJson, requestInput } from "../respond";
+import { json, errorJson, requestInput, DISCLAIMER, BACKTEST_DISCLAIMER } from "../respond";
 import { backtestBasket } from "../quant";
 import { assetBySymbol } from "../universe";
-import { DISCLAIMER } from "./plan";
+import { normalizeForRoute } from "../precheck";
+import { notRecorded } from "../record";
 
 const RequestSchema = z.object({
   allocations: z
-    .array(z.object({ symbol: z.string().min(1).max(12), weightPct: z.number().positive().max(100) }))
+    .array(z.object({ symbol: z.string().min(1).max(12), weightPct: z.coerce.number().positive().max(100) }))
     .min(1)
     .max(30),
 });
 
 export async function handleBacktest(request: Request): Promise<Response> {
-  const parsed = RequestSchema.safeParse(await requestInput(request));
+  const input = normalizeForRoute("/v1/backtest", await requestInput(request));
+  const parsed = RequestSchema.safeParse(input);
   if (!parsed.success) {
-    return errorJson(400, "Body must be { allocations: [{ symbol, weightPct }] } (1-30 legs).");
+    return errorJson(400, "Provide symbols+weights (CSV query params) or JSON { allocations: [{ symbol, weightPct }] } (1-30 legs).");
   }
   const unknown = parsed.data.allocations.filter((a) => assetBySymbol(a.symbol) === undefined);
   if (unknown.length > 0) {
@@ -32,6 +34,7 @@ export async function handleBacktest(request: Request): Promise<Response> {
   }
   return json({
     backtest: result,
-    disclaimer: `Backtests are history, not promises. ${DISCLAIMER}`,
+    record: notRecorded("backtests are not committed on-chain by design"),
+    disclaimer: `${BACKTEST_DISCLAIMER} ${DISCLAIMER}`,
   });
 }

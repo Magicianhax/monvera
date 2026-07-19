@@ -5,7 +5,11 @@ import { z } from "zod";
 import { json, errorJson, requestInput } from "../respond";
 import { SOL_MIN_LEG_USD } from "../legMath";
 import { assetBySymbol, USDC_SOL_MINT } from "../universe";
-import { DISCLAIMER } from "./plan";
+import { DISCLAIMER } from "../respond";
+import { normalizeForRoute } from "../precheck";
+import { notRecorded } from "../record";
+import { OKX_SWAP_PARAMS, referralDisclosure, EXECUTION_BLOCK } from "../legs";
+import { PRICES } from "../x402";
 
 const RequestSchema = z.object({
   holdings: z
@@ -22,11 +26,12 @@ const LEG_NOTE =
   "Quote this leg via the OKX DEX aggregator at execution time, get your user's approval, execute, then move to the next leg.";
 
 export async function handleRebalance(request: Request): Promise<Response> {
-  const parsed = RequestSchema.safeParse(await requestInput(request));
+  const input = normalizeForRoute("/v1/rebalance", await requestInput(request));
+  const parsed = RequestSchema.safeParse(input);
   if (!parsed.success) {
     return errorJson(
       400,
-      "Body must be { holdings: [{ symbol, usdValue }], target: [{ symbol, weightPct }], cashUsd?: number }."
+      "Provide holdings (CSV of SYMBOL:usd) and target (CSV of SYMBOL:pct) — query string or JSON body."
     );
   }
   const { holdings, target, cashUsd = 0 } = parsed.data;
@@ -101,7 +106,10 @@ export async function handleRebalance(request: Request): Promise<Response> {
     totalUsd: Math.round(totalUsd * 100) / 100,
     legs,
     skippedBelowMinimum: skipped,
-    execution: "sequential — sells first, then buys",
+    execution: { ...EXECUTION_BLOCK, mode: "sequential — sells first (they free the USDC), then buys" },
+    okxSwapParams: OKX_SWAP_PARAMS,
+    costs: referralDisclosure(PRICES.rebalance),
+    record: notRecorded("rebalances are not committed on-chain by design"),
     disclaimer: DISCLAIMER,
   });
 }

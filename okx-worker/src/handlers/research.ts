@@ -5,7 +5,8 @@ import { json, errorJson, requestInput } from "../respond";
 import { assetBySymbol } from "../universe";
 import { resolveAllocationModel } from "../aiModel";
 import { universeStatsBlock } from "../quant";
-import { DISCLAIMER } from "./plan";
+import { DISCLAIMER } from "../respond";
+import { notRecorded } from "../record";
 
 const RequestSchema = z.object({ symbol: z.string().min(1).max(12) });
 
@@ -29,7 +30,13 @@ export async function handleResearch(request: Request, env: Env): Promise<Respon
       maxRetries: 1,
       abortSignal: AbortSignal.timeout(28_000),
     });
-    return json({ symbol: asset.symbol, underlying: asset.underlying, note: text, disclaimer: DISCLAIMER });
+    return json({
+      symbol: asset.symbol,
+      underlying: asset.underlying,
+      note: text,
+      record: notRecorded("research notes are not committed on-chain by design"),
+      disclaimer: DISCLAIMER,
+    });
   } catch (err) {
     console.error("research failed", err);
     return errorJson(502, "Research generation failed. Try again.");

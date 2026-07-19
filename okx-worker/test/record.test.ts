@@ -1,9 +1,10 @@
-import { signRecommendationV2, buildPlanId, recHash, commitRecord } from "../src/record";
+import { signRecommendationV2, deterministicPlanId, recHash, commitRecord } from "../src/record";
 import { recoverTypedDataAddress } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import type { Allocation } from "../src/allocation-schema";
 
 const PK = "0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d" as const;
+const PAYER = "0x3333333333333333333333333333333333333333" as const;
 
 const plan: Allocation = {
   summary: "s",
@@ -15,15 +16,25 @@ const plan: Allocation = {
   ],
 };
 
+function kvStub(store: Map<string, string> = new Map()) {
+  return {
+    get: async (k: string) => store.get(k) ?? null,
+    put: async (k: string, v: string) => {
+      store.set(k, v);
+    },
+  };
+}
+
 test("V2 signature binds payer, usdSpent and legCount and recovers to the signer", async () => {
   const account = privateKeyToAccount(PK);
+  const hash = recHash(plan);
   const message = {
-    planId: buildPlanId(plan, "nonce-1"),
-    recHash: recHash(plan),
+    planId: deterministicPlanId(PAYER, hash, 500_000n),
+    recHash: hash,
     assessedRisk: 4000,
     maxRisk: 5500,
     expiry: 2_000_000_000n,
-    payer: "0x3333333333333333333333333333333333333333" as const,
+    payer: PAYER,
     usdSpent: 500_000n,
     legCount: 2,
   };
@@ -53,21 +64,34 @@ test("V2 signature binds payer, usdSpent and legCount and recovers to the signer
   expect(tampered.toLowerCase()).not.toBe(account.address.toLowerCase());
 });
 
-test("planId is deterministic per nonce, distinct across nonces", () => {
-  expect(buildPlanId(plan, "n1")).toBe(buildPlanId(plan, "n1"));
-  expect(buildPlanId(plan, "n1")).not.toBe(buildPlanId(plan, "n2"));
+test("planId is deterministic and content+size addressed", () => {
+  const hash = recHash(plan);
+  expect(deterministicPlanId(PAYER, hash, 40_000_000n)).toBe(deterministicPlanId(PAYER, hash, 40_000_000n));
+  // Different size => different planId (volume honesty)
+  expect(deterministicPlanId(PAYER, hash, 40_000_000n)).not.toBe(deterministicPlanId(PAYER, hash, 100_000_000n));
+  // Different payer => different planId
+  expect(deterministicPlanId(PAYER, hash, 40_000_000n)).not.toBe(
+    deterministicPlanId("0x1111111111111111111111111111111111111111", hash, 40_000_000n)
+  );
 });
 
 test("commitRecord no-ops without a contract address", async () => {
   const ctx = { waitUntil: () => undefined } as never;
-  const out = await commitRecord({} as never, ctx, plan, "0x0", 100);
+  const out = await commitRecord({ KV: kvStub() } as never, ctx, plan, "0x0", 100);
   expect(out).toBeUndefined();
 });
 
-test("commitRecord queues a tx and returns the planId when configured", async () => {
-  let queued = false;
-  const ctx = { waitUntil: (p: Promise<unknown>) => { queued = true; p.catch(() => undefined); } } as never;
+test("commitRecord commits once, then dedupes identical content at identical size", async () => {
+  const store = new Map<string, string>();
+  let queued = 0;
+  const ctx = {
+    waitUntil: (p: Promise<unknown>) => {
+      queued++;
+      p.catch(() => undefined);
+    },
+  } as never;
   const env = {
+    KV: kvStub(store),
     VERA_RECORD_V2_ADDRESS: "0x4444444444444444444444444444444444444444",
     AGENT_SIGNER_PRIVATE_KEY: PK,
     RECORD_COMMITTER_PRIVATE_KEY: PK,
@@ -75,8 +99,22 @@ test("commitRecord queues a tx and returns the planId when configured", async ()
   globalThis.fetch = (async () => {
     throw new Error("no rpc in tests");
   }) as never;
-  const out = await commitRecord(env, ctx, plan, "0x3333333333333333333333333333333333333333", 100);
-  expect(out?.txQueued).toBe(true);
-  expect(out?.planId).toMatch(/^0x[0-9a-f]{64}$/);
-  expect(queued).toBe(true);
+
+  const first = await commitRecord(env, ctx, plan, PAYER, 100);
+  expect(first?.status).toBe("committed");
+  expect(first?.planId).toMatch(/^0x[0-9a-f]{64}$/);
+  expect(queued).toBe(1);
+
+  // Simulate the rec: mirror having landed (the waitUntil write).
+  store.set(`rec:${first!.planId}`, JSON.stringify({ committedAt: Date.now() }));
+
+  const second = await commitRecord(env, ctx, plan, PAYER, 100);
+  expect(second?.status).toBe("duplicate");
+  expect(second?.planId).toBe(first?.planId);
+  expect(queued).toBe(1); // no second tx queued
+
+  // Same content at a DIFFERENT size records anew.
+  const resized = await commitRecord(env, ctx, plan, PAYER, 250);
+  expect(resized?.status).toBe("committed");
+  expect(resized?.planId).not.toBe(first?.planId);
 });

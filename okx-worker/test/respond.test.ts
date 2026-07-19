@@ -7,8 +7,11 @@ test("json sets content-type and status", async () => {
   expect(await r.json()).toEqual({ ok: true });
 });
 
-test("errorJson wraps message", async () => {
+test("errorJson wraps message with agent-actionable defaults", async () => {
   const r = errorJson(400, "bad input");
   expect(r.status).toBe(400);
-  expect(await r.json()).toEqual({ error: "bad input" });
+  const body = (await r.json()) as { error: string; charged: boolean; docs: string };
+  expect(body.error).toBe("bad input");
+  expect(body.charged).toBe(false);
+  expect(body.docs).toContain("llms.txt");
 });

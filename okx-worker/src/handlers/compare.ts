@@ -6,7 +6,8 @@ import { json, errorJson, requestInput } from "../respond";
 import { assetBySymbol } from "../universe";
 import { resolveAllocationModel } from "../aiModel";
 import { universeStatsBlock } from "../quant";
-import { DISCLAIMER } from "./plan";
+import { DISCLAIMER } from "../respond";
+import { notRecorded } from "../record";
 
 const RequestSchema = z.object({
   symbolA: z.string().min(1).max(12),
@@ -43,7 +44,13 @@ export async function handleCompare(request: Request, env: Env): Promise<Respons
       maxRetries: 1,
       abortSignal: AbortSignal.timeout(28_000),
     });
-    return json({ symbolA: a.symbol, symbolB: b.symbol, note: text, disclaimer: DISCLAIMER });
+    return json({
+      symbolA: a.symbol,
+      symbolB: b.symbol,
+      note: text,
+      record: notRecorded("comparisons are not committed on-chain by design"),
+      disclaimer: DISCLAIMER,
+    });
   } catch (err) {
     console.error("compare failed", err);
     return errorJson(502, "Comparison generation failed. Try again.");

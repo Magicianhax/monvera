@@ -1,7 +1,6 @@
 // Shared leg builder: turns a weighted allocation into ordered, executable
-// OKX DEX swap instructions. Used by /v1/basket and /v1/plan (included free —
-// the math is deterministic, charging twice for one product would be rent)
-// and by /v1/build (standalone, for plans that came from elsewhere).
+// OKX-DEX swap instructions. Used by /v1/basket and /v1/plan (legs included
+// free — the math is deterministic) and by /v1/build (external plans).
 import { splitByWeights } from "./legMath";
 import { assetBySymbol, USDC_SOL_MINT } from "./universe";
 
@@ -13,16 +12,54 @@ export interface Leg {
   symbol: string;
   amountIn: string; // USDC base units (6dp)
   minOut: null;
+  suggestedSlippagePercent: string;
   note: string;
 }
 
-const LEG_NOTE =
-  "Quote this leg via the OKX DEX aggregator at execution time, get your user's approval, execute, then move to the next leg. Never quote all legs upfront.";
+export const SUGGESTED_SLIPPAGE_PERCENT = "1";
 
-/** Optional partner-fee params callers may attach to their OKX swap-build calls. */
+const LEG_NOTE =
+  "Quote this leg via the OKX DEX aggregator at execution time (v6; the slippage param is slippagePercent, NOT slippage), get your user's approval, execute, then move to the next leg — never quote all legs upfront. Solana tx bytes come back BASE58-encoded; xStocks are Token-2022 tokens. minOut is null by design (quotes expire ~5 min; set slippagePercent yourself — executing without it exposes you to sandwich MEV). Legs are independent fixed-amount buys: a failure mid-sequence leaves earlier legs correctly filled; resume by re-quoting ONLY the remaining legs.";
+
+/**
+ * OPTIONAL referral params a caller may forward to their OKX swap-build call.
+ * PURE forwardable object — no prose keys; the disclosure lives in the sibling
+ * costs block (referralDisclosure), rendered FROM this object so the disclosed
+ * percent structurally cannot drift from the charged param.
+ */
 export const OKX_SWAP_PARAMS = {
   feePercent: "0.5",
   fromTokenReferrerWalletAddress: "EmKjEoRJvJvzvPSjcwnZj4xsZtYLgdVnCyQS1dv1AJgp",
+} as const;
+
+/** The honest cost block every legs-bearing response carries. */
+export function referralDisclosure(apiFeeUsd: number): Record<string, unknown> {
+  return {
+    apiFeeUsd,
+    executionReferralFee: {
+      percent: OKX_SWAP_PARAMS.feePercent,
+      recipient: OKX_SWAP_PARAMS.fromTokenReferrerWalletAddress,
+      takenFrom: "input token at swap time (a $40 leg then swaps ~$39.80 into stock)",
+      optional: true,
+      howToRemove:
+        "Omit feePercent and fromTokenReferrerWalletAddress from your OKX swap-build call — the swap executes identically with no referral fee.",
+      crossCheck: `Before signing any swap, verify okxSwapParams.feePercent in this response equals the ${OKX_SWAP_PARAMS.feePercent} disclosed here. If it differs, do not execute.`,
+      history: "Present since launch; previously undisclosed; disclosed as of 2026-07-20.",
+    },
+    slippageCostNote: `The suggested ${SUGGESTED_SLIPPAGE_PERCENT}% per-leg slippage tolerance is a cost cap you set, not a fee we charge.`,
+    worstCaseAllInNote:
+      "All-in worked examples (per-call fee + referral + full slippage tolerance) are published at GET / under costs.feeSchedule.",
+  };
+}
+
+/** Execution metadata block for legs-bearing responses. */
+export const EXECUTION_BLOCK = {
+  mode: "sequential — quote, approve and execute each leg in order",
+  slippage: `set slippagePercent=${SUGGESTED_SLIPPAGE_PERCENT} (or your own tolerance) on every OKX swap-build; minOut is null by design`,
+  txEncoding: "base58 (OKX v6 Solana swap-builds return BASE58 tx bytes)",
+  tokenProgram: "xStocks are Token-2022 (TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb)",
+  legFailureResume:
+    "Legs are independent fixed-amount buys. Stop is safe at any point; resume by re-quoting only the remaining legs — never re-execute a filled leg.",
 } as const;
 
 /**
@@ -43,6 +80,7 @@ export function buildLegs(
     symbol: a.symbol,
     amountIn: amounts[i].toString(),
     minOut: null,
+    suggestedSlippagePercent: SUGGESTED_SLIPPAGE_PERCENT,
     note: LEG_NOTE,
   }));
 }

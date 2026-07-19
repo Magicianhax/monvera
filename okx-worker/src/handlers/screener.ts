@@ -1,8 +1,8 @@
 // Paid: momentum screener over the whole universe — deterministic, no AI cost.
-import { json, errorJson } from "../respond";
+import { json, errorJson, DISCLAIMER } from "../respond";
 import { universeStatsRows } from "../quant";
 import { UNIVERSE } from "../universe";
-import { DISCLAIMER } from "./plan";
+import { notRecorded } from "../record";
 
 export async function handleScreener(): Promise<Response> {
   let rows;
@@ -32,6 +32,7 @@ export async function handleScreener(): Promise<Response> {
     metric: "3-month return divided by annualized volatility (trailing, real market data)",
     ranked,
     noData,
+    record: notRecorded("screens are not committed on-chain by design"),
     disclaimer: DISCLAIMER,
   });
 }
