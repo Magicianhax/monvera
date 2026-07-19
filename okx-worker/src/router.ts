@@ -47,9 +47,21 @@ export async function route(request: Request, env: Env, ctx: ExecutionContext): 
     // Reject BEFORE the payment gate — never charge for a guaranteed 404.
     return errorJson(404, `Unknown basket: ${basketMatch[1]}. Available: ${Object.keys(BASKETS).join(", ")}.`);
   }
+  if (p === "/v1/basket" && request.method === "POST") {
+    // Body-form basket: peek the id before the payment gate for the same reason.
+    const peek = (await request.clone().json().catch(() => null)) as { basket?: unknown } | null;
+    if (typeof peek?.basket !== "string" || !(peek.basket in BASKETS)) {
+      return errorJson(404, `Unknown basket: ${typeof peek?.basket === "string" ? peek.basket : "(none given)"}. Available: ${Object.keys(BASKETS).join(", ")}.`);
+    }
+  }
   const isPaidPath =
     request.method === "POST" &&
-    (p === "/v1/plan" || p === "/v1/research" || p === "/v1/halal-screen" || p === "/v1/build" || basketMatch !== null);
+    (p === "/v1/plan" ||
+      p === "/v1/research" ||
+      p === "/v1/halal-screen" ||
+      p === "/v1/build" ||
+      p === "/v1/basket" ||
+      basketMatch !== null);
 
   if (!isPaidPath) return errorJson(404, "Not found. GET / lists all services.");
 
@@ -71,7 +83,8 @@ export async function route(request: Request, env: Env, ctx: ExecutionContext): 
     response = await handleBuild(request);
   } else {
     const { handleBasket } = await import("./handlers/basket");
-    response = await handleBasket(request, env, ctx, p.split("/").pop()!, pay.payer);
+    const idFromPath = p === "/v1/basket" ? "" : p.split("/").pop()!;
+    response = await handleBasket(request, env, ctx, idFromPath, pay.payer);
   }
   return withHeaders(response, pay.responseHeaders);
 }

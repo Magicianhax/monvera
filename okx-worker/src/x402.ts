@@ -45,6 +45,7 @@ function routesFor(payTo: string): RoutesConfig {
     "POST /v1/plan": paid(PRICES.plan, "AI allocation plan over tokenized xStocks (Solana)"),
     "POST /v1/research": paid(PRICES.research, "Research note on one tokenized stock"),
     "POST /v1/halal-screen": paid(PRICES.halalScreen, "AAOIFI shariah screen of tickers or a portfolio"),
+    "POST /v1/basket": paid(PRICES.basket, "Themed tokenized-stock basket allocation"),
     "POST /v1/basket/*": paid(PRICES.basket, "Themed tokenized-stock basket allocation"),
     "POST /v1/build": paid(PRICES.build, "Executable per-leg swap instructions for a plan"),
   };

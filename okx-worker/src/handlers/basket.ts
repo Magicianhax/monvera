@@ -6,20 +6,28 @@ import { commitRecord } from "../record";
 import { OKX_MIN_LEG_USD } from "../legMath";
 import { DISCLAIMER } from "./plan";
 
-const RequestSchema = z.object({ amountUsd: z.number().positive().max(1_000_000) });
+const RequestSchema = z.object({
+  amountUsd: z.number().positive().max(1_000_000),
+  // Body-level basket id, used by the path-less "POST /v1/basket" form
+  // (ASP listings need a concrete endpoint URL without path parameters).
+  basket: z.string().optional(),
+});
 
 export async function handleBasket(
   request: Request,
   env: Env,
   ctx: ExecutionContext,
-  id: string,
+  idFromPath: string,
   payer: string
 ): Promise<Response> {
-  if (!(id in BASKETS)) {
-    return errorJson(404, `Unknown basket: ${id}. Available: ${Object.keys(BASKETS).join(", ")}.`);
-  }
   const parsed = RequestSchema.safeParse(await request.json().catch(() => null));
-  if (!parsed.success) return errorJson(400, "Body must be { amountUsd: number }.");
+  if (!parsed.success) {
+    return errorJson(400, "Body must be { amountUsd: number, basket?: string }.");
+  }
+  const id = idFromPath || parsed.data.basket || "";
+  if (!(id in BASKETS)) {
+    return errorJson(404, `Unknown basket: ${id || "(none given)"}. Available: ${Object.keys(BASKETS).join(", ")}.`);
+  }
   if (parsed.data.amountUsd < OKX_MIN_LEG_USD) {
     return errorJson(400, `Minimum amount is $${OKX_MIN_LEG_USD} (one leg above the venue floor).`);
   }
