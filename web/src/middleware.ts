@@ -26,7 +26,7 @@ export const config = {
 };
 
 const GATED_PAGES = ["/app"];
-const GATED_APIS = ["/api/quote", "/api/allocate", "/api/portfolio-review", "/api/autopilot", "/api/pimlico"];
+const GATED_APIS = ["/api/quote", "/api/allocate", "/api/portfolio-review", "/api/autopilot", "/api/pimlico", "/api/vera"];
 
 // Social / link-preview crawlers only read a page's OG metadata to build a card;
 // they don't "use" the product. They run from US datacenters, so the geo-gate's

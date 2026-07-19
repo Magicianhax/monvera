@@ -10,6 +10,7 @@ import { useLogin, useModalStatus } from "@privy-io/react-auth";
 import { Icon, MonveraWordmark, AssetTile } from "@/components/design";
 import { VeraMascot } from "@/components/design/VeraMascot";
 import { displayFor } from "@/lib/displayAssets";
+import { useDesktopLayout } from "@/hooks/useDesktopLayout";
 
 type Method = "email" | "google" | "x" | "wallet";
 
@@ -34,6 +35,7 @@ function Spinner({ small }: { small?: boolean }) {
 }
 
 export function LandingScreen() {
+  const { active: desktop } = useDesktopLayout();
   const [signing, setSigning] = useState<Method | null>(null);
   const [error, setError] = useState(false);
 
@@ -73,7 +75,23 @@ export function LandingScreen() {
   };
 
   return (
-    <div className="screen screen-pad-top" style={{ justifyContent: "space-between" }}>
+    <div
+      className="screen screen-pad-top"
+      style={
+        desktop
+          ? {
+              // Desktop: two-column hero — copy on the left, sign-in on the right,
+              // both vertically centered in the widened shell card.
+              display: "grid",
+              gridTemplateColumns: "1fr minmax(320px, 380px)",
+              alignItems: "center",
+              columnGap: 48,
+              maxWidth: 900,
+              marginInline: "auto",
+            }
+          : { justifyContent: "space-between" }
+      }
+    >
       {/* Vera, the brand watermark — big, half off the right edge, behind the
           content (z 0 vs content z 1), with a soft brand glow beneath her. */}
       <div aria-hidden style={{ position: "absolute", right: 0, bottom: "21%", zIndex: 0, pointerEvents: "none", transform: "translateX(46%)" }}>

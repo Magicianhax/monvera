@@ -11,6 +11,7 @@ import { ALL_ASSETS } from "@/lib/tokens";
 import { chain } from "@/lib/chain";
 import { SERVER_RPC_URL } from "@/lib/server/rpc";
 import { displayFor } from "@/lib/displayAssets";
+import { whyItMoved } from "@/lib/marketContext";
 import { usd } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
@@ -54,10 +55,13 @@ export async function GET(req: NextRequest) {
       // claim first so overlapping sweeps can't double-notify
       if (!(await claimTriggered(a.id, now))) continue;
       const name = displayFor(a.symbol).name;
+      // Context, not just a price print: the same relative-to-the-tape read the
+      // asset page shows, caveat included (deterministic, zero inference).
+      const moved = whyItMoved(a.symbol, summary);
       await addNotification(a.userId, {
         kind: "alert",
         title: `${name} is ${a.direction === "above" ? "above" : "below"} ${usd(a.threshold)}`,
-        body: `${a.symbol} is trading at ${usd(price)} right now. This alert has been turned off; set a new one any time.`,
+        body: `${a.symbol} is trading at ${usd(price)} right now.${moved ? ` ${moved.text}` : ""} This alert has been turned off; set a new one any time.`,
         symbol: a.symbol,
         at: now,
       });

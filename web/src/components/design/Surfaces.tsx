@@ -8,6 +8,7 @@ import { Icon, type IconName } from "./Icon";
 import { AssetTile, type TileAsset } from "./Brand";
 import { Sparkline } from "./Charts";
 import { useDragDismiss } from "../../hooks/useDragDismiss";
+import { useDesktopLayout } from "@/hooks/useDesktopLayout";
 
 // ── Bottom sheet ────────────────────────────────────────────────────────────
 export interface BottomSheetProps {
@@ -24,6 +25,9 @@ export function BottomSheet({ open, onClose, title, children }: BottomSheetProps
   const [mounted, setMounted] = useState(open);
   const [shown, setShown] = useState(false);
   const scrimRef = useRef<HTMLDivElement | null>(null);
+  // On the desktop shell the same sheet renders as a centered modal: no grab
+  // handle, no drag-to-dismiss, fade+lift entrance instead of the drawer slide.
+  const { active: desktop } = useDesktopLayout();
 
   // The sheet's scrim is `position: absolute; inset: 0`, so it anchors to the
   // nearest positioned ancestor. Rendered in place that is `.screen` — a SCROLL
@@ -52,6 +56,17 @@ export function BottomSheet({ open, onClose, title, children }: BottomSheetProps
     return () => clearTimeout(t);
   }, [open]);
 
+  // Desktop modals dismiss on Escape (drag-to-dismiss is the phone affordance).
+  // onClose is the same guarded path the scrim uses, so busy-gated sheets stay put.
+  useEffect(() => {
+    if (!desktop || !open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [desktop, open, onClose]);
+
   // Always render the anchor so we can find the frame on first mount, even while
   // the sheet is closed.
   if (!mounted) return <span ref={anchorRef} aria-hidden style={{ display: "none" }} />;
@@ -69,7 +84,9 @@ export function BottomSheet({ open, onClose, title, children }: BottomSheetProps
         backdropFilter: "blur(3px)",
         WebkitBackdropFilter: "blur(3px)",
         display: "flex",
-        alignItems: "flex-end",
+        alignItems: desktop ? "center" : "flex-end",
+        justifyContent: desktop ? "center" : undefined,
+        padding: desktop ? 24 : undefined,
         opacity: shown ? 1 : 0,
         transition: "opacity .2s var(--ease-out)",
       }}
@@ -78,46 +95,86 @@ export function BottomSheet({ open, onClose, title, children }: BottomSheetProps
         ref={ref}
         onClick={(e) => e.stopPropagation()}
         style={{
-          width: "100%",
+          width: desktop ? "min(480px, calc(100% - 48px))" : "100%",
+          position: desktop ? "relative" : undefined,
           background: "var(--glass)",
           backdropFilter: "var(--glass-blur)",
           WebkitBackdropFilter: "var(--glass-blur)",
-          borderRadius: "var(--r-xl) var(--r-xl) 0 0",
+          borderRadius: desktop ? "var(--r-xl)" : "var(--r-xl) var(--r-xl) 0 0",
           boxShadow: "var(--glass-shadow), var(--glass-hi)",
-          maxHeight: "88%",
+          maxHeight: desktop ? "min(85%, 720px)" : "88%",
           overflowY: "auto",
-          padding: "6px 20px calc(20px + env(safe-area-inset-bottom))",
+          padding: desktop ? "18px 20px 20px" : "6px 20px calc(20px + env(safe-area-inset-bottom))",
           // entrance via transform (slides from edge); drag takes over via direct
           // style.transform writes, so we only set the initial open transition.
-          transform: shown ? "translateY(0)" : "translateY(100%)",
-          transition: "transform .42s var(--ease-drawer)",
-          touchAction: "none",
+          // Desktop modal: fade + a small lift instead of the drawer slide.
+          transform: desktop
+            ? shown
+              ? "none"
+              : "translateY(12px) scale(.98)"
+            : shown
+              ? "translateY(0)"
+              : "translateY(100%)",
+          opacity: desktop && !shown ? 0 : 1,
+          transition: desktop
+            ? "opacity .22s var(--ease-out), transform .22s var(--ease-out)"
+            : "transform .42s var(--ease-drawer)",
+          // Mobile only: the drag gesture owns the panel. On desktop leaving this
+          // unset keeps mouse-wheel scrolling alive inside the modal.
+          touchAction: desktop ? undefined : "none",
         }}
       >
-        {/* Real grab handle — wider hit area, the visible pill is the affordance. */}
-        <div
-          {...handlers}
-          role="button"
-          aria-label="Drag to dismiss"
-          style={{
-            display: "flex",
-            justifyContent: "center",
-            alignItems: "center",
-            padding: "10px 0 12px",
-            margin: "0 -20px",
-            cursor: "grab",
-            touchAction: "none",
-          }}
-        >
+        {/* Real grab handle — wider hit area, the visible pill is the affordance.
+            Phone-only: the desktop modal closes via X / scrim / Escape. */}
+        {!desktop && (
           <div
+            {...handlers}
+            role="button"
+            aria-label="Drag to dismiss"
             style={{
-              width: 40,
-              height: 5,
-              borderRadius: 99,
-              background: "var(--line)",
+              display: "flex",
+              justifyContent: "center",
+              alignItems: "center",
+              padding: "10px 0 12px",
+              margin: "0 -20px",
+              cursor: "grab",
+              touchAction: "none",
             }}
-          />
-        </div>
+          >
+            <div
+              style={{
+                width: 40,
+                height: 5,
+                borderRadius: 99,
+                background: "var(--line)",
+              }}
+            />
+          </div>
+        )}
+        {/* Untitled sheets have no header row — on desktop float a close button
+            so the modal always has a pointer-friendly dismiss. */}
+        {desktop && !title && (
+          <button
+            onClick={onClose}
+            aria-label="Close"
+            className="tap"
+            style={{
+              position: "absolute",
+              top: 12,
+              right: 12,
+              zIndex: 1,
+              width: 34,
+              height: 34,
+              borderRadius: 99,
+              background: "var(--surface-2)",
+              display: "grid",
+              placeItems: "center",
+              color: "var(--ink-2)",
+            }}
+          >
+            <Icon name="close" size={18} />
+          </button>
+        )}
         {title && (
           <div
             style={{
@@ -205,6 +262,10 @@ export interface HoldingRowProps {
   onClick?: () => void;
   dim?: boolean;
   showSpark?: boolean;
+  /** Sparkline width in px — desktop tables pass a wider one. */
+  sparkW?: number;
+  /** Fixed pixel width for the right value column so desktop table rows align. */
+  rightW?: number;
 }
 
 export function HoldingRow({
@@ -215,6 +276,8 @@ export function HoldingRow({
   onClick,
   dim,
   showSpark = true,
+  sparkW = 64,
+  rightW,
 }: HoldingRowProps) {
   const day = asset.day ?? 0;
   const up = day >= 0;
@@ -255,10 +318,17 @@ export function HoldingRow({
         // with the name block) so it reads centered in the row, not glued to the
         // price column.
         <div style={{ flex: 1, display: "flex", justifyContent: "center", minWidth: 0 }}>
-          <Sparkline data={asset.spark} color={up ? "var(--pos)" : "var(--neg)"} />
+          <Sparkline data={asset.spark} w={sparkW} color={up ? "var(--pos)" : "var(--neg)"} />
         </div>
       )}
-      <div style={{ textAlign: "right", minWidth: 64 }}>
+      <div
+        style={{
+          textAlign: "right",
+          minWidth: rightW ?? 64,
+          width: rightW,
+          flex: rightW !== undefined ? "none" : undefined,
+        }}
+      >
         {right !== undefined ? (
           right
         ) : (

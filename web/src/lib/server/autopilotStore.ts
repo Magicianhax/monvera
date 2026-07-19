@@ -128,6 +128,15 @@ export async function claimDueAutopilots(nowSeconds: number): Promise<AutopilotC
   return (results ?? []).map(rowToConfig);
 }
 
+/** Read-only list of every active autopilot (weekly digest audience). */
+export async function listActiveAutopilots(limit = 500): Promise<AutopilotConfig[]> {
+  const { results } = await db()
+    .prepare("SELECT * FROM autopilots WHERE active = 1 LIMIT ?")
+    .bind(limit)
+    .all<Row>();
+  return (results ?? []).map(rowToConfig);
+}
+
 /** Persist run accounting after a successful run. Never touches next_run_at. */
 export async function recordRun(
   userId: string,

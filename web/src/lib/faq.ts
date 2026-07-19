@@ -23,7 +23,7 @@ export const FAQ: FaqItem[] = [
   },
   {
     q: "What does it cost?",
-    a: "Monvera covers the network (gas) fees, so you never pay gas, and there are no account fees or subscriptions. We earn a small referral from Arcus, the venue that prices our trades, on the volume we route, so the app stays free for you. No hidden platform fee on top.",
+    a: "Monvera covers the network (gas) fees, so you never pay gas, and there are no account fees or subscriptions. We earn a small routing fee built into the quoted price on the volume we route, so the figure you see is what you get and the app stays free. No hidden platform fee on top.",
   },
   {
     q: "How much do I need to start?",
@@ -39,7 +39,7 @@ export const FAQ: FaqItem[] = [
   },
   {
     q: "How does Monvera get me a fair price?",
-    a: "Every buy and sell is priced and routed through Arcus, an on-chain trading venue on Robinhood Chain. You always get a live market quote, and because the quote and the trade settle on-chain together, the price is provable, not taken on trust. Monvera covers the gas and earns only a small referral from Arcus on the volume it routes.",
+    a: "Every buy and sell is quoted at each live trading venue on Robinhood Chain in parallel, and filled wherever you get the most for your money — if a venue fails to settle, the order automatically falls back to the next best. Because every fill settles on-chain, the price is provable, not taken on trust. Monvera covers the gas and earns a small routing fee already built into the quoted price.",
   },
   {
     q: "Can I sell or cash out anytime?",
@@ -63,6 +63,6 @@ export const FAQ: FaqItem[] = [
   },
   {
     q: "How do I get help?",
-    a: "Email us at monvera.best@gmail.com and a human will get back to you. You can also ask Vera anything in plain words inside the app, she is built to explain.",
+    a: "Email us at support@monvera.best and a human will get back to you. You can also ask Vera anything in plain words inside the app, she is built to explain.",
   },
 ];

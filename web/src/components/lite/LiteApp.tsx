@@ -24,10 +24,20 @@ import { useInvest } from "@/hooks/useInvest";
 import { Spinner } from "./screens/primitives";
 import { useSmartAccount } from "@/hooks/useSmartAccount";
 import { useWatchlistSync } from "@/hooks/useWatchlistSync";
+import { useDesktopLayout } from "@/hooks/useDesktopLayout";
 import { haptic } from "@/lib/haptics";
 import { TabBar, type TabId, useToast } from "@/components/design";
+import { SideNav } from "./SideNav";
 import { InstallPrompt } from "@/components/app/InstallPrompt";
 import { HomeScreen } from "./screens/HomeScreen";
+import { DesktopHome } from "./screens/DesktopHome";
+import { DesktopMarket } from "./screens/DesktopMarket";
+import { DesktopPortfolio } from "./screens/DesktopPortfolio";
+import { DesktopWallet } from "./screens/DesktopWallet";
+import { DesktopVera } from "./screens/DesktopVera";
+import { DesktopTicker } from "./screens/DesktopTicker";
+import { DesktopActivity } from "./screens/DesktopActivity";
+import { DesktopSettings } from "./screens/DesktopSettings";
 import { GoalScreen } from "./screens/GoalScreen";
 import { ThinkingScreen } from "./screens/ThinkingScreen";
 import { PlanScreen } from "./screens/PlanScreen";
@@ -131,6 +141,9 @@ export function LiteApp({ demoPlay = null }: { demoPlay?: "invest" | "vera" | nu
   const { notify } = useToast();
   // Keep the device-local watchlist reconciled with the server for this wallet.
   useWatchlistSync();
+  // Desktop shell active (≥1024px): browse roots swap to their desktop-native
+  // dashboards; the mobile screens keep serving phones and the in-flow screens.
+  const { active: desktop } = useDesktopLayout();
 
   const [stack, setStack] = useState<Route[]>([{ screen: "home", params: {} }]);
   const current = stack[stack.length - 1];
@@ -422,6 +435,13 @@ export function LiteApp({ demoPlay = null }: { demoPlay?: "invest" | "vera" | nu
     else go(id === "market" ? "market" : id === "portfolio" ? "portfolio" : id === "vera" ? "vera" : "home");
   };
 
+  // Desktop side-nav: "invest" opens the goal flow; every other id is a screen
+  // name go() understands (root screens reset the stack, the rest push).
+  const onSideNav = (target: string) => {
+    haptic.select();
+    go(target === "invest" ? "goal" : target);
+  };
+
   // Tabs visible only on the root browse screens.
   const showTabs =
     screen === "home" || screen === "portfolio" || screen === "market" || screen === "vera";
@@ -518,7 +538,7 @@ export function LiteApp({ demoPlay = null }: { demoPlay?: "invest" | "vera" | nu
   let view: React.ReactNode;
   switch (screen) {
     case "wallet":
-      view = <WalletScreen go={go} />;
+      view = desktop ? <DesktopWallet go={go} /> : <WalletScreen go={go} />;
       break;
     case "send":
       view = <SendScreen go={go} symbol={params.symbol as string | undefined} />;
@@ -603,13 +623,17 @@ export function LiteApp({ demoPlay = null }: { demoPlay?: "invest" | "vera" | nu
       );
       break;
     case "portfolio":
-      view = <PortfolioScreen go={go} />;
+      view = desktop ? <DesktopPortfolio go={go} /> : <PortfolioScreen go={go} />;
       break;
     case "review":
       view = <ReviewScreen go={go} />;
       break;
     case "market":
-      view = <MarketScreen go={go} initialFilter={params.filter as string | undefined} />;
+      view = desktop ? (
+        <DesktopMarket go={go} initialFilter={params.filter as string | undefined} />
+      ) : (
+        <MarketScreen go={go} initialFilter={params.filter as string | undefined} />
+      );
       break;
     case "movers":
       view = <MoversScreen go={go} />;
@@ -655,13 +679,13 @@ export function LiteApp({ demoPlay = null }: { demoPlay?: "invest" | "vera" | nu
       );
       break;
     case "vera":
-      view = <VeraScreen go={go} />;
+      view = desktop ? <DesktopVera go={go} /> : <VeraScreen go={go} />;
       break;
     case "settings":
-      view = <SettingsScreen go={go} />;
+      view = desktop ? <DesktopSettings go={go} /> : <SettingsScreen go={go} />;
       break;
     case "activity":
-      view = <ActivityScreen go={go} />;
+      view = desktop ? <DesktopActivity go={go} /> : <ActivityScreen go={go} />;
       break;
     case "help":
       view = <HelpScreen go={go} />;
@@ -677,12 +701,19 @@ export function LiteApp({ demoPlay = null }: { demoPlay?: "invest" | "vera" | nu
       break;
     case "home":
     default:
-      view = <HomeScreen go={go} />;
+      view = desktop ? <DesktopHome go={go} /> : <HomeScreen go={go} />;
   }
 
+  // The live ticker rides the top of the content area only on the desktop-native
+  // dashboard screens (those that render a full-width .deskscreen).
+  const tickerOn = desktop && ["home", "market", "portfolio", "wallet", "vera", "activity", "settings"].includes(screen);
+
   return (
-    <>
-      <div key={screen} ref={screenRef} style={{ position: "absolute", inset: 0 }}>
+    <div className="app-shell">
+      <SideNav active={screen} onNav={onSideNav} />
+      <div className="app-content">
+      {tickerOn && <DesktopTicker />}
+      <div key={screen} ref={screenRef} style={{ position: "absolute", inset: 0, top: tickerOn ? 40 : 0 }}>
         {/* pull-to-refresh indicator — fades/rotates in with the pull, spins while refreshing */}
         {pullY > 0 && (
           <div
@@ -761,8 +792,13 @@ export function LiteApp({ demoPlay = null }: { demoPlay?: "invest" | "vera" | nu
           {view}
         </div>
       </div>
-      {showTabs && <TabBar active={tabFor(screen)} onNav={onTab} pro />}
+        {showTabs && (
+          <div className="app-tabbar">
+            <TabBar active={tabFor(screen)} onNav={onTab} pro />
+          </div>
+        )}
+      </div>
       <InstallPrompt />
-    </>
+    </div>
   );
 }

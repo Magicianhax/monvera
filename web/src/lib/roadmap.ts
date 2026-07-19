@@ -45,6 +45,7 @@ export const ROADMAP: RoadmapPhase[] = [
       { name: "Theme baskets", note: "One honest basket per theme, from AI to space: open weights, an open rule, and a walk-forward backtest anyone can pull as JSON." },
       { name: "$MONVERA in the app", note: "Live price, chart, and gasless buy/sell of the project token, next to your stocks in the same self-custody wallet." },
       { name: "Scan to Buy", note: "Photograph any product and Vera maps it to the listed companies behind it — then invests, signed and recorded on-chain. Unlocked by holding 100,000 $MONVERA." },
+      { name: "Ask Vera anything", note: "A real conversation: your holdings, today’s market, alerts, Autopilot, orders — answered from live data, confirmed by you." },
       { name: "Documentation", note: "Plain-language guides and a full developer reference at docs.monvera.best." },
     ],
   },
@@ -53,7 +54,6 @@ export const ROADMAP: RoadmapPhase[] = [
     title: "Building now",
     lede: "Actively in progress. These are the things people ask for, and the ones that make the agent easier to trust.",
     items: [
-      { name: "Ask Vera anything", note: "A grounded conversation about your holdings and the market, answering only from data she can show you." },
       { name: "Public proof pages", note: "A shareable page for any plan, where anyone can re-check Vera's signature on-chain without an account." },
       { name: "Goal progress", note: "See how far a plan has carried you toward the goal you actually asked for." },
       { name: "Alerts when the app is closed", note: "The same notifications, delivered to your phone rather than waiting in the app." },

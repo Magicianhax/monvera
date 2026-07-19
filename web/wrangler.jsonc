@@ -10,7 +10,7 @@
   // Cloudflare Cron Triggers → worker.ts scheduled() → /api/cron/autopilot.
   // Hourly: the route itself claims only autopilots that are actually due.
   "triggers": {
-    "crons": ["0 * * * *", "*/15 * * * *"]
+    "crons": ["0 * * * *", "*/15 * * * *", "0 13 * * 1"]
   },
   "assets": {
     "directory": ".open-next/assets",

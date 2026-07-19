@@ -18,6 +18,7 @@ import {
   type ReactNode,
 } from "react";
 import { Icon, type IconName } from "./Icon";
+import { useDesktopLayout } from "@/hooks/useDesktopLayout";
 
 export interface ToastData {
   msg: ReactNode;
@@ -45,6 +46,8 @@ export function Toast({
 }) {
   // mount-shown gate so the entrance transition has a frame to start from.
   const [shown, setShown] = useState(false);
+  // Desktop shell has no phone status bar to clear — the toast sits nearer the top.
+  const { active: desktop } = useDesktopLayout();
   // remaining time bookkeeping for pause-on-hidden.
   const remaining = useRef(VISIBLE_MS);
   const startedAt = useRef(0);
@@ -103,7 +106,7 @@ export function Toast({
     <div
       style={{
         position: "absolute",
-        top: 54,
+        top: desktop ? 20 : 54,
         left: 0,
         right: 0,
         display: "flex",
@@ -117,7 +120,7 @@ export function Toast({
           display: "flex",
           alignItems: "center",
           gap: 10,
-          maxWidth: "84%",
+          maxWidth: desktop ? 420 : "84%",
           background: "var(--ink)",
           color: "var(--paper)",
           padding: "11px 16px",

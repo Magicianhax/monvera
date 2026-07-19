@@ -43,8 +43,9 @@ export default {
       env.WORKER_SELF_REFERENCE.fetch(`https://monvera.best${path}`, {
         headers: { authorization: `Bearer ${secret}` },
       });
-    // every 15 min: price alerts; on the hour: autopilot too.
+    // every 15 min: price alerts; on the hour: autopilot; Mondays 13:00 UTC: weekly digest.
     ctx.waitUntil(hit("/api/cron/alerts"));
     if (cron === "0 * * * *") ctx.waitUntil(hit("/api/cron/autopilot"));
+    if (cron === "0 13 * * 1") ctx.waitUntil(hit("/api/cron/digest"));
   },
 };

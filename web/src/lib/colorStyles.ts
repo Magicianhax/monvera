@@ -173,6 +173,52 @@ export const SOFT_THEME_CSS =
   "#0a0d0c;}" +
   "";
 
+// Desktop shell (≥1024px). The mobile app is a 440px column; on desktop it widens
+// into a two-region layout — a persistent SideNav + a content region holding the
+// existing screens. Everything real is gated on min-width:1024px, so below that
+// not one rule changes and mobile stays byte-for-byte identical. Emitted after
+// globals.css so the .stax width/shape override wins by cascade order (globals.css
+// is edit-local-only and never touched).
+export const DESKTOP_CSS =
+  // Shell scaffolding, present at all widths. Inert on mobile: SideNav is hidden
+  // and app-shell/app-content simply fill .stax exactly as the screen did before.
+  ".stax .app-shell{position:absolute;inset:0;}" +
+  ".stax .app-content{position:absolute;inset:0;}" +
+  ".stax .sidenav{display:none;}" +
+  "@media (min-width:1024px){" +
+  // Full-screen desktop app — edge to edge, no floating phone/tablet card.
+  ".stax-backdrop{padding:0;align-items:stretch;}" +
+  ".stax-backdrop .stax{max-width:none;width:100%;height:100dvh;border-radius:0;box-shadow:none;}" +
+  '.stax-backdrop[data-mode="dark"] .stax{box-shadow:none;}' +
+  ".stax .app-shell{display:flex;flex-direction:row;}" +
+  ".stax .app-content{position:relative;inset:auto;flex:1 1 0;min-width:0;height:100%;}" +
+  ".stax .sidenav{display:flex;}" +
+  ".stax .app-tabbar{display:none;}" +
+  // Desktop-native dashboard screens (DesktopHome, …) own the full content width.
+  ".stax .app-content .deskscreen{position:absolute;inset:0;overflow-y:auto;}" +
+  // Reused mobile *flow* screens (invest, receipt, …) still read as a centered
+  // column rather than stretching edge to edge.
+  ".stax .app-content .screen{max-width:560px;margin-inline:auto;}" +
+  // Live ticker tape pinned to the top of the content area (the screen below is
+  // offset by 40px inline when it's shown). Only rendered on desktop dashboards.
+  ".stax .desk-ticker{position:absolute;top:0;left:0;right:0;height:40px;z-index:6;overflow:hidden;border-bottom:1px solid var(--line);background:color-mix(in srgb,var(--surface) 92%,transparent);backdrop-filter:saturate(150%) blur(6px);display:flex;align-items:center;}" +
+  ".stax .desk-ticker-track{display:flex;align-items:center;width:max-content;animation:mvticker 64s linear infinite;}" +
+  // Nav + row + tile interaction states.
+  ".stax .sidenav-item{transition:background .16s var(--ease-out),color .16s var(--ease-out);cursor:pointer;}" +
+  ".stax .sidenav-item:focus-visible{outline:2px solid var(--primary);outline-offset:2px;}" +
+  ".stax .navlogo{cursor:pointer;}" +
+  ".stax .desk-row,.stax .desk-tile,.stax .desk-chip{transition:background .14s var(--ease-out),border-color .14s var(--ease-out),color .14s var(--ease-out);cursor:pointer;}" +
+  "}" +
+  "@keyframes mvticker{from{transform:translateX(0)}to{transform:translateX(-50%)}}" +
+  // Hover only on real pointers (touch laptops fire hover-on-tap; don't).
+  "@media (min-width:1024px) and (hover:hover) and (pointer:fine){" +
+  ".stax .sidenav-item:not(.is-active):hover{background:var(--surface-2);color:var(--ink);}" +
+  ".stax .desk-row:hover{background:var(--surface-2);}" +
+  ".stax .desk-tile:hover{border-color:var(--primary);}" +
+  ".stax .desk-chip:hover{border-color:var(--primary);color:var(--ink);}" +
+  ".stax .navlogo:hover{opacity:.85;}" +
+  "}";
+
 function block(selector: string, v: StyleVars): string {
   return (
     `${selector}{` +

@@ -12,6 +12,7 @@ import "server-only";
 import { formatUnits, isAddress } from "viem";
 import { EXPLORER_URL } from "@/lib/chain";
 import { USDG, ALL_ASSETS } from "@/lib/tokens";
+import { MONVERA } from "@/lib/monveraToken";
 import type { WalletTx } from "@/lib/walletTx";
 
 const ALCHEMY_KEY = process.env.ALCHEMY_API_KEY;
@@ -27,6 +28,9 @@ TOKENS.set(USDG.address.toLowerCase(), { symbol: USDG.symbol, decimals: USDG.dec
 for (const a of ALL_ASSETS) {
   if (a.address && a.decimals) TOKENS.set(a.address.toLowerCase(), { symbol: a.symbol, decimals: a.decimals });
 }
+// The project token: without it, a MONVERA swap's token leg is invisible and
+// the paired USDG leg mislabels as "Sent cash" instead of Bought/Sold MONVERA.
+TOKENS.set(MONVERA.address.toLowerCase(), { symbol: "MONVERA", decimals: MONVERA.decimals });
 const KNOWN_ADDRS = [...TOKENS.keys()];
 
 function dedupeSort(txs: WalletTx[]): WalletTx[] {
