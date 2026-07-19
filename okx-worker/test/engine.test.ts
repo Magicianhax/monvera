@@ -5,7 +5,7 @@ import type { LanguageModel } from "ai";
 function mockModel(allocations: Array<{ symbol: string; weightPct: number; reason: string }>): LanguageModel {
   return new MockLanguageModelV3({
     doGenerate: async () => ({
-      finishReason: "stop" as const,
+      finishReason: { unified: "stop" as const },
       usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 },
       content: [
         {
