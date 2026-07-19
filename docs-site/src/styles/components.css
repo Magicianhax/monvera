@@ -62,6 +62,31 @@
   text-wrap: pretty;
 }
 
+/* ── contract address ─────────────────────────────────────────────────── */
+/* Shown in full and never abbreviated: the whole point is that a reader can
+   compare it character by character against whatever someone sent them. Wraps
+   rather than scrolls, so nothing is hidden off-screen on a phone. */
+.mv-address {
+  margin: 0.7rem 0;
+}
+.mv-address a {
+  display: block;
+  font-family: var(--sl-font-mono);
+  font-size: 0.85rem;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+  padding: 0.55rem 0.75rem;
+  border: 1px solid var(--sl-color-hairline-light);
+  border-radius: 0.45rem;
+  background: var(--sl-color-gray-6);
+  color: var(--sl-color-white);
+  text-decoration: none;
+}
+.mv-address a:hover {
+  border-color: var(--sl-color-accent);
+  color: var(--sl-color-text-accent);
+}
+
 /* ── screenshots ──────────────────────────────────────────────────────── */
 /* Desktop-width captures, not phone frames: the product is a chat app you use
    on a wide screen. */
