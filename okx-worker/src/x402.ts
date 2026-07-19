@@ -22,6 +22,10 @@ export const PRICES = {
   halalScreen: 0.25,
   basket: 0.35,
   build: 0.25,
+  backtest: 0.25,
+  screener: 0.25,
+  compare: 0.3,
+  rebalance: 0.35,
 } as const;
 
 type RegisterArg = Parameters<x402ResourceServer["register"]>[1];
@@ -48,6 +52,10 @@ function routesFor(payTo: string): RoutesConfig {
     "POST /v1/basket": paid(PRICES.basket, "Themed tokenized-stock basket allocation"),
     "POST /v1/basket/*": paid(PRICES.basket, "Themed tokenized-stock basket allocation"),
     "POST /v1/build": paid(PRICES.build, "Executable per-leg swap instructions for a plan"),
+    "POST /v1/backtest": paid(PRICES.backtest, "One-year backtest of any weighted basket vs SPY"),
+    "POST /v1/screener": paid(PRICES.screener, "Momentum screener over the full tokenized-stock universe"),
+    "POST /v1/compare": paid(PRICES.compare, "Head-to-head research note on two tokenized stocks"),
+    "POST /v1/rebalance": paid(PRICES.rebalance, "Rebalance planner: holdings + target -> minimal diff legs"),
   };
 }
 

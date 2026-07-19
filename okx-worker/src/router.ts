@@ -29,6 +29,10 @@ export async function route(request: Request, env: Env, ctx: ExecutionContext): 
         { path: "POST /v1/halal-screen", priceUsd: PRICES.halalScreen, what: "AAOIFI shariah screen with reasons", body: { symbols: ["string"] } },
         { path: "POST /v1/basket/:id", priceUsd: PRICES.basket, what: "Themed basket allocation", baskets: Object.keys(BASKETS), body: { amountUsd: "number" } },
         { path: "POST /v1/build", priceUsd: PRICES.build, what: "Plan -> per-leg OKX DEX swap instructions (you execute)", body: { plan: "Allocation", amountUsd: "number" } },
+        { path: "POST /v1/backtest", priceUsd: PRICES.backtest, what: "1-year backtest of any weighted basket vs SPY", body: { allocations: [{ symbol: "string", weightPct: "number" }] } },
+        { path: "POST /v1/screener", priceUsd: PRICES.screener, what: "Momentum screener over the full universe", body: {} },
+        { path: "POST /v1/compare", priceUsd: PRICES.compare, what: "Head-to-head note on two stocks", body: { symbolA: "string", symbolB: "string", goal: "string (optional)" } },
+        { path: "POST /v1/rebalance", priceUsd: PRICES.rebalance, what: "Holdings + target -> minimal diff legs", body: { holdings: [{ symbol: "string", usdValue: "number" }], target: [{ symbol: "string", weightPct: "number" }], cashUsd: "number (optional)" } },
       ],
       trust:
         "Every paid plan is committed on-chain (X Layer) with a signature binding the payer, spend and legs. Track record is publicly auditable.",
@@ -69,6 +73,10 @@ export async function route(request: Request, env: Env, ctx: ExecutionContext): 
       p === "/v1/halal-screen" ||
       p === "/v1/build" ||
       p === "/v1/basket" ||
+      p === "/v1/backtest" ||
+      p === "/v1/screener" ||
+      p === "/v1/compare" ||
+      p === "/v1/rebalance" ||
       basketMatch !== null);
 
   if (!isPaidPath) return errorJson(404, "Not found. GET / lists all services.");
@@ -89,6 +97,18 @@ export async function route(request: Request, env: Env, ctx: ExecutionContext): 
   } else if (p === "/v1/build") {
     const { handleBuild } = await import("./handlers/build");
     response = await handleBuild(request);
+  } else if (p === "/v1/backtest") {
+    const { handleBacktest } = await import("./handlers/backtest");
+    response = await handleBacktest(request);
+  } else if (p === "/v1/screener") {
+    const { handleScreener } = await import("./handlers/screener");
+    response = await handleScreener();
+  } else if (p === "/v1/compare") {
+    const { handleCompare } = await import("./handlers/compare");
+    response = await handleCompare(request, env);
+  } else if (p === "/v1/rebalance") {
+    const { handleRebalance } = await import("./handlers/rebalance");
+    response = await handleRebalance(request);
   } else {
     const { handleBasket } = await import("./handlers/basket");
     const idFromPath = p === "/v1/basket" ? "" : p.split("/").pop()!;
