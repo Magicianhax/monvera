@@ -1,6 +1,7 @@
 import type { NextRequest } from "next/server";
 import { AllocateRequestSchema } from "@/lib/allocation-schema";
 import { buildAllocation } from "@/lib/server/allocate";
+import { filterTradable } from "@/lib/server/tradability";
 import { backtestBasket } from "@/lib/server/quant";
 import { activeModelId, hasAiProvider } from "@/lib/server/aiModel";
 import { verifyRequest } from "@/lib/server/privyAuth";
@@ -33,6 +34,23 @@ export async function POST(req: NextRequest) {
 
   try {
     const allocation = await buildAllocation(body.goal, body.amountUsd, body.riskTolerance);
+
+    // Liquidity gate: drop legs no venue can actually fill right now, BEFORE
+    // the user sees the plan — the old failure mode was silent leg-skips at
+    // invest time. Weights renormalize to 100 across the surviving legs.
+    const { ok, dropped } = await filterTradable(allocation.allocations.map((a) => a.symbol));
+    if (ok.length === 0) return badRequest("None of the assets in this plan are tradable right now — try again in a few minutes.");
+    if (dropped.length > 0) {
+      const okSet = new Set(ok);
+      const kept = allocation.allocations.filter((a) => okSet.has(a.symbol));
+      const keptSum = kept.reduce((s, a) => s + a.weightPct, 0) || 1;
+      const scaled = kept.map((a) => ({ ...a, weightPct: Math.round((a.weightPct / keptSum) * 100) }));
+      const drift = 100 - scaled.reduce((s, a) => s + a.weightPct, 0);
+      scaled[0] = { ...scaled[0], weightPct: scaled[0].weightPct + drift };
+      allocation.allocations = scaled;
+      allocation.rationale = `${allocation.rationale} Skipped ${dropped.join(", ")} — no venue can fill ${dropped.length === 1 ? "it" : "them"} right now.`;
+    }
+
     // Real-history check on the proposed mix (12 months vs SPY). Best-effort:
     // a data outage never blocks the plan itself.
     const backtest = await backtestBasket(allocation.allocations).catch(() => null);

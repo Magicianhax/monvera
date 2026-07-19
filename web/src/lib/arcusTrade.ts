@@ -38,6 +38,10 @@ export async function fetchArcusQuote(params: {
   taker: string;
   /** Force the router-settled venue (used to retry legs whose "tx" settle reverts). */
   venue?: "rfq";
+  /** Venues that just failed to settle — the server skips them and returns the next best. */
+  avoid?: ("arcus" | "rialto" | "lifi" | "uniswap")[];
+  /** The user's smart account — unlocks LiFi as an executable venue server-side. */
+  executor?: string;
 }): Promise<ArcusQuoteResponse> {
   const res = await fetch("/api/quote", {
     method: "POST",
@@ -46,10 +50,11 @@ export async function fetchArcusQuote(params: {
   });
   const json = (await res.json()) as ArcusQuoteResponse & { error?: string };
   if (!res.ok) throw new Error(json.error || "Couldn't get a price. Try again.");
-  if (!json.liquidityAvailable || !json.toSign) {
-    throw new Error(`No liquidity for ${params.symbol} right now.`);
-  }
-  if (json.kind === "tx" && !json.tx) {
+  // AMM quotes (LiFi / Uniswap v4) carry no Permit2 intent — their contract is `steps`.
+  const executable = json.kind === "amm"
+    ? Boolean(json.steps && json.steps.length > 0)
+    : Boolean(json.toSign && (json.kind !== "tx" || json.tx));
+  if (!json.liquidityAvailable || !executable) {
     throw new Error(`No liquidity for ${params.symbol} right now.`);
   }
   return json;

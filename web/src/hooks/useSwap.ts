@@ -14,8 +14,10 @@
 // Arcus takes its fee inside the quote; our revenue is the affiliate referralCode
 // injected server-side, so there's no separate fee transfer here.
 import { useCallback, useState } from "react";
+import { encodeFunctionData } from "viem";
 import { useActiveWallet } from "@/hooks/useActiveWallet";
-import { sendSponsoredCalls, type Call } from "@/lib/aa";
+import { getSmartAccountClient, sendSponsoredCalls, type Call } from "@/lib/aa";
+import { ERC20_MINI_ABI } from "@/lib/monveraToken";
 
 import { buildPermitCall } from "@/lib/permit";
 import { asViemProvider } from "@/lib/provider";
@@ -44,6 +46,17 @@ interface SwapSubmission {
   txHash: `0x${string}`;
   /** True when the router settles it: the tokens land after a short delay. */
   settling: boolean;
+  /** Expected/guaranteed output per the executed quote (raw units of the buy token). */
+  buyAmount?: bigint;
+  minBuyAmount?: bigint;
+}
+
+/** The quote's expected/min output, for the receipt the ticket shows. */
+function fillOf(quote: { buyAmount?: string; minBuyAmount?: string }): { buyAmount?: bigint; minBuyAmount?: bigint } {
+  return {
+    buyAmount: quote.buyAmount ? BigInt(quote.buyAmount) : undefined,
+    minBuyAmount: quote.minBuyAmount ? BigInt(quote.minBuyAmount) : undefined,
+  };
 }
 
 /**
@@ -65,8 +78,27 @@ export async function executeSwap(
   const eoa = wallet.address as `0x${string}`;
   const provider = (await wallet.getEthereumProvider()) as Eip1193;
   const signTyped = signTypedOverride ?? typedDataSigner(provider, eoa);
+  // The smart account that relays every settlement. Passing it as `executor`
+  // lets the server offer LiFi as a third executable venue.
+  const { owner: executor } = await getSmartAccountClient(asViemProvider(provider));
 
   const settle = async (quote: Awaited<ReturnType<typeof fetchArcusQuote>>): Promise<SwapSubmission> => {
+    if (quote.kind === "amm") {
+      // AMM route (LiFi or Uniswap v4), MONVERA-batch shape: exact-amount
+      // EIP-2612 permit from the EOA -> smart account pulls the sell token ->
+      // runs the venue's server-built steps (approve/route/sweep). Output lands
+      // in the EOA, gas stays sponsored, one signature.
+      if (!quote.steps?.length || !quote.sellToken || !quote.sellAmount) throw new Error("Malformed fallback quote.");
+      const amt = BigInt(quote.sellAmount);
+      const calls: Call[] = [
+        await buildPermitCall(signTyped, eoa, executor, quote.sellToken, amt),
+        { to: quote.sellToken, data: encodeFunctionData({ abi: ERC20_MINI_ABI, functionName: "transferFrom", args: [eoa, executor, amt] }) },
+        ...quote.steps.map((st) => ({ to: st.to, data: st.data, value: BigInt(st.value || 0) })),
+      ];
+      const receipt = await sendSponsoredCalls(asViemProvider(provider), calls);
+      return { txHash: receipt.receipt.transactionHash as `0x${string}`, settling: false, ...fillOf(quote) };
+    }
+
     if (quote.kind === "rfq") {
       // No size check here: the maker's minimum is theirs to enforce, and the trade
       // screen already warned. A rejected order costs the user a signature, not money.
@@ -75,7 +107,7 @@ export async function executeSwap(
         await sendSponsoredCalls(asViemProvider(provider), [permit]);
       }
       const submitted = await submitRfqIntent(quote, eoa, signTyped);
-      return { txHash: submitted.txHash, settling: true };
+      return { txHash: submitted.txHash, settling: true, ...fillOf(quote) };
     }
 
     const calls: Call[] = [];
@@ -89,21 +121,44 @@ export async function executeSwap(
 
     // Relay through the Pimlico smart account — sponsored, so the EOA never pays gas.
     const receipt = await sendSponsoredCalls(asViemProvider(provider), calls);
-    return { txHash: receipt.receipt.transactionHash as `0x${string}`, settling: false };
+    return { txHash: receipt.receipt.transactionHash as `0x${string}`, settling: false, ...fillOf(quote) };
   };
 
-  const quote = await fetchArcusQuote({ ...params, taker: eoa });
-  try {
-    return await settle(quote);
-  } catch (err) {
-    // Symbol-dependent: some "tx" settlements revert the router's InvalidAction()
-    // guard when relayed from the smart account. Retry those router-settled
-    // (venue: "rfq") before surfacing a failure.
-    if (quote.kind !== "tx") throw err;
-    console.warn(`[swap] ${params.symbol} tx settle failed, retrying via RFQ:`, err instanceof Error ? err.message : err);
-    const rfq = await fetchArcusQuote({ ...params, taker: eoa, venue: "rfq" });
-    return await settle(rfq);
+  // Best-execution ladder: the server returns the best-priced venue each round;
+  // every settle failure adds that venue to `avoid` and we re-quote the rest —
+  // best -> runner-up -> last venue standing. Arcus "tx" gets one extra
+  // router-settled (RFQ) retry before Arcus is abandoned (the InvalidAction case).
+  const avoidList: ("arcus" | "rialto" | "lifi" | "uniswap")[] = [];
+  let lastErr: unknown = null;
+  for (let round = 0; round < 4; round++) {
+    let quote: Awaited<ReturnType<typeof fetchArcusQuote>>;
+    try {
+      quote = await fetchArcusQuote({ ...params, taker: eoa, executor, avoid: avoidList.length ? avoidList : undefined });
+    } catch (quoteErr) {
+      if (round === 0) throw quoteErr; // nothing quoted at all — surface it
+      break; // no venues left to try
+    }
+    try {
+      return await settle(quote);
+    } catch (err) {
+      lastErr = err;
+      const failed = quote.venue ?? "arcus";
+      console.warn(`[swap] ${params.symbol} ${failed}/${quote.kind} settle failed:`, err instanceof Error ? err.message : err);
+      if (failed === "arcus" && quote.kind === "tx") {
+        // Symbol-dependent: some Arcus "tx" settlements revert the router's
+        // InvalidAction() guard when relayed. Retry router-settled first.
+        try {
+          const rfq = await fetchArcusQuote({ ...params, taker: eoa, venue: "rfq" });
+          return await settle(rfq);
+        } catch (rfqErr) {
+          lastErr = rfqErr;
+          console.warn(`[swap] ${params.symbol} arcus/rfq retry also failed:`, rfqErr instanceof Error ? rfqErr.message : rfqErr);
+        }
+      }
+      avoidList.push(failed);
+    }
   }
+  throw lastErr ?? new Error(`No liquidity for ${params.symbol} right now.`);
 }
 
 /**
@@ -131,6 +186,10 @@ export interface SwapResult {
   amountUsd: number;
   /** "buy" (USDG -> asset) or "sell" (asset -> USDG). */
   side: "buy" | "sell";
+  /** Expected output per the executed quote, raw units of the buy token
+   *  (the asset on a buy at its own decimals; USDG 6dp on a sell). */
+  buyAmount?: bigint;
+  minBuyAmount?: bigint;
   /**
    * The trade is on-chain but hasn't confirmed yet (RFQ fills can take minutes).
    * The receipt must say "settling", never "bought"/"sold".
@@ -173,9 +232,9 @@ export function useSwap() {
         if (sellAmount <= BigInt(0)) throw new Error("Enter an amount first.");
 
         setPhase("swapping");
-        const { txHash, settling } = await executeSwap(wallet, { side: "buy", symbol: asset.symbol, sellAmount });
+        const { txHash, settling, buyAmount, minBuyAmount } = await executeSwap(wallet, { side: "buy", symbol: asset.symbol, sellAmount });
         const confirmed = settling ? await settleRfq(txHash, setPhase, refreshBalances) : true;
-        setResult({ txHash, asset, amountUsd, side: "buy", pending: !confirmed });
+        setResult({ txHash, asset, amountUsd, side: "buy", pending: !confirmed, buyAmount, minBuyAmount });
         setPhase("done");
         refreshBalances();
       } catch (e) {
@@ -205,9 +264,9 @@ export function useSwap() {
         if (amountIn <= BigInt(0)) throw new Error("Nothing to sell.");
 
         setPhase("swapping");
-        const { txHash, settling } = await executeSwap(wallet, { side: "sell", symbol: asset.symbol, sellAmount: amountIn });
+        const { txHash, settling, buyAmount, minBuyAmount } = await executeSwap(wallet, { side: "sell", symbol: asset.symbol, sellAmount: amountIn });
         const confirmed = settling ? await settleRfq(txHash, setPhase, refreshBalances) : true;
-        setResult({ txHash, asset, amountUsd: estUsdcValue, side: "sell", pending: !confirmed });
+        setResult({ txHash, asset, amountUsd: estUsdcValue, side: "sell", pending: !confirmed, buyAmount, minBuyAmount });
         setPhase("done");
         refreshBalances();
       } catch (e) {

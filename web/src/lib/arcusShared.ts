@@ -121,7 +121,12 @@ export interface ArcusToSign {
  *           Most assets are RFQ-only. Minimum order is roughly $10.
  */
 export interface ArcusQuoteResponse {
-  kind?: "tx" | "rfq";
+  kind?: "tx" | "rfq" | "amm";
+  /** Which venue priced/settles this quote (best-execution comparison). */
+  venue?: "arcus" | "rialto" | "lifi" | "uniswap";
+  /** kind "amm" only: calls the smart account runs right after its permit+pull
+   *  of the sell token (approve/route/sweep - venue-specific, server-built). */
+  steps?: { to: `0x${string}`; data: `0x${string}`; value: string }[];
   liquidityAvailable: boolean;
   buyAmount?: string;
   minBuyAmount?: string;

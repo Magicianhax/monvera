@@ -17,8 +17,9 @@ import { useCallback, useState } from "react";
 import { encodeFunctionData, zeroAddress } from "viem";
 import { useSignTypedData } from "@privy-io/react-auth";
 import { useActiveWallet } from "@/hooks/useActiveWallet";
-import { sendSponsoredCalls, type Call } from "@/lib/aa";
-import { buildUsdgPermitCall } from "@/lib/permit";
+import { getSmartAccountClient, sendSponsoredCalls, type Call } from "@/lib/aa";
+import { buildPermitCall, buildUsdgPermitCall } from "@/lib/permit";
+import { ERC20_MINI_ABI } from "@/lib/monveraToken";
 import { asViemProvider } from "@/lib/provider";
 import { splitByWeights } from "@/lib/arcusShared";
 import { fetchArcusQuote, settleCallFor, submitRfqIntent, typedDataSigner, waitForRfqFill, type Eip1193 } from "@/lib/arcusTrade";
@@ -250,6 +251,9 @@ export function useInvest(): UseInvest {
                 )
             : typedDataSigner(provider, eoa);
         const viemProvider = asViemProvider(provider);
+        // The relaying smart account — offered to the server as `executor` so
+        // LiFi can compete as a third executable venue for each leg.
+        const { owner: executor } = await getSmartAccountClient(viemProvider);
 
         const relay = async (call: Call): Promise<`0x${string}`> => {
           const r = await sendSponsoredCalls(viemProvider, [call]);
@@ -270,6 +274,21 @@ export function useInvest(): UseInvest {
         const settleQuote = async (
           quote: Awaited<ReturnType<typeof fetchArcusQuote>>,
         ): Promise<{ txHash: `0x${string}`; settling: boolean }> => {
+          if (quote.kind === "amm") {
+            // AMM leg (LiFi or Uniswap v4), MONVERA-batch shape (one UserOp —
+            // this is a DEX route, not an Arcus settle, so the no-batching rule
+            // doesn't apply): exact-amount USDG permit -> smart account pulls ->
+            // runs the venue's steps; output goes straight to the EOA.
+            if (!quote.steps?.length || !quote.sellToken || !quote.sellAmount) throw new Error("Malformed fallback quote.");
+            const amt = BigInt(quote.sellAmount);
+            const r = await sendSponsoredCalls(viemProvider, [
+              await buildPermitCall(signTyped, eoa, executor, quote.sellToken, amt),
+              { to: quote.sellToken, data: encodeFunctionData({ abi: ERC20_MINI_ABI, functionName: "transferFrom", args: [eoa, executor, amt] }) },
+              ...quote.steps.map((st) => ({ to: st.to, data: st.data, value: BigInt(st.value || 0) })),
+            ]);
+            if (!r.success) throw new Error(`reverted (tx ${r.receipt.transactionHash})`);
+            return { txHash: r.receipt.transactionHash as `0x${string}`, settling: false };
+          }
           if (quote.kind === "rfq") {
             const submitted = await submitRfqIntent(quote, eoa, signTyped);
             return { txHash: submitted.txHash, settling: true };
@@ -291,7 +310,7 @@ export function useInvest(): UseInvest {
           });
           try {
             const freshQuote = () =>
-              fetchArcusQuote({ side: "buy", symbol: q.leg.symbol, sellAmount: q.amountMicro, taker: eoa });
+              fetchArcusQuote({ side: "buy", symbol: q.leg.symbol, sellAmount: q.amountMicro, taker: eoa, executor });
             // Quote fresh and settle IMMEDIATELY — no gap for the quote to go stale.
             let quote = await freshQuote();
             // One-time USDG -> Permit2 allowance, its own UserOp, before the first
@@ -309,12 +328,20 @@ export function useInvest(): UseInvest {
               //    relayed from the smart account (symbol-dependent) → retry the
               //    leg ROUTER-SETTLED (venue: "rfq", off-Pimlico);
               //  - a maker pulls between quote and settle → a fresh quote fixes it.
-              console.warn(`[invest] leg ${q.leg.symbol} retrying (${quote.kind} settle failed):`, firstErr instanceof Error ? firstErr.message : firstErr);
+              console.warn(`[invest] leg ${q.leg.symbol} retrying (${quote.venue ?? "arcus"}/${quote.kind} settle failed):`, firstErr instanceof Error ? firstErr.message : firstErr);
+              const failedVenue = quote.venue ?? "arcus";
               quote =
-                quote.kind === "tx"
+                quote.kind === "tx" && failedVenue === "arcus"
                   ? await fetchArcusQuote({ side: "buy", symbol: q.leg.symbol, sellAmount: q.amountMicro, taker: eoa, venue: "rfq" })
                   : await freshQuote();
-              res = await settleQuote(quote);
+              try {
+                res = await settleQuote(quote);
+              } catch (secondErr) {
+                // Last rung: the best OTHER venue (skip the one that failed).
+                console.warn(`[invest] leg ${q.leg.symbol} cross-venue retry:`, secondErr instanceof Error ? secondErr.message : secondErr);
+                quote = await fetchArcusQuote({ side: "buy", symbol: q.leg.symbol, sellAmount: q.amountMicro, taker: eoa, executor, avoid: [failedVenue] });
+                res = await settleQuote(quote);
+              }
             }
             lastTx = res.txHash;
             filled.push({ leg: q.leg, amountMicro: q.amountMicro, txHash: res.txHash, settling: res.settling });
