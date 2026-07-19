@@ -82,18 +82,6 @@ export async function route(request: Request, env: Env, ctx: ExecutionContext): 
 
   // ── paid routes (the x402 route table decides price; unknown paths fall out) ─
   const basketMatch = /^\/v1\/basket\/([a-z-]+)$/.exec(p);
-  if (basketMatch && request.method === "POST" && !(basketMatch[1] in BASKETS)) {
-    // Reject BEFORE the payment gate — never charge for a guaranteed 404.
-    return errorJson(404, `Unknown basket: ${basketMatch[1]}. Available: ${Object.keys(BASKETS).join(", ")}.`);
-  }
-  if (p === "/v1/basket" && request.method === "POST") {
-    // Body-form basket: peek the id (body OR query) before the payment gate.
-    const peek = (await request.clone().json().catch(() => null)) as { basket?: unknown } | null;
-    const id = typeof peek?.basket === "string" ? peek.basket : url.searchParams.get("basket");
-    if (typeof id !== "string" || !(id in BASKETS)) {
-      return errorJson(404, `Unknown basket: ${id ?? "(none given)"}. Available: ${Object.keys(BASKETS).join(", ")}.`);
-    }
-  }
   const isPaidPath =
     request.method === "POST" &&
     (p === "/v1/plan" ||
@@ -108,6 +96,16 @@ export async function route(request: Request, env: Env, ctx: ExecutionContext): 
       basketMatch !== null);
 
   if (!isPaidPath) return errorJson(404, "Not found. GET / lists all services.");
+
+  // x402 settles BEFORE the merchant validates, so validate first — a request
+  // that would fail must be rejected here, before anyone is charged.
+  {
+    const body = (await request.clone().json().catch(() => null)) as Record<string, unknown> | null;
+    const input = { ...Object.fromEntries(url.searchParams), ...(body ?? {}) };
+    const { prevalidate } = await import("./precheck");
+    const problem = prevalidate(basketMatch ? "/v1/basket" : p, basketMatch?.[1] ?? null, input);
+    if (problem) return errorJson(400, `${problem} Nothing was charged.`);
+  }
 
   const pay = await requirePayment(request, env);
   if (!pay.paid) return pay.response;

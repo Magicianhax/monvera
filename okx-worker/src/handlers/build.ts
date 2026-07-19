@@ -3,7 +3,7 @@
 // time and execute it before quoting the next (per-leg rule; upfront quotes go
 // stale and tail legs die).
 import { z } from "zod";
-import { json, errorJson } from "../respond";
+import { json, errorJson, requestInput } from "../respond";
 import { AllocationSchema } from "../allocation-schema";
 import { splitByWeights, SOL_MIN_LEG_USD } from "../legMath";
 import { assetBySymbol, USDC_SOL_MINT } from "../universe";
@@ -28,7 +28,7 @@ const LEG_NOTE =
   "Quote this leg via the OKX DEX aggregator at execution time, get your user's approval, execute, then move to the next leg. Never quote all legs upfront.";
 
 export async function handleBuild(request: Request): Promise<Response> {
-  const parsed = RequestSchema.safeParse(await request.json().catch(() => null));
+  const parsed = RequestSchema.safeParse(await requestInput(request));
   if (!parsed.success) {
     return errorJson(400, "Body must be { plan: Allocation, amountUsd: number }.");
   }

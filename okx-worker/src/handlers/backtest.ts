@@ -1,6 +1,6 @@
 // Paid: 1-year backtest of any weighted basket vs SPY.
 import { z } from "zod";
-import { json, errorJson } from "../respond";
+import { json, errorJson, requestInput } from "../respond";
 import { backtestBasket } from "../quant";
 import { assetBySymbol } from "../universe";
 import { DISCLAIMER } from "./plan";
@@ -13,7 +13,7 @@ const RequestSchema = z.object({
 });
 
 export async function handleBacktest(request: Request): Promise<Response> {
-  const parsed = RequestSchema.safeParse(await request.json().catch(() => null));
+  const parsed = RequestSchema.safeParse(await requestInput(request));
   if (!parsed.success) {
     return errorJson(400, "Body must be { allocations: [{ symbol, weightPct }] } (1-30 legs).");
   }

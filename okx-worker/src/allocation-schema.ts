@@ -36,7 +36,8 @@ export const AllocateRequestSchema = z.object({
   // Bounded length: caps Anthropic token spend and shrinks the prompt-injection
   // surface (a goal can't smuggle in a multi-KB instruction payload).
   goal: z.string().min(1, "Tell the AI what you want.").max(600, "Keep your goal under 600 characters."),
-  amountUsd: z.number().positive().max(1_000_000, "That amount is too large."),
+  // coerce: A2MCP callers may deliver params as query-string values
+  amountUsd: z.coerce.number().positive().max(1_000_000, "That amount is too large."),
   riskTolerance: z.enum(["conservative", "balanced", "aggressive"]).optional(),
 });
 

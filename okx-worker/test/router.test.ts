@@ -37,15 +37,49 @@ test("GET / lists all services free", async () => {
   expect(body.services.length).toBe(11);
 });
 
-test("paid route without payment gets 402 + challenge header", async () => {
+test("valid paid request without payment gets 402 + challenge header", async () => {
   mockFetch((url) => (url.includes("/pay/x402/supported") ? supportedResponse() : null));
   const r = await route(
-    new Request("https://asp.example/v1/plan", { method: "POST", body: "{}" }),
+    new Request("https://asp.example/v1/plan", {
+      method: "POST",
+      body: JSON.stringify({ goal: "steady growth", amountUsd: 50 }),
+    }),
     env,
     ctx
   );
   expect(r.status).toBe(402);
   expect(r.headers.get("PAYMENT-REQUIRED")).toBeTruthy();
+});
+
+test("malformed paid request is rejected BEFORE the payment gate (no charge)", async () => {
+  mockFetch(() => null); // no facilitator call may happen
+  const r = await route(new Request("https://asp.example/v1/plan", { method: "POST", body: "{}" }), env, ctx);
+  expect(r.status).toBe(400);
+  const body = (await r.json()) as { error: string };
+  expect(body.error).toContain("Nothing was charged");
+});
+
+test("query-string params satisfy the pre-payment validation", async () => {
+  mockFetch((url) => (url.includes("/pay/x402/supported") ? supportedResponse() : null));
+  const r = await route(
+    new Request("https://asp.example/v1/basket/halal?amountUsd=40", { method: "POST", body: "{}" }),
+    env,
+    ctx
+  );
+  expect(r.status).toBe(402); // validation passed; only payment is missing
+});
+
+test("unknown symbol in a paid request is rejected before charging", async () => {
+  mockFetch(() => null);
+  const r = await route(
+    new Request("https://asp.example/v1/research", {
+      method: "POST",
+      body: JSON.stringify({ symbol: "DOGE" }),
+    }),
+    env,
+    ctx
+  );
+  expect(r.status).toBe(400);
 });
 
 test("free quote route responds without payment", async () => {
@@ -78,20 +112,26 @@ test("unknown route is a 404 with a pointer", async () => {
   expect(r.status).toBe(404);
 });
 
-test("unknown basket id 404s BEFORE the payment gate (never charge for a 404)", async () => {
+test("unknown basket id is rejected BEFORE the payment gate", async () => {
   mockFetch(() => null); // no facilitator call may happen
   const r = await route(
-    new Request("https://asp.example/v1/basket/nonsense", { method: "POST", body: "{}" }),
+    new Request("https://asp.example/v1/basket/nonsense", {
+      method: "POST",
+      body: JSON.stringify({ amountUsd: 40 }),
+    }),
     env,
     ctx
   );
-  expect(r.status).toBe(404);
+  expect(r.status).toBe(400);
 });
 
-test("valid basket id is payment-gated", async () => {
+test("valid basket request is payment-gated", async () => {
   mockFetch((url) => (url.includes("/pay/x402/supported") ? supportedResponse() : null));
   const r = await route(
-    new Request("https://asp.example/v1/basket/halal", { method: "POST", body: "{}" }),
+    new Request("https://asp.example/v1/basket/halal", {
+      method: "POST",
+      body: JSON.stringify({ amountUsd: 40 }),
+    }),
     env,
     ctx
   );

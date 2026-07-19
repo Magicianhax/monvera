@@ -2,7 +2,7 @@
 import { generateText } from "ai";
 import { z } from "zod";
 import type { Env } from "../env";
-import { json, errorJson } from "../respond";
+import { json, errorJson, requestInput } from "../respond";
 import { assetBySymbol } from "../universe";
 import { resolveAllocationModel } from "../aiModel";
 import { universeStatsBlock } from "../quant";
@@ -15,7 +15,7 @@ const RequestSchema = z.object({
 });
 
 export async function handleCompare(request: Request, env: Env): Promise<Response> {
-  const parsed = RequestSchema.safeParse(await request.json().catch(() => null));
+  const parsed = RequestSchema.safeParse(await requestInput(request));
   if (!parsed.success) {
     return errorJson(400, "Body must be { symbolA: string, symbolB: string, goal?: string }.");
   }

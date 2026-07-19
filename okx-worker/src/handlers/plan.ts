@@ -1,5 +1,5 @@
 import type { Env } from "../env";
-import { json, errorJson } from "../respond";
+import { json, errorJson, requestInput } from "../respond";
 import { AllocateRequestSchema } from "../allocation-schema";
 import { buildAllocation } from "../engine";
 import { backtestBasket } from "../quant";
@@ -15,7 +15,7 @@ export async function handlePlan(
   ctx: ExecutionContext,
   payer: string
 ): Promise<Response> {
-  const parsed = AllocateRequestSchema.safeParse(await request.json().catch(() => null));
+  const parsed = AllocateRequestSchema.safeParse(await requestInput(request));
   if (!parsed.success) {
     return errorJson(400, parsed.error.issues[0]?.message ?? "invalid request body");
   }

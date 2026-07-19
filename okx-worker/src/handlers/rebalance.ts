@@ -2,7 +2,7 @@
 // Non-custodial like everything else: we output instructions, the buyer's
 // wallet quotes and executes each leg itself.
 import { z } from "zod";
-import { json, errorJson } from "../respond";
+import { json, errorJson, requestInput } from "../respond";
 import { SOL_MIN_LEG_USD } from "../legMath";
 import { assetBySymbol, USDC_SOL_MINT } from "../universe";
 import { DISCLAIMER } from "./plan";
@@ -22,7 +22,7 @@ const LEG_NOTE =
   "Quote this leg via the OKX DEX aggregator at execution time, get your user's approval, execute, then move to the next leg.";
 
 export async function handleRebalance(request: Request): Promise<Response> {
-  const parsed = RequestSchema.safeParse(await request.json().catch(() => null));
+  const parsed = RequestSchema.safeParse(await requestInput(request));
   if (!parsed.success) {
     return errorJson(
       400,

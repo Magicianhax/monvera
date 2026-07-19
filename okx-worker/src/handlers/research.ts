@@ -1,7 +1,7 @@
 import { generateText } from "ai";
 import { z } from "zod";
 import type { Env } from "../env";
-import { json, errorJson } from "../respond";
+import { json, errorJson, requestInput } from "../respond";
 import { assetBySymbol } from "../universe";
 import { resolveAllocationModel } from "../aiModel";
 import { universeStatsBlock } from "../quant";
@@ -10,7 +10,7 @@ import { DISCLAIMER } from "./plan";
 const RequestSchema = z.object({ symbol: z.string().min(1).max(12) });
 
 export async function handleResearch(request: Request, env: Env): Promise<Response> {
-  const parsed = RequestSchema.safeParse(await request.json().catch(() => null));
+  const parsed = RequestSchema.safeParse(await requestInput(request));
   if (!parsed.success) return errorJson(400, "Body must be { symbol: string }.");
   const asset = assetBySymbol(parsed.data.symbol);
   if (!asset) return errorJson(404, `Unknown symbol: ${parsed.data.symbol}`);
