@@ -1,31 +1,18 @@
-// Turns a plan into per-leg swap instructions the buyer's own wallet executes.
-// Non-custodial: Vera never signs. The buyer must quote each leg at execution
-// time and execute it before quoting the next (per-leg rule; upfront quotes go
-// stale and tail legs die).
+// Turns an EXTERNAL plan into per-leg swap instructions. Note: /v1/plan and
+// /v1/basket already include their legs for free — this endpoint exists for
+// plans that came from somewhere else (or were edited by the buyer).
+// Non-custodial: Vera never signs; the buyer quotes and executes per leg.
 import { z } from "zod";
 import { json, errorJson, requestInput } from "../respond";
 import { AllocationSchema } from "../allocation-schema";
-import { splitByWeights, SOL_MIN_LEG_USD } from "../legMath";
-import { assetBySymbol, USDC_SOL_MINT } from "../universe";
+import { SOL_MIN_LEG_USD } from "../legMath";
+import { assetBySymbol } from "../universe";
+import { buildLegs, OKX_SWAP_PARAMS } from "../legs";
 
 const RequestSchema = z.object({
   plan: AllocationSchema,
-  amountUsd: z.number().positive().max(1_000_000),
+  amountUsd: z.coerce.number().positive().max(1_000_000),
 });
-
-export interface Leg {
-  venue: "okx-dex";
-  chainIndex: "501";
-  tokenIn: string;
-  tokenOut: string;
-  symbol: string;
-  amountIn: string; // USDC base units (6dp)
-  minOut: null;
-  note: string;
-}
-
-const LEG_NOTE =
-  "Quote this leg via the OKX DEX aggregator at execution time, get your user's approval, execute, then move to the next leg. Never quote all legs upfront.";
 
 export async function handleBuild(request: Request): Promise<Response> {
   const parsed = RequestSchema.safeParse(await requestInput(request));
@@ -40,19 +27,7 @@ export async function handleBuild(request: Request): Promise<Response> {
     return errorJson(400, `Unknown symbols in plan: ${unknown.map((a) => a.symbol).join(", ")}.`);
   }
 
-  const weights = plan.allocations.map((a) => a.weightPct);
-  const amounts = splitByWeights(BigInt(Math.round(amountUsd * 1_000_000)), weights);
-  const legs: Leg[] = plan.allocations.map((a, i) => ({
-    venue: "okx-dex",
-    chainIndex: "501",
-    tokenIn: USDC_SOL_MINT,
-    tokenOut: assetBySymbol(a.symbol)!.mint,
-    symbol: a.symbol,
-    amountIn: amounts[i].toString(),
-    minOut: null,
-    note: LEG_NOTE,
-  }));
-
+  const legs = buildLegs(plan.allocations, amountUsd);
   const dust = legs.filter((l) => BigInt(l.amountIn) < BigInt(SOL_MIN_LEG_USD * 1_000_000));
   if (dust.length > 0) {
     return errorJson(
@@ -66,11 +41,6 @@ export async function handleBuild(request: Request): Promise<Response> {
     execution: "sequential",
     rule: "quote -> approve -> execute per leg, in order",
     settlement: "Tokens land in the executing wallet. Vera never holds funds.",
-    // Optional partner-fee params for the OKX swap-build call. Including them
-    // supports Vera; omitting them changes nothing about the trade itself.
-    okxSwapParams: {
-      feePercent: "0.5",
-      fromTokenReferrerWalletAddress: "EmKjEoRJvJvzvPSjcwnZj4xsZtYLgdVnCyQS1dv1AJgp",
-    },
+    okxSwapParams: OKX_SWAP_PARAMS,
   });
 }

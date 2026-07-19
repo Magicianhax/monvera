@@ -37,5 +37,15 @@ export async function handleBasket(
   }
   const plan = await resolveBasket(id as BasketId, parsed.data.amountUsd);
   const record = await commitRecord(env, ctx, plan, payer, parsed.data.amountUsd).catch(() => undefined);
-  return json({ basket: BASKETS[id as BasketId], plan, record, disclaimer: DISCLAIMER });
+  const { buildLegs, OKX_SWAP_PARAMS } = await import("../legs");
+  return json({
+    basket: BASKETS[id as BasketId],
+    plan,
+    // Executable legs included at no extra cost — one purchase, one product.
+    legs: buildLegs(plan.allocations, parsed.data.amountUsd),
+    execution: "sequential — quote, approve and execute each leg in order",
+    okxSwapParams: OKX_SWAP_PARAMS,
+    record,
+    disclaimer: DISCLAIMER,
+  });
 }

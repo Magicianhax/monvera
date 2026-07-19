@@ -37,5 +37,15 @@ export async function handlePlan(
     }))
   ).catch(() => null);
   const record = await commitRecord(env, ctx, plan, payer, parsed.data.amountUsd).catch(() => undefined);
-  return json({ plan, backtest, record, disclaimer: DISCLAIMER });
+  const { buildLegs, OKX_SWAP_PARAMS } = await import("../legs");
+  return json({
+    plan,
+    backtest,
+    // Executable legs included at no extra cost — one purchase, one product.
+    legs: buildLegs(plan.allocations, parsed.data.amountUsd),
+    execution: "sequential — quote, approve and execute each leg in order",
+    okxSwapParams: OKX_SWAP_PARAMS,
+    record,
+    disclaimer: DISCLAIMER,
+  });
 }
