@@ -60,10 +60,11 @@ export async function route(request: Request, env: Env, ctx: ExecutionContext): 
     return errorJson(404, `Unknown basket: ${basketMatch[1]}. Available: ${Object.keys(BASKETS).join(", ")}.`);
   }
   if (p === "/v1/basket" && request.method === "POST") {
-    // Body-form basket: peek the id before the payment gate for the same reason.
+    // Body-form basket: peek the id (body OR query) before the payment gate.
     const peek = (await request.clone().json().catch(() => null)) as { basket?: unknown } | null;
-    if (typeof peek?.basket !== "string" || !(peek.basket in BASKETS)) {
-      return errorJson(404, `Unknown basket: ${typeof peek?.basket === "string" ? peek.basket : "(none given)"}. Available: ${Object.keys(BASKETS).join(", ")}.`);
+    const id = typeof peek?.basket === "string" ? peek.basket : url.searchParams.get("basket");
+    if (typeof id !== "string" || !(id in BASKETS)) {
+      return errorJson(404, `Unknown basket: ${id ?? "(none given)"}. Available: ${Object.keys(BASKETS).join(", ")}.`);
     }
   }
   const isPaidPath =
