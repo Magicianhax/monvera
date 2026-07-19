@@ -32,6 +32,11 @@ const config: HardhatUserConfig = {
       chainId: 4663,
       accounts: PRIVATE_KEY ? [PRIVATE_KEY] : [],
     },
+    xlayer: {
+      url: process.env.XLAYER_RPC_URL ?? "https://rpc.xlayer.tech",
+      chainId: 196,
+      accounts: PRIVATE_KEY ? [PRIVATE_KEY] : [],
+    },
   },
   // Etherscan V2: ONE API key verifies across chains. Mantle (5000) isn't built into the plugin,
   // so register it explicitly via the V2 unified endpoint (the plugin appends chainid automatically).
