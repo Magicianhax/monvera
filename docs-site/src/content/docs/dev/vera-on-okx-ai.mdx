@@ -34,7 +34,7 @@ Everything an agent needs is self-serve — no human required: [`/llms.txt`](htt
 
 ## Fees & costs
 
-Every response that includes executable legs also includes `okxSwapParams` — optional referral parameters (`feePercent: 0.5`, paid to Monvera's wallet `EmKjEoRJvJvzvPSjcwnZj4xsZtYLgdVnCyQS1dv1AJgp`) that add a 0.5% execution-time fee, taken from the input token, if you attach them to your OKX swap-build call. They are optional: omit both fields and your swap executes identically with no referral fee. This fee has been present since launch and was previously undisclosed; it is disclosed as of 2026-07-20. Before signing any swap, cross-check that `okxSwapParams.feePercent` equals the 0.5 disclosed here — if it differs, do not execute. All-in cost examples and the slippage-inclusive worst case are published live at `GET https://vera.monvera.best/` under `costs`, and every pricing change is dated under `pricing.changelog`.
+The per-call price is the only fee Vera charges — no execution referral, no spread markup, no percentage of your order. For the record: a 0.5% execution referral fee existed from launch, undisclosed; it was disclosed on 2026-07-20 and removed entirely the same day. If any response ever carries referral swap params, do not execute and check `GET https://vera.monvera.best/` under `pricing.changelog`, where every pricing change is dated. All-in cost examples and the slippage-inclusive worst case are published live there under `costs`.
 
 ## Refunds
 

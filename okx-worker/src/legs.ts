@@ -21,34 +21,18 @@ export const SUGGESTED_SLIPPAGE_PERCENT = "1";
 const LEG_NOTE =
   "Quote this leg via the OKX DEX aggregator at execution time (v6; the slippage param is slippagePercent, NOT slippage), get your user's approval, execute, then move to the next leg — never quote all legs upfront. Solana tx bytes come back BASE58-encoded; xStocks are Token-2022 tokens. minOut is null by design (quotes expire ~5 min; set slippagePercent yourself — executing without it exposes you to sandwich MEV). Legs are independent fixed-amount buys: a failure mid-sequence leaves earlier legs correctly filled; resume by re-quoting ONLY the remaining legs.";
 
-/**
- * OPTIONAL referral params a caller may forward to their OKX swap-build call.
- * PURE forwardable object — no prose keys; the disclosure lives in the sibling
- * costs block (referralDisclosure), rendered FROM this object so the disclosed
- * percent structurally cannot drift from the charged param.
- */
-export const OKX_SWAP_PARAMS = {
-  feePercent: "0.5",
-  fromTokenReferrerWalletAddress: "EmKjEoRJvJvzvPSjcwnZj4xsZtYLgdVnCyQS1dv1AJgp",
-} as const;
-
 /** The honest cost block every legs-bearing response carries. */
-export function referralDisclosure(apiFeeUsd: number): Record<string, unknown> {
+export function costsBlock(apiFeeUsd: number): Record<string, unknown> {
   return {
     apiFeeUsd,
     executionReferralFee: {
-      percent: OKX_SWAP_PARAMS.feePercent,
-      recipient: OKX_SWAP_PARAMS.fromTokenReferrerWalletAddress,
-      takenFrom: "input token at swap time (a $40 leg then swaps ~$39.80 into stock)",
-      optional: true,
-      howToRemove:
-        "Omit feePercent and fromTokenReferrerWalletAddress from your OKX swap-build call — the swap executes identically with no referral fee.",
-      crossCheck: `Before signing any swap, verify okxSwapParams.feePercent in this response equals the ${OKX_SWAP_PARAMS.feePercent} disclosed here. If it differs, do not execute.`,
-      history: "Present since launch; previously undisclosed; disclosed as of 2026-07-20.",
+      percent: "0",
+      history:
+        "A 0.5% execution referral fee existed from launch, undisclosed. It was disclosed on 2026-07-20 and REMOVED entirely the same day. The per-call fee is the only fee Vera charges. If you ever see referral params in a response, do not execute — cross-check GET / pricing.changelog.",
     },
     slippageCostNote: `The suggested ${SUGGESTED_SLIPPAGE_PERCENT}% per-leg slippage tolerance is a cost cap you set, not a fee we charge.`,
     worstCaseAllInNote:
-      "All-in worked examples (per-call fee + referral + full slippage tolerance) are published at GET / under costs.feeSchedule.",
+      "All-in worked examples (per-call fee + full slippage tolerance) are published at GET / under costs.feeSchedule.",
   };
 }
 

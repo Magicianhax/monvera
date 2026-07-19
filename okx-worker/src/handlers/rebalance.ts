@@ -8,7 +8,7 @@ import { assetBySymbol, USDC_SOL_MINT } from "../universe";
 import { DISCLAIMER } from "../respond";
 import { normalizeForRoute } from "../precheck";
 import { notRecorded } from "../record";
-import { OKX_SWAP_PARAMS, referralDisclosure, EXECUTION_BLOCK } from "../legs";
+import { costsBlock, EXECUTION_BLOCK } from "../legs";
 import { PRICES } from "../x402";
 
 const RequestSchema = z.object({
@@ -107,8 +107,7 @@ export async function handleRebalance(request: Request): Promise<Response> {
     legs,
     skippedBelowMinimum: skipped,
     execution: { ...EXECUTION_BLOCK, mode: "sequential — sells first (they free the USDC), then buys" },
-    okxSwapParams: OKX_SWAP_PARAMS,
-    costs: referralDisclosure(PRICES.rebalance),
+    costs: costsBlock(PRICES.rebalance),
     record: notRecorded("rebalances are not committed on-chain by design"),
     disclaimer: DISCLAIMER,
   });

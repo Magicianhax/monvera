@@ -5,7 +5,7 @@ import { buildAllocation } from "../engine";
 import { backtestBasket } from "../quant";
 import { assetBySymbol } from "../universe";
 import { commitRecord, notRecorded } from "../record";
-import { buildLegs, referralDisclosure, EXECUTION_BLOCK, OKX_SWAP_PARAMS } from "../legs";
+import { buildLegs, costsBlock, EXECUTION_BLOCK } from "../legs";
 import { PRICES } from "../x402";
 
 export { DISCLAIMER };
@@ -49,8 +49,7 @@ export async function handlePlan(
     backtest: backtest ? { ...backtest, disclaimer: BACKTEST_DISCLAIMER } : null,
     legs: buildLegs(plan.allocations, parsed.data.amountUsd),
     execution: EXECUTION_BLOCK,
-    okxSwapParams: OKX_SWAP_PARAMS,
-    costs: referralDisclosure(PRICES.plan),
+    costs: costsBlock(PRICES.plan),
     prerequisites: PREREQUISITES,
     record,
     next: record.planId

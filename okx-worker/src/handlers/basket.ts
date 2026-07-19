@@ -4,7 +4,7 @@ import { json, errorJson, requestInput, DISCLAIMER, PREREQUISITES, BASE_URL } fr
 import { BASKETS, resolveBasket, type BasketId } from "../baskets";
 import { commitRecord, notRecorded } from "../record";
 import { SOL_MIN_LEG_USD } from "../legMath";
-import { buildLegs, referralDisclosure, EXECUTION_BLOCK, OKX_SWAP_PARAMS } from "../legs";
+import { buildLegs, costsBlock, EXECUTION_BLOCK } from "../legs";
 import { PRICES } from "../x402";
 
 const RequestSchema = z.object({
@@ -49,8 +49,7 @@ export async function handleBasket(
     plan,
     legs: buildLegs(plan.allocations, parsed.data.amountUsd),
     execution: EXECUTION_BLOCK,
-    okxSwapParams: OKX_SWAP_PARAMS,
-    costs: referralDisclosure(PRICES.basket),
+    costs: costsBlock(PRICES.basket),
     prerequisites: PREREQUISITES,
     record,
     next: record.planId

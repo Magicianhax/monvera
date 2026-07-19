@@ -6,7 +6,7 @@
 import type { Env } from "./env";
 import { PRICES, PAID_ROUTES, challengeEntryFor, signingContract, CHALLENGE_TTL_SECONDS, USDT0_XLAYER, XLAYER_NETWORK } from "./x402";
 import { PARAM_SPECS } from "./precheck";
-import { OKX_SWAP_PARAMS, SUGGESTED_SLIPPAGE_PERCENT } from "./legs";
+import { SUGGESTED_SLIPPAGE_PERCENT } from "./legs";
 import { UNIVERSE, USDC_SOL_MINT } from "./universe";
 import { BASKETS } from "./baskets";
 import { BASE_URL, DOCS_URL, PREREQUISITES } from "./respond";
@@ -16,9 +16,8 @@ const FEE_DISCLOSURE_DATE = "2026-07-20";
 
 // ── all-in fee math (computed, never hand-written) ───────────────────────────
 function allInPct(callFeeUsd: number, orderUsd: number, withSlippage = false): string {
-  const referral = orderUsd * (Number(OKX_SWAP_PARAMS.feePercent) / 100);
   const slippage = withSlippage ? orderUsd * (Number(SUGGESTED_SLIPPAGE_PERCENT) / 100) : 0;
-  return (((callFeeUsd + referral + slippage) / orderUsd) * 100).toFixed(2);
+  return (((callFeeUsd + slippage) / orderUsd) * 100).toFixed(2);
 }
 
 function feeSchedule() {
@@ -36,16 +35,10 @@ function feeSchedule() {
 
 function costsBlock() {
   return {
-    perCall: "See services[].priceUsd — flat, per call, in USDT0.",
+    perCall: "See services[].priceUsd — flat, per call, in USDT0. This is the ONLY fee Vera charges.",
     executionReferralFee: {
-      percent: OKX_SWAP_PARAMS.feePercent,
-      recipient: OKX_SWAP_PARAMS.fromTokenReferrerWalletAddress,
-      takenFrom: "input token at swap time (a $40 leg swaps ~$39.80 into stock)",
-      optional: true,
-      howToRemove:
-        "Omit feePercent and fromTokenReferrerWalletAddress from your OKX swap-build call — the swap executes identically with no referral fee.",
-      crossCheck: `Before signing any swap, verify okxSwapParams.feePercent equals this disclosed percent (${OKX_SWAP_PARAMS.feePercent}). If it differs, do not execute.`,
-      history: `Present since launch; previously undisclosed; disclosed as of ${FEE_DISCLOSURE_DATE}.`,
+      percent: "0",
+      history: `A 0.5% execution referral fee existed from launch, undisclosed. It was disclosed on ${FEE_DISCLOSURE_DATE} and REMOVED entirely the same day. If any response ever carries referral swap params again, do not execute and check pricing.changelog.`,
     },
     feeSchedule: feeSchedule(),
   };
@@ -101,7 +94,11 @@ export function catalog(env: Env): Record<string, unknown> {
       changelog: [
         {
           date: FEE_DISCLOSURE_DATE,
-          change: `Execution referral fee (${OKX_SWAP_PARAMS.feePercent}%, optional, opt-out documented) disclosed. It has been present since launch and was previously undisclosed. No prices changed.`,
+          change: "Execution referral fee (0.5%) REMOVED entirely. The per-call fee is now the only fee.",
+        },
+        {
+          date: FEE_DISCLOSURE_DATE,
+          change: "Execution referral fee (0.5%, optional, opt-out documented) disclosed. It had been present since launch and was previously undisclosed. No prices changed.",
         },
       ],
     },
@@ -245,22 +242,18 @@ output and a deduplicated on-chain record. Re-fetch free with your original sign
 
 ## Cost stack (all-in, honest)
 
-- Per-call fee (above) + an OPTIONAL ${OKX_SWAP_PARAMS.feePercent}% execution referral paid to Monvera
-  (${OKX_SWAP_PARAMS.fromTokenReferrerWalletAddress}), taken FROM THE INPUT TOKEN at swap time
-  if you attach okxSwapParams to your OKX swap-build (a $40 leg then swaps ~$39.80 into
-  stock). Omit feePercent and fromTokenReferrerWalletAddress to pay no referral — the
-  swap executes identically.
-- Worked math, basket ($${PRICES.basket}) + ${OKX_SWAP_PARAMS.feePercent}% referral: $50 order ≈ ${ex(50)?.basketAllInPct}% all-in · $250 ≈ ${ex(250)?.basketAllInPct}% ·
+- The per-call fee (above) is THE ONLY FEE Vera charges. There is no execution referral,
+  no spread markup, no percentage of your order.
+- Worked math, basket ($${PRICES.basket}): $50 order ≈ ${ex(50)?.basketAllInPct}% all-in · $250 ≈ ${ex(250)?.basketAllInPct}% ·
   $1,000 ≈ ${ex(1000)?.basketAllInPct}%. Plan ($${PRICES.plan}): ${ex(50)?.planAllInPct}% / ${ex(250)?.planAllInPct}% / ${ex(1000)?.planAllInPct}%. Flat pricing favors size; below
   ~$50/order the drag is real. Suggested minimum order: $${feeSched.suggestedMinOrderUsd}.
-- Slippage is ALSO a cost you control: the suggested ${SUGGESTED_SLIPPAGE_PERCENT}% per-leg tolerance is a cap you
+- Slippage is a cost you control: the suggested ${SUGGESTED_SLIPPAGE_PERCENT}% per-leg tolerance is a cap you
   set, not a fee we charge. At full tolerance the worst-case all-in on a $1,000 basket
   is ≈ ${allInPct(PRICES.basket, 1000, true)}%.
-- CROSS-CHECK AT EXECUTION TIME: before signing any swap, verify okxSwapParams.feePercent
-  in the response equals the ${OKX_SWAP_PARAMS.feePercent} disclosed here. If it differs, do not execute.
-  Pricing changes are dated in GET / under pricing.changelog.
-- This referral fee has existed since launch and was previously undisclosed; disclosed as
-  of ${FEE_DISCLOSURE_DATE}.
+- History, for the record: a 0.5% execution referral fee existed from launch,
+  undisclosed. It was disclosed on ${FEE_DISCLOSURE_DATE} and REMOVED entirely the same day. If any
+  response ever carries referral swap params, do not execute — check GET /
+  pricing.changelog (every pricing change is dated there).
 
 ## Execution runbook (Solana, OKX DEX v6)
 
@@ -274,7 +267,6 @@ Per leg, IN ORDER (never quote all legs upfront — quotes go stale in ~5 min):
           ?chainIndex=501&fromTokenAddress=<tokenIn>&toTokenAddress=<tokenOut>&amount=<amountIn>
 2. BUILD  GET .../api/v6/dex/aggregator/swap — same params + userWalletAddress +
           slippagePercent=${SUGGESTED_SLIPPAGE_PERCENT}   (the param is slippagePercent, NOT "slippage")
-          [+ okxSwapParams fields ONLY if you accept the ${OKX_SWAP_PARAMS.feePercent}% referral]
 3. SIGN + BROADCAST: returned Solana tx bytes are BASE58-encoded. Deserialize, sign with
    your wallet, broadcast, await confirmation.
 4. Confirm, then move to the next leg.

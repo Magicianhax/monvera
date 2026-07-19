@@ -4,7 +4,7 @@
 import { route } from "../src/router";
 import { resetX402ServerForTests, PAID_ROUTES, PRICES } from "../src/x402";
 import { prevalidate, normalizeForRoute, PARAM_SPECS } from "../src/precheck";
-import { OKX_SWAP_PARAMS, SUGGESTED_SLIPPAGE_PERCENT } from "../src/legs";
+import { SUGGESTED_SLIPPAGE_PERCENT } from "../src/legs";
 import { catalog, llmsTxt, openapi, wellKnownX402 } from "../src/discovery";
 import { handleBuildStage } from "../src/handlers/buildStage";
 import { handleBuild } from "../src/handlers/build";
@@ -148,37 +148,40 @@ test("stage->build roundtrip: external JSON becomes a query-string-deliverable p
     env
   );
   expect(built.status).toBe(200);
-  const body = (await built.json()) as { legs: Array<{ symbol: string; amountIn: string }>; costs: { executionReferralFee: { percent: string } } };
+  const body = (await built.json()) as { legs: Array<{ symbol: string; amountIn: string }>; costs: { executionReferralFee: { percent: string } }; okxSwapParams?: unknown };
   expect(body.legs).toHaveLength(2);
   expect(body.legs.reduce((s, l) => s + Number(l.amountIn), 0)).toBe(40_000_000);
-  expect(body.costs.executionReferralFee.percent).toBe(OKX_SWAP_PARAMS.feePercent);
+  expect(body.costs.executionReferralFee.percent).toBe("0");
+  expect(body.okxSwapParams).toBeUndefined(); // no referral params anywhere, ever
 });
 
 // ── anti-drift: discovery artifacts render from the live source of truth ─────
-test("catalog fee disclosure equals the charged okxSwapParams and prices", () => {
+test("catalog costs: zero referral fee, schedule recomputed from PRICES", () => {
   const cat = catalog(env) as {
-    costs: { executionReferralFee: { percent: string; recipient: string }; feeSchedule: { examples: Array<{ orderUsd: number; basketAllInPct: string }> } };
+    costs: { executionReferralFee: { percent: string; history: string }; feeSchedule: { examples: Array<{ orderUsd: number; basketAllInPct: string }> } };
     services: Array<{ path: string; priceUsd: number }>;
   };
-  expect(cat.costs.executionReferralFee.percent).toBe(OKX_SWAP_PARAMS.feePercent);
-  expect(cat.costs.executionReferralFee.recipient).toBe(OKX_SWAP_PARAMS.fromTokenReferrerWalletAddress);
-  // Fee schedule numbers recompute from PRICES + feePercent (never hand-written).
+  expect(cat.costs.executionReferralFee.percent).toBe("0");
+  expect(cat.costs.executionReferralFee.history).toContain("REMOVED");
+  // Fee schedule numbers recompute from PRICES alone (never hand-written).
   const ex1000 = cat.costs.feeSchedule.examples.find((e) => e.orderUsd === 1000)!;
-  const expected = (((PRICES.basket + 1000 * (Number(OKX_SWAP_PARAMS.feePercent) / 100)) / 1000) * 100).toFixed(2);
+  const expected = ((PRICES.basket / 1000) * 100).toFixed(2);
   expect(ex1000.basketAllInPct).toBe(expected);
   const planService = cat.services.find((s) => s.path === "POST /v1/plan")!;
   expect(planService.priceUsd).toBe(PRICES.plan);
 });
 
-test("llms.txt encodes the fee percent, slippage, transport rule and signing domain", () => {
+test("llms.txt: only-fee promise, removal history, slippage, transport and signing domain", () => {
   const txt = llmsTxt(env);
-  expect(txt).toContain(`${OKX_SWAP_PARAMS.feePercent}% execution referral`);
+  expect(txt).toContain("THE ONLY FEE Vera charges");
+  expect(txt).toContain("REMOVED entirely");
   expect(txt).toContain(`slippagePercent=${SUGGESTED_SLIPPAGE_PERCENT}`);
   expect(txt).toContain("QUERY STRING");
   expect(txt).toContain('name: "USD₮0"');
   expect(txt).toContain("Token-2022");
   expect(txt).toContain("BASE58");
-  expect(txt).toContain("previously undisclosed");
+  expect(txt).toContain("undisclosed");
+  expect(txt).not.toContain("fromTokenReferrerWalletAddress");
 });
 
 test("openapi and well-known accepts match challengeEntryFor for every paid route", () => {

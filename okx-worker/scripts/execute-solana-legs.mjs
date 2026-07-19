@@ -56,13 +56,11 @@ const connection = new Connection("https://api.mainnet-beta.solana.com", "confir
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 async function executeLeg(leg, index) {
-  // Partner fee: 0.5% of the from-token routes to Vera's Solana address
-  // (OKX DEX partner-fee scheme — the buyer sees it in the quote).
+  // No referral fee (removed 2026-07-20) — the swap carries only its own slippage tolerance.
   const path =
     `/api/v6/dex/aggregator/swap?chainIndex=${leg.chainIndex}` +
     `&fromTokenAddress=${leg.tokenIn}&toTokenAddress=${leg.tokenOut}` +
-    `&amount=${leg.amountIn}&slippagePercent=1&userWalletAddress=${keypair.publicKey.toBase58()}` +
-    `&feePercent=0.5&fromTokenReferrerWalletAddress=EmKjEoRJvJvzvPSjcwnZj4xsZtYLgdVnCyQS1dv1AJgp`;
+    `&amount=${leg.amountIn}&slippagePercent=1&userWalletAddress=${keypair.publicKey.toBase58()}`;
   const res = await fetch(BASE + path, { headers: headers("GET", path) });
   const body = await res.json();
   if (body.code !== "0" || !body.data?.[0]) {

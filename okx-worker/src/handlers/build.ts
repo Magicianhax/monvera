@@ -12,7 +12,7 @@ import { json, errorJson, requestInput, DISCLAIMER, PREREQUISITES } from "../res
 import { AllocationSchema, type Allocation } from "../allocation-schema";
 import { SOL_MIN_LEG_USD } from "../legMath";
 import { assetBySymbol } from "../universe";
-import { buildLegs, referralDisclosure, EXECUTION_BLOCK, OKX_SWAP_PARAMS } from "../legs";
+import { buildLegs, costsBlock, EXECUTION_BLOCK } from "../legs";
 import { notRecorded } from "../record";
 import { normalizeForRoute } from "../precheck";
 import { PRICES } from "../x402";
@@ -63,8 +63,7 @@ export async function handleBuild(request: Request, env: Env): Promise<Response>
     legs,
     execution: EXECUTION_BLOCK,
     settlement: "Tokens land in the executing wallet. Vera never holds funds.",
-    okxSwapParams: OKX_SWAP_PARAMS,
-    costs: referralDisclosure(PRICES.build),
+    costs: costsBlock(PRICES.build),
     prerequisites: PREREQUISITES,
     record: notRecorded("only /v1/plan and /v1/basket purchases are committed on-chain"),
     disclaimer: DISCLAIMER,
