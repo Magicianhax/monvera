@@ -51,9 +51,17 @@ test("valid paid request without payment gets 402 + challenge header", async () 
   expect(r.headers.get("PAYMENT-REQUIRED")).toBeTruthy();
 });
 
-test("malformed paid request is rejected BEFORE the payment gate (no charge)", async () => {
-  mockFetch(() => null); // no facilitator call may happen
-  const r = await route(new Request("https://asp.example/v1/plan", { method: "POST", body: "{}" }), env, ctx);
+test("signed malformed request is rejected BEFORE the payment gate (no charge)", async () => {
+  mockFetch(() => null); // no facilitator call may happen (prevalidate rejects first)
+  const r = await route(
+    new Request("https://asp.example/v1/plan", {
+      method: "POST",
+      body: "{}",
+      headers: { "PAYMENT-SIGNATURE": "ZHVtbXk=" },
+    }),
+    env,
+    ctx
+  );
   expect(r.status).toBe(400);
   const body = (await r.json()) as { error: string };
   expect(body.error).toContain("Nothing was charged");
@@ -69,12 +77,13 @@ test("query-string params satisfy the pre-payment validation", async () => {
   expect(r.status).toBe(402); // validation passed; only payment is missing
 });
 
-test("unknown symbol in a paid request is rejected before charging", async () => {
+test("unknown symbol in a signed request is rejected before charging", async () => {
   mockFetch(() => null);
   const r = await route(
     new Request("https://asp.example/v1/research", {
       method: "POST",
       body: JSON.stringify({ symbol: "DOGE" }),
+      headers: { "PAYMENT-SIGNATURE": "ZHVtbXk=" },
     }),
     env,
     ctx
@@ -112,12 +121,13 @@ test("unknown route is a 404 with a pointer", async () => {
   expect(r.status).toBe(404);
 });
 
-test("unknown basket id is rejected BEFORE the payment gate", async () => {
+test("unknown basket id in a signed request is rejected BEFORE the payment gate", async () => {
   mockFetch(() => null); // no facilitator call may happen
   const r = await route(
     new Request("https://asp.example/v1/basket/nonsense", {
       method: "POST",
       body: JSON.stringify({ amountUsd: 40 }),
+      headers: { "PAYMENT-SIGNATURE": "ZHVtbXk=" },
     }),
     env,
     ctx

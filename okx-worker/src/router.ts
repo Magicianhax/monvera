@@ -163,13 +163,15 @@ export async function route(request: Request, env: Env, ctx: ExecutionContext): 
   const { paymentHeaderOf } = await import("./payments");
   const signed = paymentHeaderOf(request) !== null;
 
-  // Method matrix (Decision 9): unsigned non-POST probes get the 402 challenge
-  // (never a 404, never a free product); unsigned POST keeps today's exact
-  // prevalidate-first behavior; signed requests of any method run the full flow.
+  // Method matrix: an UNSIGNED request cannot be charged, so it ALWAYS gets the
+  // 402 challenge (OKX buyer tooling probes bare endpoints — any method — and
+  // treats anything but 402/200 as unreachable; the challenge itself teaches
+  // the params via accepts[].outputSchema and the body's params advisory).
+  // A SIGNED request is about to move money: validate BEFORE the payment gate —
+  // a request that would fail must never charge ("Nothing was charged").
   const input = normalizeForRoute(routePath, await requestInput(request.clone() as unknown as Request));
 
-  if (request.method === "POST" || signed) {
-    // Validate BEFORE the payment gate — a request that would fail must never charge.
+  if (signed) {
     const problem = await prevalidate(routePath, basketMatch?.[1] ?? null, input, env);
     if (problem) return errorJson(problem.status, problem.message, problem.extras);
   }

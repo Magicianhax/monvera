@@ -69,8 +69,25 @@ test("unsigned GET can never leak the free product (free-product leak guard)", a
   expect(body.code).toBe("PAYMENT_REQUIRED");
 });
 
-test("unsigned malformed POST keeps the byte-level 400 'Nothing was charged' behavior", async () => {
+test("unsigned bare POST probe gets the 402 challenge (OKX CLI expects 402/200 only)", async () => {
   const r = await route(new Request("https://asp.example/v1/plan", { method: "POST", body: "{}" }), env, ctx);
+  expect(r.status).toBe(402);
+  const body = (await r.json()) as { code: string; params: { missing: string[] } };
+  expect(body.code).toBe("PAYMENT_REQUIRED");
+  expect(body.params.missing).toEqual(["goal", "amountUsd"]);
+});
+
+test("SIGNED malformed request fails 400 'Nothing was charged' BEFORE any settlement", async () => {
+  mockFacilitatorOnly(); // no facilitator call may happen beyond /supported
+  const r = await route(
+    new Request("https://asp.example/v1/plan", {
+      method: "POST",
+      body: "{}",
+      headers: { "PAYMENT-SIGNATURE": "ZHVtbXk=" },
+    }),
+    env,
+    ctx
+  );
   expect(r.status).toBe(400);
   const body = (await r.json()) as { error: string; charged: boolean; fields: unknown[]; hint: string };
   expect(body.error).toContain("Nothing was charged");
