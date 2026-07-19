@@ -4,7 +4,7 @@
 // the screening research remains valid).
 // Copy rule: "shariah-screened, certification in progress" — never "certified".
 import type { Allocation } from "./allocation-schema";
-import { capAllocationLegs, OKX_MIN_LEG_USD } from "./legMath";
+import { capAllocationLegs, SOL_MIN_LEG_USD } from "./legMath";
 import { UNIVERSE, assetBySymbol } from "./universe";
 
 export type BasketId = "halal" | "blue-chip" | "index" | "ai-semis" | "dividend" | "momentum" | "barbell";
@@ -199,7 +199,7 @@ export async function resolveBasket(id: BasketId, amountUsd: number): Promise<Al
   });
   const total = raw.reduce((s, a) => s + a.weightPct, 0) || 1;
   const scaled = raw.map((a) => ({ ...a, weightPct: (a.weightPct / total) * 100 }));
-  const capped = capAllocationLegs(applyCap(scaled, def.singleNameCapPct), amountUsd, OKX_MIN_LEG_USD);
+  const capped = capAllocationLegs(applyCap(scaled, def.singleNameCapPct), amountUsd, SOL_MIN_LEG_USD);
   return {
     summary: `${def.title}: ${capped.length} tokenized stocks for $${amountUsd}.`,
     rationale: def.description,

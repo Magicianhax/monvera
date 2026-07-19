@@ -33,8 +33,13 @@ export function splitByWeights(total: bigint, weightsPct: number[]): bigint[] {
  */
 export const RFQ_MIN_BUY_USD = 11;
 
-/** OKX DEX aggregator minimum per swap order (owner-verified, X Layer). */
+/** OKX DEX aggregator minimum per swap order on X LAYER (owner-verified).
+ *  Applies only if/when legs execute on X Layer — NOT on Solana. */
 export const OKX_MIN_LEG_USD = 15;
+
+/** Solana swaps have no venue minimum (owner-verified) — this is purely a
+ *  dust guard so a small budget doesn't shatter into worthless slivers. */
+export const SOL_MIN_LEG_USD = 1;
 
 /** Minimum a plan must invest — one leg that clears the floor. */
 export const MIN_INVEST_USD = RFQ_MIN_BUY_USD;

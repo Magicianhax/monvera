@@ -1,6 +1,6 @@
 import { BASKETS, resolveBasket, screenSymbols, HALAL_SCREEN } from "../src/baskets";
 import { assetBySymbol } from "../src/universe";
-import { OKX_MIN_LEG_USD } from "../src/legMath";
+import { SOL_MIN_LEG_USD } from "../src/legMath";
 
 test("all static basket tickers exist in the universe", () => {
   for (const b of Object.values(BASKETS)) {
@@ -39,16 +39,16 @@ test("resolveBasket returns normalized, capped, floor-respecting allocations", a
   expect(alloc.allocations.length).toBeGreaterThanOrEqual(3);
   for (const a of alloc.allocations) {
     expect(a.weightPct).toBeLessThanOrEqual(BASKETS["blue-chip"].singleNameCapPct + 1);
-    expect((a.weightPct / 100) * 500).toBeGreaterThanOrEqual(OKX_MIN_LEG_USD - 1e-6);
+    expect((a.weightPct / 100) * 500).toBeGreaterThanOrEqual(SOL_MIN_LEG_USD - 1e-6);
     expect(assetBySymbol(a.symbol)).toBeDefined();
   }
 });
 
 test("small amounts shrink the basket instead of producing dust legs", async () => {
-  const alloc = await resolveBasket("dividend", 40); // $40 → at most 2 legs at $15 floor
-  expect(alloc.allocations.length).toBeLessThanOrEqual(2);
+  const alloc = await resolveBasket("dividend", 5); // $5 → at most 5 legs at the $1 dust floor
+  expect(alloc.allocations.length).toBeLessThanOrEqual(5);
   for (const a of alloc.allocations) {
-    expect((a.weightPct / 100) * 40).toBeGreaterThanOrEqual(OKX_MIN_LEG_USD - 1e-6);
+    expect((a.weightPct / 100) * 5).toBeGreaterThanOrEqual(SOL_MIN_LEG_USD - 1e-6);
   }
 });
 

@@ -3,7 +3,7 @@
 // wallet quotes and executes each leg itself.
 import { z } from "zod";
 import { json, errorJson } from "../respond";
-import { OKX_MIN_LEG_USD } from "../legMath";
+import { SOL_MIN_LEG_USD } from "../legMath";
 import { assetBySymbol, USDC_SOL_MINT } from "../universe";
 import { DISCLAIMER } from "./plan";
 
@@ -42,8 +42,8 @@ export async function handleRebalance(request: Request): Promise<Response> {
   }
 
   const totalUsd = holdings.reduce((s, h) => s + h.usdValue, 0) + cashUsd;
-  if (totalUsd < OKX_MIN_LEG_USD) {
-    return errorJson(400, `Portfolio too small to rebalance (under $${OKX_MIN_LEG_USD}).`);
+  if (totalUsd < SOL_MIN_LEG_USD) {
+    return errorJson(400, `Portfolio too small to rebalance (under $${SOL_MIN_LEG_USD}).`);
   }
 
   // Canonical per-symbol current + target dollars (keyed by xStock symbol).
@@ -62,14 +62,14 @@ export async function handleRebalance(request: Request): Promise<Response> {
   const buys: Array<{ symbol: string; usd: number }> = [];
   for (const sym of new Set([...current.keys(), ...targetUsd.keys()])) {
     const diff = (targetUsd.get(sym) ?? 0) - (current.get(sym) ?? 0);
-    if (diff >= OKX_MIN_LEG_USD) buys.push({ symbol: sym, usd: Math.round(diff * 100) / 100 });
-    else if (-diff >= OKX_MIN_LEG_USD) sells.push({ symbol: sym, usd: Math.round(-diff * 100) / 100 });
+    if (diff >= SOL_MIN_LEG_USD) buys.push({ symbol: sym, usd: Math.round(diff * 100) / 100 });
+    else if (-diff >= SOL_MIN_LEG_USD) sells.push({ symbol: sym, usd: Math.round(-diff * 100) / 100 });
     // |diff| below the venue floor → intentionally skipped (dust), reported below.
   }
 
   const skipped = [...new Set([...current.keys(), ...targetUsd.keys()])].filter((sym) => {
     const diff = Math.abs((targetUsd.get(sym) ?? 0) - (current.get(sym) ?? 0));
-    return diff > 0.01 && diff < OKX_MIN_LEG_USD;
+    return diff > 0.01 && diff < SOL_MIN_LEG_USD;
   });
 
   const legs = [

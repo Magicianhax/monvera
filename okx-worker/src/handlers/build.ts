@@ -5,7 +5,7 @@
 import { z } from "zod";
 import { json, errorJson } from "../respond";
 import { AllocationSchema } from "../allocation-schema";
-import { splitByWeights, OKX_MIN_LEG_USD } from "../legMath";
+import { splitByWeights, SOL_MIN_LEG_USD } from "../legMath";
 import { assetBySymbol, USDC_SOL_MINT } from "../universe";
 
 const RequestSchema = z.object({
@@ -53,11 +53,11 @@ export async function handleBuild(request: Request): Promise<Response> {
     note: LEG_NOTE,
   }));
 
-  const dust = legs.filter((l) => BigInt(l.amountIn) < BigInt(OKX_MIN_LEG_USD * 1_000_000));
+  const dust = legs.filter((l) => BigInt(l.amountIn) < BigInt(SOL_MIN_LEG_USD * 1_000_000));
   if (dust.length > 0) {
     return errorJson(
       400,
-      `Legs below the $${OKX_MIN_LEG_USD} venue minimum: ${dust.map((l) => l.symbol).join(", ")}. Increase amountUsd or trim the plan.`
+      `Legs below the $${SOL_MIN_LEG_USD} dust floor: ${dust.map((l) => l.symbol).join(", ")}. Increase amountUsd or trim the plan.`
     );
   }
 

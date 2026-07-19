@@ -3,7 +3,7 @@ import type { Env } from "../env";
 import { json, errorJson } from "../respond";
 import { BASKETS, resolveBasket, type BasketId } from "../baskets";
 import { commitRecord } from "../record";
-import { OKX_MIN_LEG_USD } from "../legMath";
+import { SOL_MIN_LEG_USD } from "../legMath";
 import { DISCLAIMER } from "./plan";
 
 const RequestSchema = z.object({
@@ -21,16 +21,19 @@ export async function handleBasket(
   idFromPath: string,
   payer: string
 ): Promise<Response> {
-  const parsed = RequestSchema.safeParse(await request.json().catch(() => null));
+  // A2MCP callers vary: params may arrive as JSON body or as query string.
+  const query = Object.fromEntries(new URL(request.url).searchParams);
+  const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
+  const parsed = RequestSchema.safeParse({ ...query, ...(body ?? {}) });
   if (!parsed.success) {
-    return errorJson(400, "Body must be { amountUsd: number, basket?: string }.");
+    return errorJson(400, "Provide { amountUsd: number, basket?: string } (body or query).");
   }
   const id = idFromPath || parsed.data.basket || "";
   if (!(id in BASKETS)) {
     return errorJson(404, `Unknown basket: ${id || "(none given)"}. Available: ${Object.keys(BASKETS).join(", ")}.`);
   }
-  if (parsed.data.amountUsd < OKX_MIN_LEG_USD) {
-    return errorJson(400, `Minimum amount is $${OKX_MIN_LEG_USD} (one leg above the venue floor).`);
+  if (parsed.data.amountUsd < SOL_MIN_LEG_USD) {
+    return errorJson(400, `Minimum amount is $${SOL_MIN_LEG_USD}.`);
   }
   const plan = await resolveBasket(id as BasketId, parsed.data.amountUsd);
   const record = await commitRecord(env, ctx, plan, payer, parsed.data.amountUsd).catch(() => undefined);

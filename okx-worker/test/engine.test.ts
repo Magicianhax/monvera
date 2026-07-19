@@ -59,10 +59,10 @@ test("maps underlying tickers to xStock symbols", async () => {
   expect(out.allocations.map((a) => a.symbol).sort()).toEqual(["AAPLx", "NVDAx"]);
 });
 
-test("caps legs to the $15 OKX floor", async () => {
+test("small budgets keep every leg above the $1 dust floor", async () => {
   const out = await buildAllocation(
     env,
-    { goal: "g", amountUsd: 50 },
+    { goal: "g", amountUsd: 5 },
     {
       model: mockModel([
         { symbol: "AAPLx", weightPct: 80, reason: "a" },
@@ -72,7 +72,7 @@ test("caps legs to the $15 OKX floor", async () => {
     }
   );
   for (const a of out.allocations) {
-    expect((a.weightPct / 100) * 50).toBeGreaterThanOrEqual(15 - 1e-6);
+    expect((a.weightPct / 100) * 5).toBeGreaterThanOrEqual(1 - 1e-6);
   }
 });
 

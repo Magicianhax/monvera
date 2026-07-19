@@ -3,11 +3,11 @@
 //   - universe = xStocks on Solana (src/universe.ts), not Robinhood-Chain assets
 //   - liquidity gate = membership in the curated universe (live per-leg OKX
 //     quotes happen in /v1/build, not here — the trial API key is ~1 RPS)
-//   - leg floor = $15 (OKX aggregator swap minimum), not Arcus's $11
+//   - leg floor = $1 dust guard (Solana swaps have no venue minimum)
 //   - model injectable for tests; env passed explicitly (Workers have no process.env)
 import { generateObject, type LanguageModel } from "ai";
 import { AllocationSchema, type Allocation } from "./allocation-schema";
-import { capAllocationLegs, OKX_MIN_LEG_USD } from "./legMath";
+import { capAllocationLegs, SOL_MIN_LEG_USD } from "./legMath";
 import { UNIVERSE } from "./universe";
 import { resolveAllocationModel } from "./aiModel";
 import { universeStatsBlock } from "./quant";
@@ -132,10 +132,9 @@ export async function buildAllocation(
     weightPct: total > 0 ? Math.round((a.weightPct / total) * 10000) / 100 : 0,
   }));
 
-  // Cap the plan so every leg clears the $15 OKX swap floor once the amount is
-  // split by weight — undersized legs get rejected by the venue and the user's
-  // money lands short.
-  const capped = capAllocationLegs(normalized, req.amountUsd, OKX_MIN_LEG_USD);
+  // Cap the plan so every leg clears the dust floor once the amount is split
+  // by weight — slivers aren't worth the swap fees.
+  const capped = capAllocationLegs(normalized, req.amountUsd, SOL_MIN_LEG_USD);
 
   return { ...object, allocations: capped };
 }

@@ -1,7 +1,7 @@
 import { handleBacktest } from "../src/handlers/backtest";
 import { handleRebalance } from "../src/handlers/rebalance";
 import { handleScreener } from "../src/handlers/screener";
-import { OKX_MIN_LEG_USD } from "../src/legMath";
+import { SOL_MIN_LEG_USD } from "../src/legMath";
 
 function post(path: string, body: unknown): Request {
   return new Request(`https://asp.example${path}`, {
@@ -65,7 +65,7 @@ test("rebalance produces sells before buys and skips dust diffs", async () => {
   const nvda = body.legs.find((l) => l.symbol === "NVDAx");
   expect(nvda?.action).toBe("buy");
   expect(nvda?.approxUsd).toBe(150);
-  for (const leg of body.legs) expect(leg.approxUsd).toBeGreaterThanOrEqual(OKX_MIN_LEG_USD);
+  for (const leg of body.legs) expect(leg.approxUsd).toBeGreaterThanOrEqual(SOL_MIN_LEG_USD);
 });
 
 test("rebalance rejects weights that do not sum to 100", async () => {
