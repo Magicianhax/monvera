@@ -121,6 +121,16 @@ test("challengeEntryFor matches the live 402 accepts for every paid route", asyn
   }
 });
 
+test("the live challenge accepts carry outputSchema so OKX tooling learns params pre-payment", async () => {
+  const out = await verifyAndSettle(new Request("https://asp.example/v1/basket/halal", { method: "POST" }), env);
+  if (out.kind !== "challenge") throw new Error("expected challenge");
+  const decoded = decodeBase64Json(out.response.headers.get("PAYMENT-REQUIRED")!) as {
+    accepts: Array<{ decimals?: number; outputSchema?: { input?: { queryParams?: { required?: string[] } } } }>;
+  };
+  expect(decoded.accepts[0].decimals).toBe(6);
+  expect(decoded.accepts[0].outputSchema?.input?.queryParams?.required).toContain("amountUsd");
+});
+
 test("routes outside the paid table pass through unpaid", async () => {
   const out = await verifyAndSettle(new Request("https://asp.example/v1/quote/AAPLx", { method: "GET" }), env);
   expect(out.kind).toBe("paid"); // free pass-through

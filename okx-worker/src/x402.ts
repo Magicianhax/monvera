@@ -212,17 +212,39 @@ export function decodeBase64Json(b64: string): unknown {
   return JSON.parse(new TextDecoder().decode(bytes));
 }
 
-/** Enrich the SDK's bare 402 with the full agent-readable body. */
+function encodeBase64Json(value: unknown): string {
+  const bytes = new TextEncoder().encode(JSON.stringify(value));
+  let bin = "";
+  for (const b of bytes) bin += String.fromCharCode(b);
+  return btoa(bin);
+}
+
+/** Enrich the SDK's bare 402 with the full agent-readable body — and inject
+ *  decimals + outputSchema.input.queryParams into the challenge's accepts so
+ *  OKX buyer tooling (which reads outputSchema) knows what params to collect
+ *  BEFORE paying. Purely additive: every field the wallet signs over (amount,
+ *  payTo, asset, network, extra) is untouched. */
 function enrichChallenge(instructions: ResponseInstructions, path: string, env: Env, missing: string[]): Response {
   const headers: Record<string, string> = { ...instructions.headers, "content-type": "application/json" };
   const challengeB64 = instructions.headers["PAYMENT-REQUIRED"] ?? instructions.headers["payment-required"];
+  const entry = challengeEntryFor(path, env.PAY_TO_ADDRESS);
   let decoded: unknown = null;
   try {
     decoded = challengeB64 ? decodeBase64Json(challengeB64) : null;
+    const challenge = decoded as { accepts?: Array<Record<string, unknown>> } | null;
+    if (challenge?.accepts && entry) {
+      challenge.accepts = challenge.accepts.map((a) => ({
+        ...a,
+        decimals: entry.decimals,
+        outputSchema: entry.outputSchema,
+      }));
+      const reencoded = encodeBase64Json(challenge);
+      if ("PAYMENT-REQUIRED" in headers) headers["PAYMENT-REQUIRED"] = reencoded;
+      if ("payment-required" in headers) headers["payment-required"] = reencoded;
+    }
   } catch {
     decoded = null;
   }
-  const entry = challengeEntryFor(path, env.PAY_TO_ADDRESS);
   const spec = PARAM_SPECS[path];
   const body = {
     error: "Payment required",
