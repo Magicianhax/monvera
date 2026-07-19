@@ -7,7 +7,8 @@ import { OKX_MIN_LEG_USD } from "../legMath";
 import { DISCLAIMER } from "./plan";
 
 const RequestSchema = z.object({
-  amountUsd: z.number().positive().max(1_000_000),
+  // coerce: A2MCP callers (e.g. the onchainos payment CLI) send params as strings
+  amountUsd: z.coerce.number().positive().max(1_000_000),
   // Body-level basket id, used by the path-less "POST /v1/basket" form
   // (ASP listings need a concrete endpoint URL without path parameters).
   basket: z.string().optional(),
