@@ -51,6 +51,7 @@ export default defineConfig({
           collapsed: true,
           items: [
             'use/make-your-first-plan',
+            'use/ask-vera-anything',
             'use/read-your-plan',
             'use/invest-in-one-tap',
             'use/review-your-portfolio',
