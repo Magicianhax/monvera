@@ -5,7 +5,61 @@
 .header {
   backdrop-filter: blur(14px) saturate(1.6);
   -webkit-backdrop-filter: blur(14px) saturate(1.6);
+  /* the strip below carries the rule now */
+  border-bottom: 0;
+}
+
+/* ── category strip ───────────────────────────────────────────────────── */
+/* Sits under the title row inside the fixed header. --sl-nav-height (tokens)
+   reserves the space for both rows, so nothing overlaps the page content. */
+.mv-strip {
   border-bottom: 1px solid var(--sl-color-hairline);
+  overflow-x: auto;
+  scrollbar-width: none;
+  /* pull out to the header's padding edges so the rule spans the full width */
+  margin-inline: calc(var(--sl-nav-pad-x) * -1);
+  padding-inline: var(--sl-nav-pad-x);
+}
+.mv-strip::-webkit-scrollbar {
+  display: none;
+}
+.mv-strip ul {
+  display: flex;
+  gap: 1.35rem;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  white-space: nowrap;
+}
+.mv-strip a {
+  display: block;
+  padding: 0.5rem 0 0.55rem;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--sl-color-gray-3);
+  text-decoration: none;
+  border-bottom: 2px solid transparent;
+  transition: color 0.12s ease, border-color 0.12s ease;
+}
+.mv-strip a:hover {
+  color: var(--sl-color-white);
+}
+.mv-strip a[aria-current='page'] {
+  color: var(--sl-color-white);
+  border-bottom-color: var(--sl-color-accent);
+  font-weight: 600;
+}
+
+@media (max-width: 50rem) {
+  .mv-strip {
+    gap: 1rem;
+  }
+  .mv-strip ul {
+    gap: 1.1rem;
+  }
+  .mv-strip a {
+    font-size: 0.78rem;
+  }
 }
 
 .site-title {

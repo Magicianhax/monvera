@@ -62,7 +62,8 @@
   --sl-content-width: 48rem;
   --sl-sidebar-width: 17.25rem;
   --sl-sidebar-pad-x: 1.15rem;
-  --sl-nav-height: 3.75rem;
+  /* two rows: the title bar plus the category strip (see Header.astro) */
+  --sl-nav-height: 6.1rem;
   --sl-line-height: 1.7;
   --sl-line-height-headings: 1.22;
 

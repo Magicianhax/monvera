@@ -1,0 +1,42 @@
+---
+// Starlight's header, plus a category strip beneath it.
+//
+// The six top-level sections are the site's real structure — the sidebar is
+// already scoped to one of them at a time (starlight-utils multiSidebar) — so
+// the strip is the control for that: pick a category here, and the whole left
+// rail becomes that category. Its own switcher is set to `hidden` in
+// astro.config.mjs so this is the single place the choice is made.
+//
+// Each entry points at a real landing page, not the first child, so clicking
+// "Guide" tells you what the guide covers instead of dropping you mid-topic.
+import Default from '@astrojs/starlight/components/Header.astro';
+
+const CATEGORIES = [
+  { label: 'Start', href: '/start/', match: '/start/' },
+  { label: 'Guide', href: '/use/', match: '/use/' },
+  { label: 'Safety', href: '/safety/', match: '/safety/' },
+  { label: 'How it works', href: '/how/', match: '/how/' },
+  { label: 'Developers', href: '/dev/', match: '/dev/' },
+  { label: 'API', href: '/dev/api/', match: '/dev/api/' },
+];
+
+const path = Astro.url.pathname;
+// /dev/api/* belongs to API, not Developers — check the longest match first.
+const active = [...CATEGORIES].sort((a, b) => b.match.length - a.match.length).find((c) => path.startsWith(c.match))?.label;
+---
+
+<Default><slot /></Default>
+
+<nav class="mv-strip" aria-label="Documentation sections">
+  <ul>
+    {
+      CATEGORIES.map((c) => (
+        <li>
+          <a href={c.href} aria-current={active === c.label ? 'page' : undefined}>
+            {c.label}
+          </a>
+        </li>
+      ))
+    }
+  </ul>
+</nav>

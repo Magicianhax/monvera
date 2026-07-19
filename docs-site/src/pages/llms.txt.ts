@@ -29,14 +29,18 @@ const MAX_BYTES = 14_000;
 const MAX_DESC = 120;
 const MAX_DESC_API = 80;
 
+// A section's landing page has the bare section id ("use"), its children carry
+// the prefix ("use/your-plan") — both belong to the same heading.
+const inSection = (id: string, section: string) => id === section || id.startsWith(section + '/');
+
 const GROUPS: Array<[string, (id: string) => boolean]> = [
-  ['Start here', (id) => id.startsWith('start/')],
-  ['Using Monvera', (id) => id.startsWith('use/')],
-  ['Money and safety', (id) => id.startsWith('safety/')],
-  ['How it works', (id) => id.startsWith('how/')],
-  ['Developers', (id) => id.startsWith('dev/') && !id.startsWith('dev/api/')],
-  ['API reference', (id) => id.startsWith('dev/api/')],
-  ['Reference', (id) => !id.includes('/')],
+  ['Start here', (id) => inSection(id, 'start')],
+  ['Using Monvera', (id) => inSection(id, 'use')],
+  ['Money and safety', (id) => inSection(id, 'safety')],
+  ['How it works', (id) => inSection(id, 'how')],
+  ['Developers', (id) => inSection(id, 'dev') && !inSection(id, 'dev/api')],
+  ['API reference', (id) => inSection(id, 'dev/api')],
+  ['Reference', (id) => id === 'glossary'],
 ];
 
 /** Trim to a whole word so a clipped description never ends mid-token. */

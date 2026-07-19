@@ -1,0 +1,18 @@
+---
+title: "How it works"
+description: "Why Monvera is checkable: what Vera signs, where prices come from, and what runs underneath."
+---
+
+import { LinkCard, CardGrid } from '@astrojs/starlight/components';
+
+Every claim Monvera makes about itself should be one you can verify rather than take on trust. These pages explain the machinery, and each one ends somewhere you can check for yourself.
+
+<CardGrid>
+	<LinkCard title="An AI you can check" href="/how/accountable-ai/" description="Vera signs the risk assessment, you sign the spend, and the chain keeps both." />
+	<LinkCard title="How Vera decides" href="/how/how-vera-decides/" description="How companies are picked, weighted, and risk-read — and the limits of that." />
+	<LinkCard title="Where prices come from" href="/how/where-prices-come-from/" description="The oracles and venue quotes behind every number you see." />
+	<LinkCard title="Open strategies and backtests" href="/how/open-strategies-and-backtests/" description="What the strategy book holds and how the 12-month history is built." />
+	<LinkCard title="The stack" href="/how/the-stack/" description="Which piece does what: the chain, the venues, the wallet, the sponsor, the model." />
+</CardGrid>
+
+To reproduce a signed plan yourself from chain data, see [verify Vera](/dev/verify-vera/).

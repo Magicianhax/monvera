@@ -1,0 +1,20 @@
+---
+title: "Developers"
+description: "Build on Monvera: authentication, conventions, the network, and how to verify Vera yourself."
+---
+
+import { LinkCard, CardGrid } from '@astrojs/starlight/components';
+
+A REST API over the same engine the app uses. Market data, the strategy book, and the backtester are public; anything touching an account needs a token.
+
+<CardGrid>
+	<LinkCard title="Quickstart" href="/dev/quickstart/" description="A call that works right now, then the authenticated version." />
+	<LinkCard title="Authentication" href="/dev/authentication/" description="Privy bearer tokens, and which routes are public or gated." />
+	<LinkCard title="Conventions" href="/dev/conventions/" description="Base URL, response shapes, rate limits, and every error you can get." />
+	<LinkCard title="Verify Vera" href="/dev/verify-vera/" description="Reproduce a signed plan from chain data and recover her key yourself." />
+	<LinkCard title="Network and addresses" href="/dev/network-and-addresses/" description="Robinhood Chain, USDG, and the contract addresses." />
+	<LinkCard title="MCP server" href="/dev/mcp-server/" description="Point an AI agent at these docs over MCP, or read them as plain text." />
+	<LinkCard title="Vera on OKX.AI" href="/dev/vera-on-okx-ai/" description="Her pay-per-call research listing, priced in USDT over x402." />
+</CardGrid>
+
+Every route is listed in the [API reference](/dev/api/).

@@ -39,7 +39,10 @@ export const GET: APIRoute = async () => {
       url: `${SITE}/${e.id}/`,
       title: e.data.title,
       description: e.data.description ?? '',
-      section: e.id.includes('/') ? e.id.split('/')[0] : 'reference',
+      // a section landing page ("use") sits in its own section, not 'reference'
+      section: ['start', 'use', 'safety', 'how', 'dev'].includes(e.id.split('/')[0])
+        ? e.id.split('/')[0]
+        : 'reference',
       text: toText(e.body ?? ''),
     }));
 

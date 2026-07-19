@@ -84,6 +84,7 @@ export default defineConfig({
       // appends the agent entry points.
       components: {
         Head: './src/components/DocsHead.astro',
+        Header: './src/components/Header.astro',
         PageTitle: './src/components/PageTitle.astro',
         Sidebar: './src/components/Sidebar.astro',
       },
@@ -91,9 +92,10 @@ export default defineConfig({
       // no "edit this page" link: the docs repo is private
       lastUpdated: true,
       plugins: [
-        // Topic tabs in the header: each top-level sidebar group becomes a
-        // horizontal tab, and the sidebar shows only that topic's pages.
-        starlightUtils({ multiSidebar: { switcherStyle: 'horizontalList' } }),
+        // Scope the sidebar to one top-level group at a time. The switcher is
+        // hidden because src/components/Header.astro renders that choice as the
+        // category strip in the header instead.
+        starlightUtils({ multiSidebar: { switcherStyle: 'hidden' } }),
         // Bulk text for agents that need whole pages. The INDEX Vera reads is
         // not this plugin's llms.txt — it cannot list pages (it never reads the
         // content collection), so src/pages/llms.txt.ts owns that route and
@@ -124,7 +126,7 @@ export default defineConfig({
       sidebar: [
         {
           label: 'Start',
-          items: ['start/what-monvera-is', 'start/before-you-invest', 'start/the-monvera-token'],
+          items: ['start', 'start/what-monvera-is', 'start/before-you-invest', 'start/the-monvera-token'],
         },
         {
           // ordered as a first session runs: talk, read the plan, then the
@@ -132,6 +134,7 @@ export default defineConfig({
           label: 'Guide',
           collapsed: true,
           items: [
+            'use',
             'use/talk-to-vera',
             'use/your-plan',
             'use/your-portfolio',
@@ -146,6 +149,7 @@ export default defineConfig({
           label: 'Safety',
           collapsed: true,
           items: [
+            'safety',
             'safety/can-i-lose-money',
             'safety/what-it-costs',
             'safety/your-account-and-recovery',
@@ -160,6 +164,7 @@ export default defineConfig({
           label: 'How it works',
           collapsed: true,
           items: [
+            'how',
             'how/accountable-ai',
             'how/how-vera-decides',
             'how/where-prices-come-from',
@@ -171,6 +176,7 @@ export default defineConfig({
           label: 'Developers',
           collapsed: true,
           items: [
+            'dev',
             'dev/quickstart',
             'dev/authentication',
             'dev/conventions',
