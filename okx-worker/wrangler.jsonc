@@ -5,5 +5,6 @@
   "compatibility_date": "2026-07-04",
   "compatibility_flags": ["nodejs_compat"],
   "kv_namespaces": [{ "binding": "KV", "id": "befb0a870a1a4fb6a0086ef1f294c6cf" }],
+  "vars": { "VERA_RECORD_V2_ADDRESS": "0xd97cd1a25484252bf234ab384c3818b05e6594e0" },
   "observability": { "enabled": true }
 }
