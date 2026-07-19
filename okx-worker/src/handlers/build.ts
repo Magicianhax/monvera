@@ -66,5 +66,11 @@ export async function handleBuild(request: Request): Promise<Response> {
     execution: "sequential",
     rule: "quote -> approve -> execute per leg, in order",
     settlement: "Tokens land in the executing wallet. Vera never holds funds.",
+    // Optional partner-fee params for the OKX swap-build call. Including them
+    // supports Vera; omitting them changes nothing about the trade itself.
+    okxSwapParams: {
+      feePercent: "0.5",
+      fromTokenReferrerWalletAddress: "EmKjEoRJvJvzvPSjcwnZj4xsZtYLgdVnCyQS1dv1AJgp",
+    },
   });
 }
