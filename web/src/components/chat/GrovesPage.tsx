@@ -121,10 +121,13 @@ function GroveShelfCard({ g, onOpen }: { g: GroveLive; onOpen: (id: string) => v
         {!g.stats.deployed && <span style={{ position: "absolute", top: 10, right: 10, zIndex: 2 }}><SoonChip /></span>}
       </div>
       <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", gap: 7, padding: "12px 16px 14px" }}>
+        {/* Structured like the public card: ticker+chip, big serif name, thesis,
+            logos, a labeled 4-stat grid, then the mono foot line. */}
         <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
-          <span style={{ fontSize: 15, fontWeight: 700, color: "var(--ink)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{g.name}</span>
-          <span style={{ fontSize: 11.5, fontWeight: 650, color: "var(--primary)", flex: "none" }}>{g.ticker}</span>
+          <span className="tnum" style={{ fontSize: 13, fontWeight: 750, letterSpacing: ".02em", color: "var(--primary)" }}>{g.ticker}</span>
+          <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--ink-3)", padding: "2px 8px", borderRadius: 999, border: "1px solid var(--line)", flex: "none" }}>{g.category}</span>
         </div>
+        <div className="serif" style={{ fontSize: 21, fontWeight: 600, letterSpacing: "-.015em", color: "var(--ink)", lineHeight: 1.15, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{g.name}</div>
         <div style={{ fontSize: 12.5, color: "var(--ink-2)", lineHeight: 1.5, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{g.thesis}</div>
         <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
           <span style={{ display: "inline-flex", flex: "none" }}>
@@ -135,22 +138,28 @@ function GroveShelfCard({ g, onOpen }: { g: GroveLive; onOpen: (id: string) => v
             ))}
           </span>
           <span style={{ fontSize: 11, color: "var(--ink-3)", flex: "none" }}>+{g.components.length - top4.length} more</span>
-          {bt && (
-            <span className="tnum" style={{ marginLeft: "auto", fontSize: 12, fontWeight: 650, color: dcol(bt.portfolio.returnPct), whiteSpace: "nowrap" }}>
-              {pctStr(bt.portfolio.returnPct)} 1y<span style={{ color: "var(--ink-3)", fontWeight: 550 }}> · SPY {pctStr(bt.benchmark.returnPct)}</span>
-            </span>
-          )}
         </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: 4, paddingTop: 8, marginTop: "auto", borderTop: "1px solid var(--line-2)" }}>
-          {/* Always shown, zeros included — real numbers arrive with the contract. */}
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <span className="tnum" style={{ fontSize: 11.5, fontWeight: 650, color: "var(--ink-2)" }}>{g.stats.users.toLocaleString("en-US")} investor{g.stats.users === 1 ? "" : "s"} · {usd0(g.stats.managedUsd)} managed</span>
-            <PIcon name="ph-caret-right" size={13} weight="bold" style={{ marginLeft: "auto", color: "var(--ink-3)" }} />
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 8, paddingTop: 10, marginTop: "auto", borderTop: "1px solid var(--line-2)" }}>
+          <div>
+            <div style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: ".05em", textTransform: "uppercase", color: "var(--ink-3)" }}>1y backtest</div>
+            <div className="tnum" style={{ fontSize: 14, fontWeight: 700, marginTop: 1, color: bt ? dcol(bt.portfolio.returnPct) : "var(--ink-3)" }}>{bt ? pctStr(bt.portfolio.returnPct) : "—"}</div>
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <span className="tnum" style={{ fontSize: 11.5, fontWeight: 650, color: "var(--ink-2)" }}>min {usd0(g.minBuyUsd)}</span>
-            <span style={{ fontSize: 11.5, color: "var(--ink-3)" }}>· {FEE_LINE}</span>
+          <div>
+            <div style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: ".05em", textTransform: "uppercase", color: "var(--ink-3)" }}>S&P · same yr</div>
+            <div className="tnum" style={{ fontSize: 14, fontWeight: 700, marginTop: 1, color: "var(--ink-2)" }}>{bt ? pctStr(bt.benchmark.returnPct) : "—"}</div>
           </div>
+          <div>
+            <div style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: ".05em", textTransform: "uppercase", color: "var(--ink-3)" }}>Min buy</div>
+            <div className="tnum" style={{ fontSize: 14, fontWeight: 700, marginTop: 1, color: "var(--ink)" }}>{usd0(g.minBuyUsd)}</div>
+          </div>
+          <div>
+            <div style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: ".05em", textTransform: "uppercase", color: "var(--ink-3)" }}>Investors</div>
+            <div className="tnum" style={{ fontSize: 14, fontWeight: 700, marginTop: 1, color: "var(--ink)" }}>{g.stats.users.toLocaleString("en-US")} <span style={{ color: "var(--ink-3)", fontWeight: 600 }}>· {usd0(g.stats.managedUsd)}</span></div>
+          </div>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, paddingTop: 8, borderTop: "1px solid var(--line-2)" }}>
+          <span className="tnum" style={{ fontSize: 11, fontWeight: 600, color: "var(--ink-2)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>Top holdings first from {usd0(g.minBuyUsd)}, every name from {usd0(fullDiversificationUsd(g))} · 10% of profit at exit</span>
+          <PIcon name="ph-arrow-right" size={14} weight="bold" style={{ marginLeft: "auto", flex: "none", color: "var(--primary)" }} />
         </div>
       </div>
     </button>
