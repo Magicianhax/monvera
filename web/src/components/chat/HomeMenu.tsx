@@ -167,7 +167,7 @@ export function HomeMenu({ nav }: { nav: ChatNav }) {
                 // Real equity curve (hourly snapshots incl. deposits/trades)
                 // once enough history exists; intraday holdings curve until then.
                 const day =
-                  equityCurveFrom(snaps ?? [], pf?.totalUsd ?? 0) ??
+                  equityCurveFrom(snaps ?? [], pf?.totalUsd) ??
                   portfolioDayCurve(pf?.holdings ?? [], pf?.cashUsd ?? 0);
                 if (!day) {
                   return (

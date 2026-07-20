@@ -1107,7 +1107,7 @@ function PortfolioCard({ data, nav }: { data?: Portfolio; nav: ChatNav }) {
   const { address } = useSmartAccount();
   const { data: snaps } = useBalanceHistory(address ?? undefined);
   const day =
-    equityCurveFrom(snaps ?? [], data?.totalUsd ?? 0) ??
+    equityCurveFrom(snaps ?? [], data?.totalUsd) ??
     portfolioDayCurve(data?.holdings ?? [], data?.cashUsd ?? 0);
   const mini = day ? chartPaths(day.curve, 200, 64, { minSpanFrac: 0.02 }) : null;
   return (

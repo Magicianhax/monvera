@@ -31,7 +31,7 @@ export function HomeMobile({ nav }: { nav: ChatNav }) {
 
   // Real equity curve (hourly snapshots incl. deposits/trades) once enough
   // history exists; real intraday holdings curve until then. Never synthetic.
-  const day = equityCurveFrom(snaps ?? [], total) ?? portfolioDayCurve(port?.holdings ?? [], cash);
+  const day = equityCurveFrom(snaps ?? [], port?.totalUsd) ?? portfolioDayCurve(port?.holdings ?? [], cash);
   const home = day ? chartPaths(day.curve, 380, 90, { minSpanFrac: 0.02 }) : null;
 
   const strip = STOCKS.map((a) => ({ sym: a.symbol, name: a.name, day: market?.summary[a.symbol]?.dayChangePct ?? 0, price: prices?.prices[a.symbol]?.priceUsd }))

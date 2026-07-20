@@ -7,6 +7,7 @@
 import { useEffect } from "react";
 import { usePrivy } from "@privy-io/react-auth";
 import { authHeader } from "@/lib/authedFetch";
+import { useSmartAccount } from "@/hooks/useSmartAccount";
 import { registerRemotePush, snapshotWatchlist, hydrateWatchlist } from "@/lib/watchlist";
 
 async function push(symbol: string, on: boolean) {
@@ -25,6 +26,7 @@ async function push(symbol: string, on: boolean) {
 
 export function useWatchlistSync() {
   const { ready, authenticated } = usePrivy();
+  const { address } = useSmartAccount();
 
   useEffect(() => {
     if (!ready || !authenticated) return;
@@ -34,7 +36,10 @@ export function useWatchlistSync() {
       const h = await authHeader();
       if (!h.Authorization || cancelled) return;
       try {
-        const r = await fetch("/api/watchlist", { headers: h });
+        // The address rides along so the server can record userId -> wallet.
+        // This runs on every app open, so hourly balance snapshots cover every
+        // signed-in user — not just the ones who happen to chat with Vera.
+        const r = await fetch(`/api/watchlist${address ? `?address=${address}` : ""}`, { headers: h });
         if (!r.ok || cancelled) return;
         const j = (await r.json()) as { symbols?: unknown };
         const server = Array.isArray(j.symbols)
@@ -55,5 +60,5 @@ export function useWatchlistSync() {
       cancelled = true;
       registerRemotePush(null);
     };
-  }, [ready, authenticated]);
+  }, [ready, authenticated, address]);
 }

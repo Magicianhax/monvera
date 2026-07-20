@@ -7,6 +7,7 @@ import { verifyRequest } from "@/lib/server/privyAuth";
 import { rateLimit } from "@/lib/server/rateLimit";
 import { unauthorized, badRequest, tooManyRequests, serverError } from "@/lib/server/respond";
 import { listWatchlist, addWatch, removeWatch } from "@/lib/server/watchlistStore";
+import { touchUser } from "@/lib/server/userDirectory";
 import { ALL_ASSETS } from "@/lib/tokens";
 
 export const dynamic = "force-dynamic";
@@ -18,9 +19,17 @@ const WatchInput = z.object({
 
 const KNOWN = new Set(ALL_ASSETS.map((a) => a.symbol));
 
+const ADDR = /^0x[a-fA-F0-9]{40}$/;
+
 export async function GET(req: NextRequest) {
   const user = await verifyRequest(req);
   if (!user) return unauthorized();
+  // Fire-and-forget directory touch: this route runs on every app open, so it
+  // is where "which wallet does this user hold?" stays current — which is what
+  // the hourly balance-snapshot cron reads. Authed, so nobody can inject a
+  // stranger's address. Never blocks or fails the watchlist read.
+  const addr = req.nextUrl.searchParams.get("address");
+  if (addr && ADDR.test(addr)) void touchUser(user.userId, addr);
   try {
     return Response.json({ symbols: await listWatchlist(user.userId) });
   } catch (err) {

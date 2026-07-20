@@ -32,13 +32,17 @@ export interface EquitySnapshot {
  * curve. Snapshots capture deposits, sends, and trades — the intraday curve
  * can't.
  */
-export function equityCurveFrom(snapshots: EquitySnapshot[], liveTotalUsd: number, hours = 24): DayCurve | null {
+export function equityCurveFrom(snapshots: EquitySnapshot[], liveTotalUsd: number | undefined, hours = 24): DayCurve | null {
   const since = Math.floor(Date.now() / 1000) - hours * 3600;
   const pts = snapshots.filter((s) => s.takenAt >= since).map((s) => s.totalUsd);
   if (pts.length < 3) return null;
-  const curve = [...pts, liveTotalUsd];
+  // The live total is appended ONLY once the portfolio query has answered.
+  // Snapshots are edge-cached and usually land first; appending a not-yet-known
+  // total as 0 drew a cliff crashing to zero on every load.
+  const curve = typeof liveTotalUsd === "number" ? [...pts, liveTotalUsd] : pts;
   const open = curve[0];
-  const changeUsd = liveTotalUsd - open;
+  const last = curve[curve.length - 1];
+  const changeUsd = last - open;
   return { curve, changeUsd, changePct: open > 0 ? (changeUsd / open) * 100 : 0 };
 }
 
