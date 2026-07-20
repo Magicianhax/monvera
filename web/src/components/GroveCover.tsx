@@ -158,7 +158,7 @@ export function GroveCover({ id, coverImage, style }: {
     <div aria-hidden style={{ position: "absolute", inset: 0, overflow: "hidden", color: accent, ...style }}>
       {coverImage ? (
         // eslint-disable-next-line @next/next/no-img-element -- decorative cover, plain img keeps this component boundary-free
-        <img src={coverImage} alt="" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} />
+        <img src={coverImage} alt="" loading="lazy" decoding="async" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} />
       ) : (
         <Motif />
       )}
