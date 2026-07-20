@@ -12,9 +12,14 @@
   "triggers": {
     "crons": ["0 * * * *", "*/15 * * * *", "0 13 * * 1"]
   },
-  // The app's home. monvera.best / www / assets are attached in the dashboard;
-  // this one is config-managed. Middleware serves the app at "/" here.
+  // ALL custom domains must be listed here: once `routes` exists in config it
+  // is the source of truth, and a deploy DETACHES any dashboard-added domain
+  // that is missing from this list (this took the apex down once — never
+  // remove an entry without meaning to). Middleware serves the app at "/" on
+  // the app subdomain.
   "routes": [
+    { "pattern": "monvera.best", "custom_domain": true },
+    { "pattern": "www.monvera.best", "custom_domain": true },
     { "pattern": "app.monvera.best", "custom_domain": true }
   ],
   "assets": {
