@@ -23,14 +23,35 @@ export interface AdoptedPlan {
   brand: string;
   connections: { symbol: string; weightPct: number; reason: string }[];
 }
+// The adopted-plan slot NOTIFIES, it doesn't just store. ChatCenter used to
+// drain it in a mount-only effect, so a scan adopted while a chat session was
+// already open landed in the slot and stayed there — the button did nothing.
+// Subscribers are called on every set, so the handoff works whether or not the
+// chat is already mounted.
 let adoptSlot: AdoptedPlan | null = null;
+const adoptListeners = new Set<() => void>();
+
 export function setAdoptedPlan(p: AdoptedPlan) {
   adoptSlot = p;
+  for (const fn of [...adoptListeners]) {
+    try {
+      fn();
+    } catch {
+      /* one bad listener must not swallow the handoff for the others */
+    }
+  }
 }
 export function consumeAdoptedPlan(): AdoptedPlan | null {
   const p = adoptSlot;
   adoptSlot = null;
   return p;
+}
+/** Subscribe to adoptions. Returns an unsubscribe fn. */
+export function onAdoptedPlan(fn: () => void): () => void {
+  adoptListeners.add(fn);
+  return () => {
+    adoptListeners.delete(fn);
+  };
 }
 
 export function consumeAutopilotPrefill(): AutopilotPrefill | null {

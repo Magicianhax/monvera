@@ -17,7 +17,7 @@ import { AssetTile, Confetti, RiskMeter } from "@/components/design";
 import type { useVeraChat } from "@/hooks/useVeraChat";
 import type { AllocateResult, InvestSuccess } from "@/lib/invest-types";
 import { authHeader } from "@/lib/authedFetch";
-import { setAutopilotPrefill, setOrderAmountPrefill, consumeAdoptedPlan } from "./autopilotPrefill";
+import { setAutopilotPrefill, setOrderAmountPrefill, consumeAdoptedPlan, onAdoptedPlan } from "./autopilotPrefill";
 import { ChatOrb, PIcon, chartPaths, dcol, pctStr, usd, usd0, type ChatNav } from "./chatKit";
 import { useAvatar, avatarCss } from "./avatar";
 import { FAQ } from "@/lib/faq";
@@ -608,12 +608,16 @@ ${seller.error.slice(0, 160)}`, payload: { suggestions: ["Try again"] } }).catch
   // Scan → chat: an adopted basket arrives structured (weights intact). Vera
   // shows what's behind the product and asks the amount; each chip builds the
   // EXACT plan deterministically — no second LLM pass, nothing re-invented.
-  const adoptGuard = useRef(false);
-  useEffect(() => {
-    if (adoptGuard.current) return;
+  //
+  // Drained on mount AND on every later adoption (see onAdoptedPlan): the chat
+  // is usually ALREADY mounted when someone taps "Ask Vera to build this plan",
+  // so a mount-only effect silently dropped it. The handler lives in a ref so
+  // the subscription always calls the latest closure (fresh activeId/portfolio)
+  // without resubscribing on every render.
+  const adoptRef = useRef<() => void>(() => {});
+  adoptRef.current = () => {
     const adopted = consumeAdoptedPlan();
     if (!adopted) return;
-    adoptGuard.current = true;
     void (async () => {
       let threadId = activeId;
       if (!threadId) {
@@ -630,7 +634,10 @@ ${seller.error.slice(0, 160)}`, payload: { suggestions: ["Try again"] } }).catch
         payload: { adoptedPlan: adopted, suggestions: [...sizes.map((v) => `$${v}`), cash >= 1 ? `All $${cash}` : ""].filter(Boolean).slice(0, 4) },
       });
     })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+  };
+  useEffect(() => {
+    adoptRef.current(); // anything adopted before this mounted
+    return onAdoptedPlan(() => adoptRef.current()); // and everything after
   }, []);
 
   // Build the adopted plan card for a chosen amount — pure client, exact weights.

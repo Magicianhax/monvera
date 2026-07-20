@@ -9,9 +9,9 @@ import "server-only";
 // for 10 minutes.
 import type { Address } from "viem";
 import { getPrice } from "./arcus";
-import { lifiPrice } from "./lifiStocks";
+import { lifiPrice, lifiExecQuote } from "./lifiStocks";
 import { rialtoPrice, rialtoEnabled } from "./rialto";
-import { uniV4Price } from "./uniswapV4";
+import { uniV4Price, uniV4Quote } from "./uniswapV4";
 import { venueEnabled } from "./venueFlags";
 import { assetBySymbol, USDG } from "@/lib/tokens";
 
@@ -24,11 +24,23 @@ const cache = new Map<string, { ok: boolean; at: number }>();
 
 /** Venue ladder for one direction; returns the best output or null.
  *  One delayed retry when everything misses — LiFi 429s otherwise read as
- *  "no liquidity" and poison the sweep with false negatives. */
+ *  "no liquidity" and poison the sweep with false negatives.
+ *
+ *  EXECUTABLE quotes first, indicative price second. A venue can price a pair
+ *  it cannot actually build a transaction for, and an asset that prices but
+ *  won't execute is exactly the kind we must never offer: the user only finds
+ *  out at invest time. The price call stays as a fallback so a transient
+ *  quote-builder error doesn't lock an otherwise healthy name. */
 async function probeVenues(sellToken: Address, buyToken: Address, sellRaw: bigint, sellDec: number, retry = true): Promise<bigint | null> {
   let out: bigint | null = null;
-  if (venueEnabled("uniswap")) out = await uniV4Price(sellToken, buyToken, sellRaw).catch(() => null);
-  if (out === null && venueEnabled("lifi")) out = await lifiPrice(sellToken, buyToken, sellRaw, PROBE_TAKER).catch(() => null);
+  if (venueEnabled("uniswap")) {
+    out = await uniV4Quote(sellToken, buyToken, sellRaw, PROBE_TAKER).then((q) => q?.buyAmount ?? null).catch(() => null);
+    if (out === null) out = await uniV4Price(sellToken, buyToken, sellRaw).catch(() => null);
+  }
+  if (out === null && venueEnabled("lifi")) {
+    out = await lifiExecQuote(sellToken, buyToken, sellRaw, PROBE_TAKER, PROBE_TAKER).then((q) => q?.buyAmount ?? null).catch(() => null);
+    if (out === null) out = await lifiPrice(sellToken, buyToken, sellRaw, PROBE_TAKER).catch(() => null);
+  }
   if (out === null && venueEnabled("arcus")) {
     out = await getPrice(sellToken, buyToken, sellRaw).then((r) => (r.liquidityAvailable ? r.buyAmount : null)).catch(() => null);
   }
