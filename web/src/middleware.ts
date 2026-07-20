@@ -74,12 +74,16 @@ export function middleware(req: NextRequest) {
   // On the subdomain, "/" (and /app itself) serve the app page — query params
   // (?tab=…) carry over so every in-app link works there. On the apex, /app*
   // permanently redirects to the subdomain. Dev on localhost is untouched.
+  // The rewrite is DEFERRED (not returned here) so the geo-gate below still
+  // screens the effective /app path — returning early would hand the app to
+  // blocked regions via the subdomain.
   const host = req.nextUrl.hostname;
+  let subdomainRewrite: URL | null = null;
   if (host === "app.monvera.best") {
     if (req.nextUrl.pathname === "/" || req.nextUrl.pathname === "/app") {
       const url = req.nextUrl.clone();
       url.pathname = "/app";
-      return NextResponse.rewrite(url);
+      subdomainRewrite = url;
     }
   } else if (host === "monvera.best" || host === "www.monvera.best") {
     if (req.nextUrl.pathname === "/app" || req.nextUrl.pathname.startsWith("/app/")) {
@@ -91,10 +95,13 @@ export function middleware(req: NextRequest) {
   }
 
   // ── 2. geo-gate (product + money APIs only) ──
-  const path = req.nextUrl.pathname;
+  // Gate on the effective path, so the subdomain's rewritten "/" counts as /app.
+  const path = subdomainRewrite ? subdomainRewrite.pathname : req.nextUrl.pathname;
   const gatedPage = GATED_PAGES.some((p) => path === p || path.startsWith(p + "/"));
   const gatedApi = GATED_APIS.some((p) => path === p || path.startsWith(p + "/"));
-  if (!gatedPage && !gatedApi) return NextResponse.next();
+  if (!gatedPage && !gatedApi) {
+    return subdomainRewrite ? NextResponse.rewrite(subdomainRewrite) : NextResponse.next();
+  }
 
   // Link-preview crawlers may bypass the gate ONLY for pages, so a shared /app
   // link renders its OG card. User-Agent is spoofable, which is acceptable here:
@@ -102,11 +109,13 @@ export function middleware(req: NextRequest) {
   // moves no money. The money-moving APIs are NEVER header-bypassable — a spoofed
   // UA must not reach a gated endpoint.
   if (gatedPage && !gatedApi && CRAWLER_UA.test(req.headers.get("user-agent") ?? "")) {
-    return NextResponse.next();
+    return subdomainRewrite ? NextResponse.rewrite(subdomainRewrite) : NextResponse.next();
   }
 
   const country = req.headers.get("cf-ipcountry")?.toUpperCase();
-  if (!country || !BLOCKED.has(country)) return NextResponse.next();
+  if (!country || !BLOCKED.has(country)) {
+    return subdomainRewrite ? NextResponse.rewrite(subdomainRewrite) : NextResponse.next();
+  }
 
   if (path.startsWith("/api/")) {
     return NextResponse.json(
