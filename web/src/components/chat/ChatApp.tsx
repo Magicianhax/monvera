@@ -6,6 +6,7 @@
 // Overlays: order ticket, send/receive, settings. Vera's history lives in D1
 // via useVeraChat; the intelligence itself stays on the existing invest rails.
 import { useCallback, useEffect, useRef, useState } from "react";
+import dynamic from "next/dynamic";
 import { readAppUrl, writeAppUrl, isCanvasTab } from "./appUrl";
 import { useTheme } from "@/hooks/useTheme";
 import { useSmartAccount } from "@/hooks/useSmartAccount";
@@ -17,14 +18,22 @@ import { useNotifications } from "@/hooks/useNotifications";
 import { useWatchlistSync } from "@/hooks/useWatchlistSync";
 import { ChatCenter, type ChatCenterHandle } from "./ChatCenter";
 import { HomeMenu } from "./HomeMenu";
-import { GrovesPage } from "./GrovesPage";
-import { CanvasBody } from "./CanvasBody";
-import { OrderTicket, type OrderState } from "./OrderTicket";
-import { TokenOrderTicket } from "./TokenOrderTicket";
-import { PaySheet, type PayMode } from "./PaySheet";
-import { SettingsPopup } from "./SettingsPopup";
-import { HistoryPopup } from "./HistoryPopup";
+import type { OrderState } from "./OrderTicket";
+import type { PayMode } from "./PaySheet";
 import { displayFor } from "@/lib/displayAssets";
+
+// Surfaces that only exist AFTER a tap — canvases, Groves, order tickets, the
+// pay sheet, settings, history. Each is already conditionally rendered, so
+// deferring its chunk means opening the app costs only the chat itself; the
+// rest streams in on first use and is cached from then on. ssr:false because
+// every one of them is browser-only.
+const GrovesPage = dynamic(() => import("./GrovesPage").then((m) => m.GrovesPage), { ssr: false });
+const CanvasBody = dynamic(() => import("./CanvasBody").then((m) => m.CanvasBody), { ssr: false });
+const OrderTicket = dynamic(() => import("./OrderTicket").then((m) => m.OrderTicket), { ssr: false });
+const TokenOrderTicket = dynamic(() => import("./TokenOrderTicket").then((m) => m.TokenOrderTicket), { ssr: false });
+const PaySheet = dynamic(() => import("./PaySheet").then((m) => m.PaySheet), { ssr: false });
+const SettingsPopup = dynamic(() => import("./SettingsPopup").then((m) => m.SettingsPopup), { ssr: false });
+const HistoryPopup = dynamic(() => import("./HistoryPopup").then((m) => m.HistoryPopup), { ssr: false });
 
 const LAUNCHERS: [CanvasType, string, string][] = [
   ["portfolio", "Portfolio", "ph-chart-pie-slice"],

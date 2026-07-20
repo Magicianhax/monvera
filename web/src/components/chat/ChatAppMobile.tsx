@@ -7,6 +7,7 @@
 // The canvas bodies, conversation, and overlays are REUSED from the desktop
 // build (they're scope-agnostic — CSS vars carry the .mvm theme).
 import { useCallback, useEffect, useRef, useState } from "react";
+import dynamic from "next/dynamic";
 import { readAppUrl, writeAppUrl, isCanvasTab } from "./appUrl";
 import { useTheme } from "@/hooks/useTheme";
 import { useSmartAccount } from "@/hooks/useSmartAccount";
@@ -18,15 +19,20 @@ import { useColorStyle } from "@/hooks/useColorStyle";
 import { useNotifications } from "@/hooks/useNotifications";
 import { useWatchlistSync } from "@/hooks/useWatchlistSync";
 import { HomeMobile } from "./HomeMobile";
-import { GrovesPage } from "./GrovesPage";
 import { ChatCenter } from "./ChatCenter";
-import { CanvasBody } from "./CanvasBody";
-import { OrderTicket, type OrderState } from "./OrderTicket";
-import { TokenOrderTicket } from "./TokenOrderTicket";
-import { PaySheet, type PayMode } from "./PaySheet";
-import { SettingsPopup } from "./SettingsPopup";
+import type { OrderState } from "./OrderTicket";
+import type { PayMode } from "./PaySheet";
 import { InstallPrompt } from "@/components/app/InstallPrompt";
-import { HistoryPopup } from "./HistoryPopup";
+
+// Tap-to-open surfaces, deferred — same rationale as the desktop shell, and it
+// matters more on a phone: opening the app must not download every sheet.
+const GrovesPage = dynamic(() => import("./GrovesPage").then((m) => m.GrovesPage), { ssr: false });
+const CanvasBody = dynamic(() => import("./CanvasBody").then((m) => m.CanvasBody), { ssr: false });
+const OrderTicket = dynamic(() => import("./OrderTicket").then((m) => m.OrderTicket), { ssr: false });
+const TokenOrderTicket = dynamic(() => import("./TokenOrderTicket").then((m) => m.TokenOrderTicket), { ssr: false });
+const PaySheet = dynamic(() => import("./PaySheet").then((m) => m.PaySheet), { ssr: false });
+const SettingsPopup = dynamic(() => import("./SettingsPopup").then((m) => m.SettingsPopup), { ssr: false });
+const HistoryPopup = dynamic(() => import("./HistoryPopup").then((m) => m.HistoryPopup), { ssr: false });
 import { displayFor } from "@/lib/displayAssets";
 
 const DRAWER_ITEMS: [CanvasType, string, string][] = [
