@@ -1,10 +1,12 @@
 import "server-only";
 
-// Live tradability: can ANY venue (Arcus -> LiFi -> Rialto) actually fill a
-// $15 buy of this symbol right now? Plan builders call this BEFORE proposing
-// legs, so Vera never recommends a stock nobody can execute — the old failure
-// was silent leg-skips at invest time. Probes are cheap price calls, run in
-// parallel per plan (≤ ~10 symbols) and cached per symbol for 10 minutes.
+// Live tradability: can ANY venue (Uniswap -> LiFi -> Arcus -> Rialto) fill a
+// $15 buy of this symbol right now — AND buy it back? Two-way is the bar:
+// LiFi's fly tool has one-directional books (it could buy AAOI/SOXX but not
+// sell them), which strands users in positions with no exit. Plan builders and
+// every buy surface call this BEFORE offering a stock, so nothing sellable-in-
+// theory-only is ever served. Probes are cheap price calls, cached per symbol
+// for 10 minutes.
 import type { Address } from "viem";
 import { getPrice } from "./arcus";
 import { lifiPrice } from "./lifiStocks";
@@ -20,7 +22,21 @@ const TTL_MS = 10 * 60 * 1000;
 
 const cache = new Map<string, { ok: boolean; at: number }>();
 
-/** True when at least one venue can price a $15 buy of `symbol` right now. */
+/** Venue ladder for one direction; returns the best output or null. */
+async function probeVenues(sellToken: Address, buyToken: Address, sellRaw: bigint, sellDec: number): Promise<bigint | null> {
+  let out: bigint | null = null;
+  if (venueEnabled("uniswap")) out = await uniV4Price(sellToken, buyToken, sellRaw).catch(() => null);
+  if (out === null && venueEnabled("lifi")) out = await lifiPrice(sellToken, buyToken, sellRaw, PROBE_TAKER).catch(() => null);
+  if (out === null && venueEnabled("arcus")) {
+    out = await getPrice(sellToken, buyToken, sellRaw).then((r) => (r.liquidityAvailable ? r.buyAmount : null)).catch(() => null);
+  }
+  if (out === null && venueEnabled("rialto") && rialtoEnabled()) {
+    out = await rialtoPrice(sellToken, buyToken, sellRaw, sellDec, PROBE_TAKER).catch(() => null);
+  }
+  return out;
+}
+
+/** True when some venue can fill a $15 buy of `symbol` AND sell it back. */
 export async function isTradable(symbol: string): Promise<boolean> {
   const hit = cache.get(symbol);
   if (hit && Date.now() - hit.at < TTL_MS) return hit.ok;
@@ -30,14 +46,12 @@ export async function isTradable(symbol: string): Promise<boolean> {
   const usdg = USDG.address as Address;
   const stock = asset.address as Address;
 
+  // Buy first — its output is exactly the position a $15 buyer would hold, so
+  // the sell probe asks the only question that matters: could they get out?
+  const bought = await probeVenues(usdg, stock, PROBE_USDG, USDG.decimals);
   let ok = false;
-  if (venueEnabled("uniswap")) ok = (await uniV4Price(usdg, stock, PROBE_USDG)) !== null;
-  if (!ok && venueEnabled("lifi")) ok = (await lifiPrice(usdg, stock, PROBE_USDG, PROBE_TAKER)) !== null;
-  if (!ok && venueEnabled("arcus")) {
-    ok = await getPrice(usdg, stock, PROBE_USDG).then((r) => r.liquidityAvailable).catch(() => false);
-  }
-  if (!ok && venueEnabled("rialto") && rialtoEnabled()) {
-    ok = (await rialtoPrice(usdg, stock, PROBE_USDG, USDG.decimals, PROBE_TAKER)) !== null;
+  if (bought !== null && bought > BigInt(0)) {
+    ok = (await probeVenues(stock, usdg, bought, asset.decimals ?? 18)) !== null;
   }
 
   cache.set(symbol, { ok, at: Date.now() });
@@ -107,6 +121,34 @@ export async function filterTradable(symbols: string[]): Promise<{ ok: string[];
     ok: results.filter((r) => r.ok).map((r) => r.s),
     dropped: results.filter((r) => !r.ok).map((r) => r.s),
   };
+}
+
+// ── universe sweep ───────────────────────────────────────────────────────────
+// Full two-way probe of every stock/ETF, for the hourly cron. Modest
+// concurrency: each symbol costs up to 2 venue-ladder walks, and LiFi rate
+// limits are shared with real user quotes.
+export const TRADABILITY_KV_KEY = "tradability:v1";
+
+export interface TradabilitySweep {
+  /** Symbols with a live buy AND sell route. */
+  ok: string[];
+  /** Symbols missing one or both directions right now. */
+  dropped: string[];
+  asOf: string;
+}
+
+export async function sweepTradability(): Promise<TradabilitySweep> {
+  const { ALL_ASSETS } = await import("@/lib/tokens");
+  const symbols = ALL_ASSETS.filter((a) => a.tier === "stock" || a.tier === "etf").map((a) => a.symbol);
+  const ok: string[] = [];
+  const dropped: string[] = [];
+  const CONCURRENCY = 4;
+  for (let i = 0; i < symbols.length; i += CONCURRENCY) {
+    const batch = symbols.slice(i, i + CONCURRENCY);
+    const results = await Promise.all(batch.map(async (s) => ({ s, ok: await isTradable(s).catch(() => false) })));
+    for (const r of results) (r.ok ? ok : dropped).push(r.s);
+  }
+  return { ok, dropped, asOf: new Date().toISOString() };
 }
 
 /** A few always-liquid alternatives to suggest when a requested symbol is dead. */

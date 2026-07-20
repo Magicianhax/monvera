@@ -31,7 +31,7 @@ import { sinceBought } from "@/lib/sinceBought";
 import { AssetTile } from "@/components/design";
 import { ActivityGlyph } from "@/components/lite/ActivityGlyph";
 import { usePrices } from "@/hooks/usePrices";
-import { useMarketSummary, useMarketHistory, type MarketRange } from "@/hooks/useMarket";
+import { useMarketSummary, useMarketHistory, useTradability, type MarketRange } from "@/hooks/useMarket";
 import { usePortfolio, useUsdcBalance } from "@/hooks/useBalances";
 import { useSmartAccount } from "@/hooks/useSmartAccount";
 import { useTransactions } from "@/hooks/useTransactions";
@@ -159,6 +159,10 @@ function MarketPanel({ nav }: { nav: ChatNav }) {
   const [cat, setCat] = useState("All");
   const [pages, setPages] = useState(1);
   const watchedList = useWatchlist();
+  // Two-way liquidity gate: only names with a live buy AND sell route are
+  // offered. null = sweep unknown — fail open, hide nothing.
+  const { data: trad } = useTradability();
+  const twoWay = trad?.ok ? new Set(trad.ok) : null;
 
   const cats = useMemo(() => {
     const seen = new Set<string>();
@@ -173,7 +177,8 @@ function MarketPanel({ nav }: { nav: ChatNav }) {
     // AI names) — the one the desktop market and server already use.
     const okQ = needle === "" || matchesSearch(a.symbol, d.name, d.cat, needle);
     const okCat = cat === "All" || (cat === "\u2605 Watchlist" ? watchedList.includes(a.symbol) : d.cat === cat);
-    return okQ && okCat;
+    const okTrade = twoWay === null || (a.tier !== "stock" && a.tier !== "etf") || twoWay.has(a.symbol);
+    return okQ && okCat && okTrade;
   });
   // True pages (Prev/Next swap the list); search or category change resets to page 1.
   const totalPages = Math.max(1, Math.ceil(all.length / MARKET_PAGE));
@@ -233,6 +238,11 @@ function MarketPanel({ nav }: { nav: ChatNav }) {
         );
       })}
       {rows.length === 0 && <div style={EMPTY_NOTE}>Nothing matches that search.</div>}
+      {twoWay !== null && trad!.dropped.length > 0 && (
+        <p style={{ margin: "10px 4px 0", fontSize: 11.5, color: "var(--ink-3)", lineHeight: 1.5 }}>
+          {trad!.dropped.length} name{trad!.dropped.length === 1 ? "" : "s"} hidden — no two-way trading route at the venues right now. They return automatically when liquidity does.
+        </p>
+      )}
       {totalPages > 1 && (
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 10 }}>
           <button onClick={() => setPages(page - 1)} disabled={page <= 1} aria-label="Previous page" style={{ flex: 1, height: 42, borderRadius: 13, border: "1px solid var(--line)", background: "var(--panel)", color: "var(--ink-2)", fontSize: 13, fontWeight: 600, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6, opacity: page <= 1 ? 0.45 : 1 }}>

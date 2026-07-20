@@ -43,6 +43,23 @@ async function getJson<T>(url: string, fallbackError: string): Promise<T> {
   return json as T;
 }
 
+export interface TradabilityResponse {
+  /** Two-way tradable symbols (buy AND sell routes live). null = no sweep yet — treat as unknown, hide nothing. */
+  ok: string[] | null;
+  dropped: string[];
+  asOf: string | null;
+}
+
+/** The two-way tradable universe from the hourly venue sweep. Fail-open. */
+export function useTradability() {
+  return useQuery({
+    queryKey: ["tradability"],
+    staleTime: 5 * 60_000,
+    refetchInterval: 10 * 60_000,
+    queryFn: () => getJson<TradabilityResponse>("/api/tradability", "Couldn't check tradability."),
+  });
+}
+
 /** Real chart series for one asset + range. keepPreviousData makes range switches seamless. */
 export function useMarketHistory(symbol: string | undefined, range: MarketRange) {
   return useQuery({

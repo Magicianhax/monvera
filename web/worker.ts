@@ -45,7 +45,11 @@ export default {
       });
     // every 15 min: price alerts; on the hour: autopilot; Mondays 13:00 UTC: weekly digest.
     ctx.waitUntil(hit("/api/cron/alerts"));
-    if (cron === "0 * * * *") ctx.waitUntil(hit("/api/cron/autopilot"));
+    if (cron === "0 * * * *") {
+      ctx.waitUntil(hit("/api/cron/autopilot"));
+      // Hourly two-way liquidity sweep — feeds /api/tradability from KV.
+      ctx.waitUntil(hit("/api/cron/tradability"));
+    }
     if (cron === "0 13 * * 1") ctx.waitUntil(hit("/api/cron/digest"));
     // Keep the $MONVERA chart warm: the route persists every successful series
     // to KV for 24h, so even occasional upstream luck keeps all ranges served.

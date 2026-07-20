@@ -11,6 +11,7 @@ import { parseUnits } from "viem";
 import { assetBySymbol, isTradable } from "@/lib/tokens";
 import { RFQ_MIN_BUY_USD, RFQ_MIN_SELL_USD } from "@/lib/arcusShared";
 import { useQuote, useSellQuote } from "@/hooks/useQuote";
+import { useTradability } from "@/hooks/useMarket";
 import { useSwap } from "@/hooks/useSwap";
 import { useUsdcBalance, usePortfolio } from "@/hooks/useBalances";
 import { usePrice } from "@/hooks/usePrices";
@@ -48,6 +49,13 @@ export function OrderTicket({ order, onClose, nav }: { order: OrderState; onClos
   const asset = assetBySymbol(symbol);
   const d = displayFor(symbol, asset?.name);
   const tradable = !!asset && isTradable(symbol) && !d.coming;
+  // Live two-way gate: never let someone BUY a name with no sell route (LiFi's
+  // books can be one-directional). Sells stay open — an exit is never blocked
+  // by this, only entries. Unknown sweep (ok === null) fails open.
+  const { data: trad } = useTradability();
+  const buyBlocked =
+    !!asset && (asset.tier === "stock" || asset.tier === "etf") &&
+    trad?.ok != null && !trad.ok.includes(symbol);
 
   const { address } = useSmartAccount();
   const { data: bal } = useUsdcBalance(address ?? undefined);
@@ -109,7 +117,7 @@ export function OrderTicket({ order, onClose, nav }: { order: OrderState; onClos
   const over = side === "buy" && n > cash + 1e-6;
   const canBuy = side === "buy" && tradable && n > 0 && !over && !!quote && quote.expectedOutRaw > BigInt(0) && !!address;
   const canSell = side === "sell" && tradable && sellRaw > BigInt(0) && !!sellQuote && sellQuote.expectedUsdcRaw > BigInt(0) && !!address;
-  const readyBase = side === "buy" ? canBuy : canSell;
+  const readyBase = side === "buy" ? canBuy && !buyBlocked : canSell;
 
   // RFQ makers enforce their minimum only at fill time — warn, don't forbid.
   const underMin =
@@ -132,6 +140,8 @@ export function OrderTicket({ order, onClose, nav }: { order: OrderState; onClos
   // Why the CTA can't fire — shown inline under the button, in plain words.
   const reason = !tradable
     ? "This one can't be traded in-app yet."
+    : side === "buy" && buyBlocked
+      ? "No sell route at the venues right now — buying is paused so you can't get stuck holding it."
     : side === "buy"
       ? n <= 0
         ? "Enter an amount"
