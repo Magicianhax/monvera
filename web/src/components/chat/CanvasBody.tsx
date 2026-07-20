@@ -850,8 +850,7 @@ function TokenPanel({ nav }: { nav: ChatNav }) {
           <span style={{ fontSize: 13.5, fontWeight: 700, display: "inline-flex", alignItems: "center", gap: 7 }}><ChatMark size={16} />$MONVERA</span>
           <span className="tnum" style={{ fontSize: 12.5, fontWeight: 700, color: dcol(ch ?? 0) }}>{ch !== undefined ? (up ? "▲ " : "▼ ") + Math.abs(ch).toFixed(1) + "% · 24h" : "…"}</span>
         </div>
-        <div style={{ marginTop: 10 }}><Pill text="Project token · Utility, not an investment" /></div>
-        <div className="serif tnum" style={{ fontSize: 32, fontWeight: 500, marginTop: 8 }}>{tok ? priceStr(tok.priceUsd) : "…"}</div>
+        <div className="serif tnum" style={{ fontSize: 32, fontWeight: 500, marginTop: 12 }}>{tok ? priceStr(tok.priceUsd) : "…"}</div>
         <div style={{ display: "inline-flex", alignItems: "center", gap: 6, marginTop: 6, padding: "6px 12px", borderRadius: 999, background: "var(--panel-2)", fontSize: 12, fontWeight: 600, color: "var(--ink-2)" }}>
           <PIcon name="ph-wallet" size={13} weight="fill" style={{ color: "var(--primary)" }} />
           {monvera

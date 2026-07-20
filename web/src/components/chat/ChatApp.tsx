@@ -27,8 +27,18 @@ import { displayFor } from "@/lib/displayAssets";
 // deferring its chunk means opening the app costs only the chat itself; the
 // rest streams in on first use and is cached from then on. ssr:false because
 // every one of them is browser-only.
-const GrovesPage = dynamic(() => import("./GrovesPage").then((m) => m.GrovesPage), { ssr: false });
-const CanvasBody = dynamic(() => import("./CanvasBody").then((m) => m.CanvasBody), { ssr: false });
+// Every lazy surface gets a visible loading state. Without one, a slow or
+// missing chunk renders NOTHING and the panel reads as frozen — which is
+// exactly how a stale chunk (tab left open across a deploy) used to look.
+const PanelLoading = () => (
+  <div style={{ padding: 24, display: "grid", gap: 12 }} role="status" aria-label="Loading">
+    <div className="glassin" style={{ height: 92, borderRadius: 18, background: "var(--panel-2)", opacity: 0.6 }} />
+    <div className="glassin" style={{ height: 160, borderRadius: 18, background: "var(--panel-2)", opacity: 0.5 }} />
+    <div className="glassin" style={{ height: 120, borderRadius: 18, background: "var(--panel-2)", opacity: 0.4 }} />
+  </div>
+);
+const GrovesPage = dynamic(() => import("./GrovesPage").then((m) => m.GrovesPage), { ssr: false, loading: PanelLoading });
+const CanvasBody = dynamic(() => import("./CanvasBody").then((m) => m.CanvasBody), { ssr: false, loading: PanelLoading });
 const OrderTicket = dynamic(() => import("./OrderTicket").then((m) => m.OrderTicket), { ssr: false });
 const TokenOrderTicket = dynamic(() => import("./TokenOrderTicket").then((m) => m.TokenOrderTicket), { ssr: false });
 const PaySheet = dynamic(() => import("./PaySheet").then((m) => m.PaySheet), { ssr: false });

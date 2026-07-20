@@ -26,8 +26,16 @@ import { InstallPrompt } from "@/components/app/InstallPrompt";
 
 // Tap-to-open surfaces, deferred — same rationale as the desktop shell, and it
 // matters more on a phone: opening the app must not download every sheet.
-const GrovesPage = dynamic(() => import("./GrovesPage").then((m) => m.GrovesPage), { ssr: false });
-const CanvasBody = dynamic(() => import("./CanvasBody").then((m) => m.CanvasBody), { ssr: false });
+// A missing/slow chunk must never look like a frozen screen — see ChatApp.
+const PanelLoading = () => (
+  <div style={{ padding: 20, display: "grid", gap: 12 }} role="status" aria-label="Loading">
+    <div className="glassin" style={{ height: 88, borderRadius: 18, background: "var(--panel-2)", opacity: 0.6 }} />
+    <div className="glassin" style={{ height: 150, borderRadius: 18, background: "var(--panel-2)", opacity: 0.5 }} />
+    <div className="glassin" style={{ height: 110, borderRadius: 18, background: "var(--panel-2)", opacity: 0.4 }} />
+  </div>
+);
+const GrovesPage = dynamic(() => import("./GrovesPage").then((m) => m.GrovesPage), { ssr: false, loading: PanelLoading });
+const CanvasBody = dynamic(() => import("./CanvasBody").then((m) => m.CanvasBody), { ssr: false, loading: PanelLoading });
 const OrderTicket = dynamic(() => import("./OrderTicket").then((m) => m.OrderTicket), { ssr: false });
 const TokenOrderTicket = dynamic(() => import("./TokenOrderTicket").then((m) => m.TokenOrderTicket), { ssr: false });
 const PaySheet = dynamic(() => import("./PaySheet").then((m) => m.PaySheet), { ssr: false });
