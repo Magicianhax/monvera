@@ -159,11 +159,7 @@ function GroveShelfCard({ g, onOpen }: { g: GroveLive; onOpen: (id: string) => v
             <div className="tnum" style={{ fontSize: 14, fontWeight: 700, marginTop: 1, color: "var(--ink)" }}>{g.stats.users.toLocaleString("en-US")} <span style={{ color: "var(--ink-3)", fontWeight: 600 }}>· {usd0(g.stats.managedUsd)}</span></div>
           </div>
         </div>
-        <div style={{ flex: "none", display: "flex", alignItems: "center", gap: 8, paddingTop: 8, borderTop: "1px solid var(--line-2)" }}>
-          <span className="tnum" style={{ fontSize: 11, fontWeight: 600, color: "var(--ink-2)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>Top holdings first from {usd0(g.minBuyUsd)}, every name from {usd0(fullDiversificationUsd(g))} · 10% of profit at exit</span>
-          <PIcon name="ph-arrow-right" size={14} weight="bold" style={{ marginLeft: "auto", flex: "none", color: "var(--primary)" }} />
         </div>
-      </div>
     </button>
     </div>
   );
@@ -199,7 +195,7 @@ function GroveShelf({ onOpen }: { onOpen: (id: string) => void }) {
         </div>
       </div>
       {/* 2-up desktop in the center column, 1-up mobile — big square tiles. */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(min(480px,100%),1fr))", gap: 16 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(min(340px,100%),1fr))", gap: 16 }}>
         {data.groves.map((g) => <GroveShelfCard key={g.id} g={g} onOpen={onOpen} />)}
       </div>
       <div style={{ fontSize: 11, color: "var(--ink-3)", textAlign: "center", padding: "16px 8px 4px" }}>
@@ -443,7 +439,7 @@ export function GrovesPage({ groveId, autoManage, nav, onOpen, onBack, mobile = 
         </div>
       </div>
       <main className="scr stag" style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: mobile ? 16 : "22px 28px 48px" }}>
-        <div style={{ maxWidth: 1280, margin: "0 auto" }}>
+        <div style={{ maxWidth: 880, margin: "0 auto" }}>
           {groveId
             ? <GroveDetail key={groveId} id={groveId} autoManage={autoManage} nav={nav} />
             : <GroveShelf onOpen={onOpen} />}
