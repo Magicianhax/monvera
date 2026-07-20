@@ -10,6 +10,7 @@ import { AuthScreen } from "@/components/chat/AuthScreen";
 import { ChatApp } from "@/components/chat/ChatApp";
 import { ChatAppMobile } from "@/components/chat/ChatAppMobile";
 import { ToastProvider } from "@/components/design/Toast";
+import { Web3Providers } from "@/components/Web3Providers";
 
 // The chat-first design ships as a responsive split at 761px (the "Monvera Chat"
 // / "Monvera Chat Mobile" sub-designs). Both variants own all of their own
@@ -32,7 +33,17 @@ function useChatDesktop(): boolean {
   return wide;
 }
 
+// The wallet stack mounts HERE, not in the root layout — marketing pages must
+// never pay for it. AppShellInner runs privy hooks, so it has to sit inside.
 export function AppShell() {
+  return (
+    <Web3Providers>
+      <AppShellInner />
+    </Web3Providers>
+  );
+}
+
+function AppShellInner() {
   const { ready, authenticated } = usePrivy();
   const chatDesktop = useChatDesktop();
 
