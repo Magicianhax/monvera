@@ -550,7 +550,7 @@ export async function routeVera(ctx: VeraContext): Promise<VeraResult> {
           const alts = await liquidSuggestions(symbol).catch(() => []);
           return {
             intent: "reply",
-            message: `${symbol} is listed but no trading venue can fill it right now — that happens when maker inventory runs dry. Want one of these instead, or try ${symbol} again later?`,
+            message: `${symbol} is on the shelf but locked for now — the venues can't trade it both ways yet, and I don't buy anything I can't also sell for you. It unlocks automatically when liquidity arrives. Want one of these instead?`,
             suggestions: alts.map((a) => `Buy $25 of ${a}`),
           };
         }
@@ -1076,7 +1076,7 @@ export async function routeVera(ctx: VeraContext): Promise<VeraResult> {
       const alts = await liquidSuggestions(sym).catch(() => []);
       return {
         intent: "reply",
-        message: `Not right now. ${sym} is listed but no venue can fill it at the moment, which happens when maker inventory runs dry. It usually comes back.`,
+        message: `Not right now. ${sym} is locked — the venues can't trade it both ways yet, so I don't touch it in either direction. It unlocks automatically when liquidity arrives.`,
         suggestions: alts.map((a) => `Buy $25 of ${a}`),
       };
     }
@@ -1242,7 +1242,7 @@ async function sellPlan(ctx: VeraContext, symbolRaw?: string, amountUsd?: number
   }
   const posUsd = holding.valueUsd ?? 0;
   if (!(await isTradable(symbol).catch(() => true))) {
-    return { intent: "reply", message: `${symbol} can't be filled right now: no venue has inventory for it. It usually comes back within minutes.` };
+    return { intent: "reply", message: `${symbol} is locked right now — the venues can't trade it both ways, so I can't place a clean exit for you. Your position is safe in your wallet; it becomes sellable the moment liquidity returns.` };
   }
   let amount = all ? posUsd : amountUsd;
   if (amount === undefined) {

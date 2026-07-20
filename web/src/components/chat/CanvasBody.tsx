@@ -159,10 +159,13 @@ function MarketPanel({ nav }: { nav: ChatNav }) {
   const [cat, setCat] = useState("All");
   const [pages, setPages] = useState(1);
   const watchedList = useWatchlist();
-  // Two-way liquidity gate: only names with a live buy AND sell route are
-  // offered. null = sweep unknown — fail open, hide nothing.
+  // Two-way liquidity gate: names without a live buy AND sell route stay
+  // VISIBLE but locked ("Soon") — no buy control, list demoted below the
+  // tradable names. null = sweep unknown — fail open, lock nothing.
   const { data: trad } = useTradability();
   const twoWay = trad?.ok ? new Set(trad.ok) : null;
+  const isLocked = (a: (typeof ALL_ASSETS)[number]) =>
+    twoWay !== null && (a.tier === "stock" || a.tier === "etf") && !twoWay.has(a.symbol);
 
   const cats = useMemo(() => {
     const seen = new Set<string>();
@@ -177,9 +180,8 @@ function MarketPanel({ nav }: { nav: ChatNav }) {
     // AI names) — the one the desktop market and server already use.
     const okQ = needle === "" || matchesSearch(a.symbol, d.name, d.cat, needle);
     const okCat = cat === "All" || (cat === "\u2605 Watchlist" ? watchedList.includes(a.symbol) : d.cat === cat);
-    const okTrade = twoWay === null || (a.tier !== "stock" && a.tier !== "etf") || twoWay.has(a.symbol);
-    return okQ && okCat && okTrade;
-  });
+    return okQ && okCat;
+  }).sort((x, y) => Number(isLocked(x)) - Number(isLocked(y)));
   // True pages (Prev/Next swap the list); search or category change resets to page 1.
   const totalPages = Math.max(1, Math.ceil(all.length / MARKET_PAGE));
   const page = Math.min(pages, totalPages); // 1-based, clamped when the filter shrinks
@@ -211,7 +213,8 @@ function MarketPanel({ nav }: { nav: ChatNav }) {
         const price = livePrice ?? sparkLast ?? d.price;
         const day = live?.dayChangePct ?? d.day;
         const spark = live?.spark ?? tile.spark;
-        const muted = d.coming || (!live && livePrice === undefined);
+        const locked = isLocked(a);
+        const muted = d.coming || locked || (!live && livePrice === undefined);
         return (
           <div key={a.symbol} className="hgl" style={{ display: "flex", alignItems: "center", gap: 10, padding: 10, borderRadius: 14 }}>
             <button onClick={() => nav.openCanvas("holding", a.symbol)} style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", gap: 11, textAlign: "left" }}>
@@ -231,7 +234,11 @@ function MarketPanel({ nav }: { nav: ChatNav }) {
             <button onClick={() => toggleWatch(a.symbol)} aria-label="Watchlist" style={{ width: 30, height: 30, flex: "none", borderRadius: 9, display: "grid", placeItems: "center", background: "transparent", color: watchedList.includes(a.symbol) ? "var(--primary)" : "var(--ink-3)" }}>
               <PIcon name="ph-star" size={15} weight={watchedList.includes(a.symbol) ? "fill" : "duotone"} />
             </button>
-            {!d.coming && (
+            {locked ? (
+              <span style={{ height: 26, padding: "0 11px", borderRadius: 999, fontSize: 10.5, fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase", color: "var(--ink-3)", border: "1px solid var(--line)", display: "inline-flex", alignItems: "center", gap: 5, flex: "none" }}>
+                <PIcon name="ph-lock-simple" size={11} /> Soon
+              </span>
+            ) : !d.coming && (
               <button onClick={() => nav.openBuy(a.symbol)} style={{ height: 32, padding: "0 14px", borderRadius: 999, fontSize: 12.5, fontWeight: 700, color: "var(--primary)", background: "var(--primary-soft)", flex: "none" }}>Buy</button>
             )}
           </div>
@@ -240,7 +247,7 @@ function MarketPanel({ nav }: { nav: ChatNav }) {
       {rows.length === 0 && <div style={EMPTY_NOTE}>Nothing matches that search.</div>}
       {twoWay !== null && trad!.dropped.length > 0 && (
         <p style={{ margin: "10px 4px 0", fontSize: 11.5, color: "var(--ink-3)", lineHeight: 1.5 }}>
-          {trad!.dropped.length} name{trad!.dropped.length === 1 ? "" : "s"} hidden — no two-way trading route at the venues right now. They return automatically when liquidity does.
+          Locked names are coming soon — no two-way trading route at the venues yet. They unlock automatically when liquidity arrives.
         </p>
       )}
       {totalPages > 1 && (
@@ -289,6 +296,9 @@ function HoldingPanel({ symbol, nav }: { symbol: string; nav: ChatNav }) {
   const color2 = up ? "var(--pos)" : "var(--neg)";
 
   const holding = (port?.holdings ?? []).find((h) => h.asset.symbol === symbol);
+  // Two-way liquidity lock — same rule as the market list and the order ticket.
+  const { data: trad } = useTradability();
+  const lockedSoon = trad?.ok != null && !trad.ok.includes(symbol);
   const watched = useIsWatched(symbol);
   const { createAlert } = useNotifyActions();
   const [alertOpen, setAlertOpen] = useState(false);
@@ -381,17 +391,29 @@ function HoldingPanel({ symbol, nav }: { symbol: string; nav: ChatNav }) {
         {stats.map((st) => <StatTile key={st.label} label={st.label} value={st.value} />)}
       </div>
 
-      {/* actions */}
-      <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
-        <button onClick={() => nav.openBuy(symbol)} disabled={d.coming} style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 7, height: 48, borderRadius: 14, fontSize: 14.5, fontWeight: 600, color: "var(--primary-ink)", background: "var(--primary)", opacity: d.coming ? 0.5 : 1 }}>
-          <PIcon name="ph-plus" size={16} weight="bold" /> {d.coming ? "Coming soon" : "Buy"}
-        </button>
-        {held && (
-          <button onClick={() => nav.openSell(symbol)} style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 7, height: 48, borderRadius: 14, fontSize: 14.5, fontWeight: 600, color: "var(--ink)", background: "var(--panel-2)", border: "1px solid var(--line)" }}>
-            <PIcon name="ph-minus" size={16} weight="bold" /> Sell
+      {/* actions — a name without a two-way venue route is locked whole:
+          no buy, no sell, one honest bar instead of two dead buttons */}
+      {lockedSoon ? (
+        <div style={{ marginTop: 14 }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, height: 48, borderRadius: 14, fontSize: 13.5, fontWeight: 600, color: "var(--ink-3)", background: "var(--panel-2)", border: "1px dashed var(--line)" }}>
+            <PIcon name="ph-lock-simple" size={15} /> Coming soon
+          </div>
+          <p style={{ margin: "8px 2px 0", fontSize: 11.5, lineHeight: 1.55, color: "var(--ink-3)", textAlign: "center" }}>
+            The venues can&rsquo;t trade this one both ways yet. It unlocks automatically when liquidity arrives{held ? " — your position stays safe in your wallet" : ""}.
+          </p>
+        </div>
+      ) : (
+        <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
+          <button onClick={() => nav.openBuy(symbol)} disabled={d.coming} style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 7, height: 48, borderRadius: 14, fontSize: 14.5, fontWeight: 600, color: "var(--primary-ink)", background: "var(--primary)", opacity: d.coming ? 0.5 : 1 }}>
+            <PIcon name="ph-plus" size={16} weight="bold" /> {d.coming ? "Coming soon" : "Buy"}
           </button>
-        )}
-      </div>
+          {held && (
+            <button onClick={() => nav.openSell(symbol)} style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 7, height: 48, borderRadius: 14, fontSize: 14.5, fontWeight: 600, color: "var(--ink)", background: "var(--panel-2)", border: "1px solid var(--line)" }}>
+              <PIcon name="ph-minus" size={16} weight="bold" /> Sell
+            </button>
+          )}
+        </div>
+      )}
 
       {/* context: why it moved · since you bought · where it sits in the year */}
       {(moved || since || (meta?.fiftyTwoWeekLow !== undefined && meta?.fiftyTwoWeekHigh !== undefined && price)) && (

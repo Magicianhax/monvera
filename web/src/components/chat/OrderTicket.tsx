@@ -49,11 +49,11 @@ export function OrderTicket({ order, onClose, nav }: { order: OrderState; onClos
   const asset = assetBySymbol(symbol);
   const d = displayFor(symbol, asset?.name);
   const tradable = !!asset && isTradable(symbol) && !d.coming;
-  // Live two-way gate: never let someone BUY a name with no sell route (LiFi's
-  // books can be one-directional). Sells stay open — an exit is never blocked
-  // by this, only entries. Unknown sweep (ok === null) fails open.
+  // Live two-way gate: names without a buy AND sell route are locked in both
+  // directions ("coming soon") — a one-way book strands people either way.
+  // Unknown sweep (ok === null) fails open.
   const { data: trad } = useTradability();
-  const buyBlocked =
+  const lockedSoon =
     !!asset && (asset.tier === "stock" || asset.tier === "etf") &&
     trad?.ok != null && !trad.ok.includes(symbol);
 
@@ -117,7 +117,7 @@ export function OrderTicket({ order, onClose, nav }: { order: OrderState; onClos
   const over = side === "buy" && n > cash + 1e-6;
   const canBuy = side === "buy" && tradable && n > 0 && !over && !!quote && quote.expectedOutRaw > BigInt(0) && !!address;
   const canSell = side === "sell" && tradable && sellRaw > BigInt(0) && !!sellQuote && sellQuote.expectedUsdcRaw > BigInt(0) && !!address;
-  const readyBase = side === "buy" ? canBuy && !buyBlocked : canSell;
+  const readyBase = (side === "buy" ? canBuy : canSell) && !lockedSoon;
 
   // RFQ makers enforce their minimum only at fill time — warn, don't forbid.
   const underMin =
@@ -140,8 +140,8 @@ export function OrderTicket({ order, onClose, nav }: { order: OrderState; onClos
   // Why the CTA can't fire — shown inline under the button, in plain words.
   const reason = !tradable
     ? "This one can't be traded in-app yet."
-    : side === "buy" && buyBlocked
-      ? "No sell route at the venues right now — buying is paused so you can't get stuck holding it."
+    : lockedSoon
+      ? "Coming soon — the venues can't trade this one both ways yet. It unlocks automatically when they can."
     : side === "buy"
       ? n <= 0
         ? "Enter an amount"
