@@ -354,21 +354,11 @@
 .heroEyebrow {
   display: inline-flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   margin-bottom: 26px;
 }
-.liveDot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--primary);
-  box-shadow: 0 0 0 4px rgba(67, 186, 133, 0.18);
-  animation: breathe 2.6s ease-in-out infinite;
-}
-@keyframes breathe {
-  50% {
-    box-shadow: 0 0 0 7px rgba(67, 186, 133, 0.08);
-  }
+.heroEyebrow svg {
+  flex: none;
 }
 .h1 {
   font-size: clamp(3.4rem, 8.4vw, 7rem);
@@ -852,12 +842,6 @@
   margin-top: 46px;
   flex-wrap: wrap;
 }
-.grovesNote {
-  font-size: 11.5px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--ink-3);
-}
 
 /* ── "what you can say" ── */
 .say {
@@ -1142,13 +1126,6 @@
 .closerOrb {
   filter: drop-shadow(0 0 24px rgba(67, 186, 133, 0.45));
 }
-.closerNote {
-  font-family: var(--f-mono);
-  font-size: 12px;
-  letter-spacing: 0.08em;
-  color: var(--ink-3);
-  text-transform: uppercase;
-}
 
 /* ── footer ── */
 .footer {
@@ -1392,9 +1369,6 @@
     align-items: stretch;
     gap: 14px;
     margin-top: 34px;
-  }
-  .grovesNote {
-    text-align: center;
   }
   .paper {
     padding-block: 84px;

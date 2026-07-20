@@ -106,6 +106,16 @@ function money(n: number): string {
   return `$${Math.round(n).toLocaleString("en-US")}`;
 }
 
+// The official Robinhood feather (simple-icons path), drawn in the eyebrow's
+// own green so the mark reads as part of the line, not a pasted asset.
+function RobinhoodMark() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <path d="M2.84 24h.53c.096 0 .192-.048.224-.128C7.591 13.696 11.94 8.656 14.67 5.638c.112-.128.064-.225-.096-.225h-4.88a.55.55 0 0 0-.45.225L5.746 9.972c-.514.642-.642 1.236-.642 2.086v4.43c-1.14 3.194-1.862 5.361-2.392 7.32-.032.125.016.192.129.192M20.447.646c-.754-.802-4.157-.834-5.73-.224a3 3 0 0 0-.786.465 41 41 0 0 0-3.323 3.178c-.112.113-.064.225.097.225h5.409c.497 0 .786.289.786.786v6.1c0 .16.128.208.225.064l3.258-4.254c.53-.69.69-.898.835-1.861.192-1.413.08-3.58-.77-4.479m-6.982 16.18 2.231-3.676a.7.7 0 0 0 .064-.29V6.73c0-.16-.112-.225-.224-.097-3.355 3.74-5.971 7.672-8.395 12.407-.06.12.016.225.16.177l5.009-1.54c.565-.174.882-.402 1.155-.852" />
+    </svg>
+  );
+}
+
 // Real stock logo chip with the same monogram fallback the app uses.
 function StockLogo({ symbol, className, monoClass }: { symbol: string; className: string; monoClass: string }) {
   const d = displayFor(symbol);
@@ -169,8 +179,9 @@ export function SiteLandingV4({
               <Arrow />
             </Link>
             <p className={`${s.eyebrow} ${s.heroEyebrow}`}>
-              <span className={s.liveDot} aria-hidden="true" />
-              AI broker &middot; real stocks &middot; Robinhood Chain
+              The AI broker on
+              <RobinhoodMark />
+              Robinhood Chain
             </p>
             <h1 className={`${s.display} ${s.h1}`}>
               Say it.
@@ -345,9 +356,6 @@ export function SiteLandingV4({
               <Link href="/groves" className={s.cta}>
                 Explore the Groves <Arrow />
               </Link>
-              <span className={`${s.grovesNote} ${s.mono}`}>
-                Non-custodial &middot; every trade on-chain
-              </span>
             </div>
           </div>
         </section>
@@ -477,7 +485,6 @@ export function SiteLandingV4({
           <Link href="/app" className={s.cta}>
             Talk to Vera <Arrow />
           </Link>
-          <span className={`${s.closerNote} ${s.mono}`}>No forms. No order tickets. Minimum $11.</span>
         </div>
       </section>
 
