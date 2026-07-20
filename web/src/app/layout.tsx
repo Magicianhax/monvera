@@ -50,7 +50,7 @@ const jetbrains = JetBrains_Mono({
   display: "swap",
 });
 
-const DEFAULT_TITLE = "Monvera · Invest with Vera";
+const DEFAULT_TITLE = "Monvera — AI Broker for Real Tokenized Stocks";
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
@@ -61,16 +61,21 @@ export const metadata: Metadata = {
   },
   description: SITE_DESCRIPTION,
   keywords: [
-    "tokenized stocks",
-    "invest with AI",
+    "Monvera",
+    "Vera",
+    "Vera AI broker",
     "AI broker",
-    "buy stocks crypto",
+    "AI stockbroker",
+    "tokenized stocks",
+    "buy tokenized stocks",
     "Robinhood Chain",
+    "tokenized stocks Robinhood Chain",
+    "invest with AI",
+    "AI investing agent",
+    "buy stocks crypto",
     "no seed phrase wallet",
     "gasless investing",
     "fractional shares",
-    "Vera",
-    "Monvera",
   ],
   manifest: "/manifest.webmanifest",
   // Virtuals Protocol site-ownership proof for the $MONVERA token page.
@@ -150,6 +155,21 @@ const JSON_LD = {
       name: SITE_NAME,
       description: SITE_DESCRIPTION,
       publisher: { "@id": `${SITE_URL}/#organization` },
+    },
+    {
+      // Vera as her own entity — the answer Google should return for
+      // "vera ai broker". Distinct from the Monvera app node below.
+      "@type": "SoftwareApplication",
+      "@id": `${SITE_URL}/#vera`,
+      name: "Vera",
+      alternateName: ["Vera AI broker", "Vera by Monvera"],
+      applicationCategory: "FinanceApplication",
+      operatingSystem: "Web",
+      url: `${SITE_URL}/agent`,
+      description:
+        "Vera is Monvera's AI broker agent. She prices plans across ~95 real tokenized stocks and ETFs on Robinhood Chain, shows every dollar before it moves, and records each plan on-chain.",
+      publisher: { "@id": `${SITE_URL}/#organization` },
+      offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
     },
     {
       "@type": "WebApplication",

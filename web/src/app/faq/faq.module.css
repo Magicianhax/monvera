@@ -1,0 +1,52 @@
+/* /faq — the shared FAQ, doc-shell styled. Mirrors the buyback page's
+   accordion so the whole document family reads as one voice. */
+
+.list {
+  margin-top: 8px;
+}
+.item {
+  border-top: 1px solid var(--s-line);
+}
+.item:last-child {
+  border-bottom: 1px solid var(--s-line);
+}
+.q {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 17px 0;
+  cursor: pointer;
+  list-style: none;
+  font-weight: 600;
+  font-size: 15.5px;
+  color: var(--s-ink);
+  letter-spacing: -0.01em;
+}
+.q::-webkit-details-marker {
+  display: none;
+}
+.q:hover {
+  color: var(--s-primary-d);
+}
+.q:focus-visible {
+  outline: 2px solid var(--s-primary);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+.chevron {
+  color: var(--s-ink-3);
+  flex: none;
+  transition: transform 0.2s ease;
+}
+.item[open] .chevron {
+  transform: rotate(180deg);
+  color: var(--s-primary-d);
+}
+.a {
+  font-size: 14.5px;
+  color: var(--s-ink-2);
+  margin: 0 0 18px;
+  line-height: 1.65;
+  max-width: 66ch;
+}

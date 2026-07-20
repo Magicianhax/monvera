@@ -38,6 +38,7 @@ const FOOT_PRODUCT = [
 ];
 const FOOT_RESOURCES = [
   { label: "Documentation", href: DOCS_URL, external: true },
+  { label: "FAQ", href: "/faq" },
   { label: "Live demo", href: "/demo" },
   { label: "Brand kit", href: "/brand" },
   { label: "Vera's contract", href: VERA_CONTRACT_URL, external: true },

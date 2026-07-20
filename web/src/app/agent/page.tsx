@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { pageMeta } from "@/lib/seo";
 import { ArrowUpRight } from "lucide-react";
 import { getVeraRecordServer, getReputationServer } from "@/lib/server/executorLogs";
 import { VERA } from "@/lib/veraData";
@@ -7,18 +8,12 @@ import { addressUrl, txUrl, shortAddress, usd, riskLabel } from "@/lib/format";
 import { SiteDocShell } from "@/components/site/SiteDocShell";
 import s from "./agent.module.css";
 
-export const metadata: Metadata = {
-  title: "Vera, a verifiable AI agent",
+export const metadata: Metadata = pageMeta({
+  title: "Vera — a verifiable AI broker agent",
   description:
-    "Vera is Monvera's investing agent: she signs every plan with EIP-712 and records it permanently on-chain, so her whole track record can be checked by anyone. Machine-readable identity at /.well-known/agent-card.json.",
-  alternates: { canonical: "/agent" },
-  openGraph: {
-    title: "Monvera · Vera, a verifiable AI agent",
-    description:
-      "Every plan Vera signs is recorded on-chain and open for anyone to check. Her verified agent number, registry, and full record, in public.",
-    url: "/agent",
-  },
-};
+    "Vera is Monvera's AI broker: she signs every plan with EIP-712 and records it on-chain, so her whole track record can be checked by anyone. Machine-readable identity at /.well-known/agent-card.json.",
+  path: "/agent",
+});
 
 // Public, world-readable: this page moves no money, so it is not geo-gated.
 // Server-rendered from the same on-chain executor log the app reads; revalidates
@@ -34,7 +29,7 @@ const REGISTRY_LIVE =
 
 const TRUST: { t: string; s: string }[] = [
   { t: "Signed", s: "Every plan is signed by Vera with an EIP-712 signature." },
-  { t: "Recorded", s: "Each one is written on-chain, so it cannot be edited after the fact." },
+  { t: "Recorded", s: "Each one is written on-chain, where anyone can verify it on the public explorer." },
   { t: "Open", s: "Anyone can read her full record, no account needed." },
 ];
 
@@ -66,7 +61,7 @@ export default async function AgentPage() {
         <>
           {VERA.role[0].toUpperCase() + VERA.role.slice(1)}. She builds plans from real, named companies and funds, and
           every plan she makes is signed and recorded on-chain. That means her whole track record, below, is public and
-          cannot be rewritten later. The machine-readable version lives at{" "}
+          verifiable by anyone on the explorer. The machine-readable version lives at{" "}
           <a className={s.inlineLink} href="/.well-known/agent-card.json">/.well-known/agent-card.json</a>.
         </>
       }

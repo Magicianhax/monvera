@@ -1,20 +1,15 @@
 import type { Metadata } from "next";
+import { pageMeta } from "@/lib/seo";
 import { SiteDocShell } from "@/components/site/SiteDocShell";
 import { RoadmapRail } from "@/components/site/RoadmapRail";
 import { countOf } from "@/lib/roadmap";
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMeta({
   title: "Roadmap",
   description:
     "What Monvera has shipped, what it is building now, and what it is exploring. No dates and no promises: the page changes when something goes live.",
-  alternates: { canonical: "/roadmap" },
-  openGraph: {
-    title: "Monvera · Roadmap",
-    description:
-      "What is live today, what is being built now, and what Monvera is exploring. It changes when something ships.",
-    url: "/roadmap",
-  },
-};
+  path: "/roadmap",
+});
 
 // Public, world-readable: it moves no money, so it is not geo-gated. The
 // content lives in lib/roadmap.ts, shared with the landing preview.

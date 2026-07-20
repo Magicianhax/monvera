@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { pageMeta } from "@/lib/seo";
 import Link from "next/link";
 import { getGroves } from "@/lib/server/groveService";
 import { fullDiversificationUsd } from "@/lib/groves";
@@ -16,18 +17,12 @@ import s from "./groves.module.css";
 // the RPC. Raw JSON twin: /api/groves.
 export const revalidate = 300;
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMeta({
   title: "Groves — curated stock baskets",
   description:
     "Curated baskets of real tokenized stocks, bought straight into your own wallet. Free to enter, free to hold — the only fee is 10% of profit when you exit. Composition, backtests, and every trade published in the open.",
-  alternates: { canonical: "/groves" },
-  openGraph: {
-    title: "Monvera Groves — strategies you own, not funds you buy",
-    description:
-      "Curated baskets of real tokenized stocks, held in your own wallet. $0 entry, $0 management — 10% of profit when you exit is the whole fee.",
-    url: "/groves",
-  },
-};
+  path: "/groves",
+});
 
 export default async function GrovesPage() {
   const data = await getGroves();

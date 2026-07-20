@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { pageMeta } from "@/lib/seo";
 import { ArrowUpRight, ArrowDown, ChevronDown } from "lucide-react";
 import { getBuybackData, maybeIndex, TREASURY } from "@/lib/server/buybackStore";
 import { SiteDocShell } from "@/components/site/SiteDocShell";
@@ -10,17 +11,12 @@ import s from "./buyback.module.css";
 // minute. Renders honest zeros/empty states rather than inventing numbers.
 export const revalidate = 60;
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMeta({
   title: "Buyback transparency",
   description:
     "A share of Monvera's trading revenue buys back $MONVERA on-chain. 20% of net revenue (dynamic) is allocated to buybacks — every figure is read live from the treasury on Robinhood Chain.",
-  alternates: { canonical: "/buyback" },
-  openGraph: {
-    title: "Monvera · Buyback transparency",
-    description: "Treasury revenue, the 20% buyback budget, and every on-chain buyback — public and verifiable.",
-    url: "/buyback",
-  },
-};
+  path: "/buyback",
+});
 
 const EXPLORER = "https://robinhoodchain.blockscout.com";
 const POOL = "0x502Be3da0Ad1c83C79A9e64Ac5A05eEc39A44c78";

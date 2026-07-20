@@ -27,7 +27,7 @@ export const FAQ: FaqItem[] = [
   },
   {
     q: "How much do I need to start?",
-    a: "One dollar. No minimum balance, no paperwork, no waiting list, just a goal and a tap.",
+    a: "About $20 is a comfortable start, and each stock in a plan needs roughly $11 to clear the venue minimum. No minimum balance, no paperwork, no waiting list, just a goal and a tap.",
   },
   {
     q: "What is USDG?",
@@ -55,7 +55,7 @@ export const FAQ: FaqItem[] = [
   },
   {
     q: "Who is behind Vera?",
-    a: "Vera runs on Virtuals, the agent network that gives her a verifiable on-chain identity (a registered agent ID anyone can look up) and powers the AI that builds your plans. Because her identity and every signed recommendation are recorded on-chain, her track record is public and cannot be quietly rewritten later.",
+    a: "Vera runs on Virtuals, the agent network that gives her a verifiable on-chain identity (a registered agent ID anyone can look up) and powers the AI that builds your plans. Her identity and every signed recommendation are recorded on-chain, so her track record is public and anyone can verify it on the explorer.",
   },
   {
     q: "Where is Monvera available?",

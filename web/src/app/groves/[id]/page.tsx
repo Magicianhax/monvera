@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { pageMeta } from "@/lib/seo";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { GROVES, groveById, fullDiversificationUsd, MIN_LEG_USD, RECOMMENDED_BUY_USD } from "@/lib/groves";
@@ -29,16 +30,17 @@ export async function generateMetadata({
   const { id } = await params;
   const def = groveById(id.toLowerCase());
   if (!def) return {};
-  return {
+  const meta = pageMeta({
     title: `${def.ticker} — ${def.name}`,
     description: def.thesis,
-    alternates: { canonical: `/groves/${def.id}` },
-    openGraph: {
-      title: `${def.ticker} — ${def.name} · Monvera`,
-      description: def.thesis,
-      url: `/groves/${def.id}`,
-    },
-  };
+    path: `/groves/${def.id}`,
+  });
+  // The grove's own cover art beats the generic brand card in link previews.
+  if (def.coverImage) {
+    meta.openGraph = { ...meta.openGraph, images: [def.coverImage] };
+    meta.twitter = { ...meta.twitter, images: [def.coverImage] };
+  }
+  return meta;
 }
 
 // The 1Y backtest curve vs buy-and-hold SPY — same drawing as the strategy

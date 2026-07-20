@@ -27,5 +27,5 @@ export const VERA: VeraPersona = {
   trackRecord: "+11.4%",
   followed: "94%",
   blurb:
-    "I build plans from real, named companies and funds. Every plan I make is signed and recorded, so my track record can't be edited after the fact.",
+    "I build plans from real, named companies and funds. Every plan I make is signed and recorded on-chain, so anyone can check my track record on the public explorer.",
 };

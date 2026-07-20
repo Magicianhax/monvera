@@ -1,22 +1,17 @@
 import type { Metadata } from "next";
+import { pageMeta } from "@/lib/seo";
 import { getPublicStrategies } from "@/lib/server/strategies";
 import { displayFor } from "@/lib/displayAssets";
 import { SiteDocShell } from "@/components/site/SiteDocShell";
 import { StrategyCurve, pctLabel } from "@/components/site/StrategyCurve";
 import s from "./strategies.module.css";
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMeta({
   title: "Open strategies",
   description:
     "Monvera's public strategy book: deterministic, rule-based portfolios of tokenized stocks, rebuilt from real market data and backtested in the open. Raw JSON at /api/strategies.",
-  alternates: { canonical: "/strategies" },
-  openGraph: {
-    title: "Monvera · Open strategies",
-    description:
-      "Deterministic, rule-based portfolios of tokenized stocks: methods, weights, and backtests published in the open.",
-    url: "/strategies",
-  },
-};
+  path: "/strategies",
+});
 
 // Public, world-readable (not geo-gated: it moves no money). Server-rendered
 // from the same strategy engine the app uses; revalidates hourly.
