@@ -28,6 +28,8 @@ const TOKEN_CHART_FALLBACK = chartPaths(curve(0.35, 44, 0.2, 1.8), 640, 110);
 // The design's menuTiles (script L710-717), wired to the real nav.
 const MENU_TILES: { label: string; sub: string; icon: string; go: (nav: ChatNav) => void }[] = [
   { label: "Invest with Vera", sub: "Goal → plan → done", icon: "ph-sparkle", go: (n) => n.goChat() },
+  // Groves are full pages, not a canvas — the flagship gets its own room.
+  { label: "Groves", sub: "Curated baskets, 10% only on profit", icon: "ph-tree", go: () => { window.location.href = "/groves"; } },
   { label: "Autopilot", sub: "Invest on repeat", icon: "ph-sliders-horizontal", go: (n) => n.openCanvas("autopilot") },
   { label: "Trade it yourself", sub: "Buy & sell any asset", icon: "ph-hand-tap", go: (n) => n.openCanvas("market") },
   { label: "Portfolio & Wallet", sub: "Holdings, cash & activity", icon: "ph-chart-pie-slice", go: (n) => n.openCanvas("portfolio") },

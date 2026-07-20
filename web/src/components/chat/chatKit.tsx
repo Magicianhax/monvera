@@ -20,6 +20,7 @@ import {
   UploadSimple, Copy, ArrowsCounterClockwise, LockSimple, Lightning, CaretDown,
   ArrowRight, Info, Shield, Clock,
   type Icon as PhosphorIcon,
+  Tree,
 } from "@phosphor-icons/react";
 
 // ── icon map (the design names Phosphor icons; we ship @phosphor-icons/react) ──
@@ -41,7 +42,7 @@ const ICONS: Record<string, PhosphorIcon> = {
   "ph-arrow-up-right": ArrowUpRight, "ph-arrow-down-right": ArrowDownRight, "ph-arrow-square-out": ArrowSquareOut,
   "ph-caret-left": CaretLeft, "ph-caret-right": CaretRight, "ph-scales": Scales, "ph-piggy-bank": PiggyBank,
   "ph-repeat": Repeat, "ph-hand-tap": HandTap, "ph-users-three": UsersThree, "ph-airplane-tilt": AirplaneTilt,
-  "ph-chart-line-up": ChartLineUp, "ph-sign-out": SignOut,
+  "ph-chart-line-up": ChartLineUp, "ph-sign-out": SignOut, "ph-tree": Tree,
   "ph-google-logo": GoogleLogo, "ph-x-logo": XLogo, "ph-bell": Bell, "ph-star": Star,
 };
 
