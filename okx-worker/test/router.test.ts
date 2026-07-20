@@ -109,6 +109,23 @@ test("free quote route responds without payment", async () => {
   expect(body.quote50Usd).not.toBeNull();
 });
 
+test("GET /v1/quote?symbol= (query form) works like the path form", async () => {
+  mockFetch((url) =>
+    url.includes("/dex/aggregator/quote")
+      ? new Response(
+          JSON.stringify({
+            code: "0",
+            data: [{ toTokenAmount: "150000", priceImpactPercentage: "0.2", dexRouterList: [] }],
+          })
+        )
+      : null
+  );
+  const r = await route(new Request("https://asp.example/v1/quote?symbol=AAPLx"), env, ctx);
+  expect(r.status).toBe(200);
+  const body = (await r.json()) as { symbol: string };
+  expect(body.symbol).toBe("AAPLx");
+});
+
 test("unknown quote symbol is a 404", async () => {
   mockFetch(() => null);
   const r = await route(new Request("https://asp.example/v1/quote/NOPE"), env, ctx);

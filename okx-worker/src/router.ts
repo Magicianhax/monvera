@@ -124,7 +124,7 @@ export async function route(request: Request, env: Env, ctx: ExecutionContext): 
     return handleQuote(symbol, env, ctx);
   }
 
-  if (request.method === "POST" && p === "/v1/quote") {
+  if ((request.method === "GET" || request.method === "POST") && p === "/v1/quote") {
     const input = await requestInput(request);
     if (typeof input.symbol !== "string") {
       return errorJson(400, 'missing required query param "symbol".', {
