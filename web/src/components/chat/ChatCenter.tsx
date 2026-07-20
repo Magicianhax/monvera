@@ -5,7 +5,7 @@
 // nudges, invest → success card, and the composer. History persists via
 // useVeraChat (D1); the intelligence runs on the real invest rails (useInvest)
 // and the numbers come from the real portfolio (usePortfolio) — no mock data.
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { memo, useEffect, useRef, useState, type ReactNode } from "react";
 import { useInvest } from "@/hooks/useInvest";
 import { useSellAll, type SellSelection, type SellSuccess } from "@/hooks/useSellAll";
 import { useMonveraSwap } from "@/hooks/useMonveraSwap";
@@ -114,7 +114,10 @@ const isSepRow = (l: string | undefined): boolean =>
 const splitRow = (l: string): string[] =>
   l.trim().replace(/^\|/, "").replace(/\|$/, "").split("|").map((c) => c.trim());
 
-function VeraRich({ text }: { text: string }) {
+// Memoized: message content is immutable, so re-renders driven by the composer
+// (every keystroke re-renders ChatCenter) must not re-run the parse for the
+// whole history.
+const VeraRich = memo(function VeraRich({ text }: { text: string }) {
   const lines = text.split("\n");
   const out: ReactNode[] = [];
   let buf: string[] = [];
@@ -130,6 +133,9 @@ function VeraRich({ text }: { text: string }) {
       i += 2;
       const rows: string[][] = [];
       while (isTableRow(lines[i])) { rows.push(splitRow(lines[i])); i++; }
+      // A blank line after the table would render as a full empty line under
+      // the table's own margin (pre-wrap keeps it) — swallow one.
+      if (lines[i] === "") i++;
       flush();
       out.push(
         <div key={`tb${out.length}`} style={{ overflowX: "auto", margin: "10px 0" }}>
@@ -164,7 +170,7 @@ function VeraRich({ text }: { text: string }) {
   }
   flush();
   return <>{out}</>;
-}
+});
 
 /** Human token quantity from raw 18dp — whole numbers when big, precise when tiny. */
 function fmtTok(raw: bigint): string {
@@ -782,7 +788,7 @@ ${seller.error.slice(0, 160)}`, payload: { suggestions: ["Try again"] } }).catch
             if (m.role === "user") {
               return (
                 <div key={m.id} style={{ alignSelf: "flex-end", display: "flex", alignItems: "flex-end", gap: 9, maxWidth: "84%" }}>
-                  <div className="msg" style={{ background: "var(--primary)", color: "var(--primary-ink)", padding: "12px 16px", borderRadius: "20px 20px 6px 20px", fontSize: 15, lineHeight: 1.5, fontWeight: 500 }}>{m.content}</div>
+                  <div className="msg" style={{ background: "var(--primary)", color: "var(--primary-ink)", padding: "12px 16px", borderRadius: "20px 20px 6px 20px", fontSize: 15, lineHeight: 1.5, fontWeight: 500, whiteSpace: "pre-wrap" }}>{m.content}</div>
                   {avatar.kind === "upload" && avatar.value ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img src={avatar.value} alt="" width={30} height={30} style={{ borderRadius: "50%", flex: "none", objectFit: "cover", boxShadow: "0 1px 6px rgba(0,0,0,.18)" }} />

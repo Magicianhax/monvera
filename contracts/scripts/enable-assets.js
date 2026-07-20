@@ -10,7 +10,7 @@ const hre = require("hardhat");
 //   FBTC  : only Merchant Moe LB routes USDC->FBTC; the leg builder leaves it gated
 //           for now, but we still whitelist the token + MM router so it's ready.
 //
-// Run: npm --prefix D:/Tools/mantle/stax/contracts run enable:mantle
+// Run from the contracts directory: npm run enable:mantle
 // (owner = deployer in .env PRIVATE_KEY).
 
 const STAX_EXECUTOR = "0x3411196abdc3dbe59c5e2878c44d1931a975af12";

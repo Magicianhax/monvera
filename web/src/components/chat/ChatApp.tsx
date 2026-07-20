@@ -68,6 +68,10 @@ export function ChatApp() {
   // back untouched when it closes). null = closed; id null = the shelf.
   const [grovesView, setGrovesView] = useState<{ id: string | null; auto: boolean } | null>(null);
 
+  // True while the mount-time effects below are normalizing the arrival URL —
+  // the first URL sync after that must replace, not push (see the sync effect).
+  const restoredFromUrl = useRef(false);
+
   // /groves deep link: the public Grove pages' CTAs land on "/app?grove=<id>"
   // (+ "&auto=1" for auto-manage) — open that Grove's in-app page and strip
   // the params so a refresh doesn't re-open. Runs once per mount.
@@ -81,6 +85,7 @@ export function ChatApp() {
     const rest = q.toString();
     window.history.replaceState(null, "", `${window.location.pathname}${rest ? `?${rest}` : ""}`);
     setGrovesView({ id: g.id, auto });
+    restoredFromUrl.current = true;
   }, []);
 
   // Restore the view from the URL on load, then keep the URL in sync so a
@@ -94,23 +99,31 @@ export function ChatApp() {
       if (u.tab === "holding" && u.sym) setCanvasSymbol(u.sym.toUpperCase());
       setCanvas(u.tab as CanvasType);
     }
+    restoredFromUrl.current = true;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  // State → URL. The first run is skipped (mount is the restore effect's job,
-  // and pushing there would bury the entry the visitor arrived on); afterwards
-  // every view change pushes a history entry so back walks through the app.
+  // State → URL. The first run is skipped (mount is the restore effect's job).
+  // The first run AFTER a mount-time restore replaces instead of pushing — it's
+  // only normalizing the arrival URL (?sym casing, dropped ids), and a push
+  // there would bury the entry the visitor arrived on. Every later view change
+  // pushes a history entry so back walks through the app.
   const urlSynced = useRef(false);
   useEffect(() => {
     if (!urlSynced.current) { urlSynced.current = true; return; }
-    if (grovesView) writeAppUrl({ tab: "groves", id: grovesView.id });
-    else if (canvas) writeAppUrl({ tab: canvas, sym: canvas === "holding" ? canvasSymbol : null });
-    else writeAppUrl({ tab: home === "chat" ? "chat" : null });
+    const replace = restoredFromUrl.current;
+    restoredFromUrl.current = false;
+    if (grovesView) writeAppUrl({ tab: "groves", id: grovesView.id }, { replace });
+    else if (canvas) writeAppUrl({ tab: canvas, sym: canvas === "holding" ? canvasSymbol : null }, { replace });
+    else writeAppUrl({ tab: home === "chat" ? "chat" : null }, { replace });
   }, [home, canvas, canvasSymbol, grovesView]);
 
   // Back/forward: re-apply whatever view the restored URL describes. The sync
   // effect then no-ops because the URL already matches the applied state.
   useEffect(() => {
     const onPop = () => {
+      // A close animation may be mid-flight; its timer would fire AFTER this
+      // restore and wipe the very canvas the user navigated back to.
+      if (closeTimer.current) { clearTimeout(closeTimer.current); closeTimer.current = null; }
       const u = readAppUrl();
       if (u.tab === "groves") setGrovesView({ id: u.id && groveById(u.id) ? u.id : null, auto: false });
       else setGrovesView(null);

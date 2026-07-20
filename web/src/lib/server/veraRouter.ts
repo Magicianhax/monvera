@@ -449,13 +449,18 @@ function salvageTurn(raw: string): VeraTurn {
 /** One turn of Vera's brain. Throws only on total inference failure. */
 export async function routeVera(ctx: VeraContext): Promise<VeraResult> {
   // Real failover: every configured provider in precedence order. A Virtuals
-  // outage (5xx/timeout, no salvageable text) degrades to the next provider
-  // instead of failing the user's turn.
+  // outage (5xx/timeout, junk output) degrades to the next provider instead of
+  // failing the user's turn. One shared deadline caps the whole chain so three
+  // slow providers can't stack 28s timeouts on a waiting user.
   const system = await systemPrompt(ctx);
   const chain = resolveModelChain();
+  const deadline = Date.now() + 32_000;
   let turn: VeraTurn | null = null;
+  let salvaged: VeraTurn | null = null;
   let lastErr: unknown = null;
   for (const { provider, model } of chain) {
+    const budget = Math.min(28_000, deadline - Date.now());
+    if (budget < 3_000) break;
     try {
       const { object } = await generateObject({
         model,
@@ -464,24 +469,31 @@ export async function routeVera(ctx: VeraContext): Promise<VeraResult> {
         prompt: ctx.text,
         temperature: 0.3,
         maxRetries: 1,
-        abortSignal: AbortSignal.timeout(28_000),
+        abortSignal: AbortSignal.timeout(budget),
       });
       turn = object;
       break;
     } catch (err) {
       // The Virtuals proxy strips response_format, so the model may answer with
       // wrapped JSON, partial JSON, or plain prose. Salvage in order: parse the
-      // JSON; else deliver the model's own words as a reply. Only a response
-      // with nothing to show (provider down, hard timeout) moves down the chain.
+      // JSON; else the model's own words as a reply. A salvage that yields only
+      // the canned apology means the provider returned junk — keep it as a last
+      // resort but let the next provider try for a real answer.
+      lastErr = err;
       const raw = rawTextFrom(err);
       if (raw) {
-        turn = salvageTurn(raw);
-        break;
+        const t = salvageTurn(raw);
+        const isApology = t.intent === "reply" && t.message?.startsWith("I lost my train of thought");
+        if (!isApology) {
+          turn = t;
+          break;
+        }
+        salvaged = salvaged ?? t;
       }
-      lastErr = err;
-      console.error(`[vera] provider ${provider} failed with no salvageable text; trying next.`, err);
+      console.error(`[vera] provider ${provider} produced no usable turn; trying next.`, err);
     }
   }
+  if (!turn) turn = salvaged;
   if (!turn) throw lastErr ?? new Error("No inference provider produced a turn.");
 
   switch (turn.intent) {
@@ -1013,9 +1025,9 @@ export async function routeVera(ctx: VeraContext): Promise<VeraResult> {
         return {
           intent: "reply",
           message: turn.action === "enable"
-            ? `Auto-manage for the ${g.name} opens when its contract deploys — the hourly drift checks aren't live yet, and I won't pretend to flip a switch that doesn't exist. You can buy the basket today, and auto-manage can be added to your position at launch.`
+            ? `Auto-manage for the ${g.name} opens when its contract deploys — the hourly drift checks aren't live yet, and I won't pretend to flip a switch that doesn't exist. The whole basket is public today, and buys open with the contract.`
             : `There's nothing to switch off — auto-manage for the ${g.name} isn't live yet. It opens when its contract deploys.`,
-          suggestions: [`Buy $${g.minBuyUsd} of ${g.name}`, `What's in the ${g.name}?`],
+          suggestions: [`What's in the ${g.name}?`, "What Groves do you have?"],
         };
       }
       return { intent: "reply", message: `Auto-manage changes for the ${g.name} aren't wired into chat yet — manage them from monvera.best/groves/${g.id}.` };

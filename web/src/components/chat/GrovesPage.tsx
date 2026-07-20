@@ -285,7 +285,7 @@ function GroveDetail({ id, autoManage, nav }: { id: string; autoManage: boolean;
           <p style={{ margin: "10px 0 0", fontSize: 12.5, lineHeight: 1.6, color: "var(--ink-2)" }}>
             {g.stats.deployed
               ? `Vera keeps the basket at its published weights for you — ${g.rebalancePolicy}. Ask her to enable it whenever you're ready.`
-              : `Auto-manage opens with the GroveManager contract: Vera will keep the basket at its published weights (${g.rebalancePolicy}), with every action landing on-chain. Until then, buying places the ${g.components.length} names as direct orders into your wallet — they're yours to hold or sell like any other asset, and rebalancing stays in your hands.`}
+              : `Auto-manage opens with the GroveManager contract: Vera will keep the basket at its published weights (${g.rebalancePolicy}), with every action landing on-chain. The full composition and backtest are public today — buys open the moment the contract goes live.`}
           </p>
         </div>
       )}

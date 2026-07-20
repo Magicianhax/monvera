@@ -22,8 +22,9 @@ const CHAIN_ID = 4663;
 
 const DISPLAY_NAME = "Monvera";
 const SLUG = "monvera";
-const CONTACT_EMAIL = "magicianafk@gmail.com";
-const TELEGRAM_HANDLE = "@Magicianafk_01";
+// Contact details come from env so personal handles never live in the repo.
+const CONTACT_EMAIL = process.env.RIALTO_CONTACT_EMAIL || "support@monvera.best";
+const TELEGRAM_HANDLE = process.env.RIALTO_CONTACT_TELEGRAM || "";
 const APP_URL = "https://monvera.best";
 const APPLICATION_DESCRIPTION =
   "Monvera is an AI broker for tokenized stocks on Robinhood Chain. Vera, its agent, builds and executes diversified stock plans for users — gasless and non-custodial.";
