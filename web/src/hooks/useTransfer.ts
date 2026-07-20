@@ -1,22 +1,53 @@
 "use client";
 
-// useTransfer — send a held token out of the smart account to any address, as a
-// single gasless UserOp: [ token.transfer(to, amount) ]. Works for USDC and any
-// xStock the user holds. Demo mode never touches the chain.
+// useTransfer — send a held token to any address, gasless.
+//
+// The user's funds live in the Privy embedded EOA (see useSmartAccount — the
+// EOA is the address we show, fund, and trade from). The relaying smart
+// account holds NOTHING, so a naive `token.transfer` from it reverts with an
+// opaque bundler error. The working shape mirrors the invest rails: the EOA
+// signs an exact-amount EIP-2612 permit for the smart account, and ONE
+// sponsored UserOp relays [permit, transferFrom(EOA -> recipient)] — funds
+// move straight from the EOA, the user never needs gas, and no standing
+// allowance is left behind. Demo mode never touches the chain.
 import { useCallback, useState } from "react";
 import { encodeFunctionData, isAddress } from "viem";
 import { useActiveWallet } from "@/hooks/useActiveWallet";
-import { sendSponsoredCalls, type Call } from "@/lib/aa";
+import { getSmartAccountClient, sendSponsoredCalls, type Call } from "@/lib/aa";
 import { asViemProvider } from "@/lib/provider";
+import { buildPermitCall } from "@/lib/permit";
+import { typedDataSigner, type Eip1193 } from "@/lib/arcusTrade";
 import { useDemo } from "@/components/demo/DemoProvider";
 import { useRefreshBalances } from "@/hooks/useBalances";
-import { ERC20_ABI } from "@/lib/abis";
 
 type Phase = "idle" | "sending" | "done" | "error";
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 // Canned receipt hash for demo-mode sends (never broadcast on-chain).
 const DEMO_TX = ("0x" + "5e9d1c30".repeat(32).slice(0, 64)) as `0x${string}`;
+
+const TRANSFER_FROM_ABI = [
+  {
+    type: "function",
+    name: "transferFrom",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "from", type: "address" },
+      { name: "to", type: "address" },
+      { name: "value", type: "uint256" },
+    ],
+    outputs: [{ type: "bool" }],
+  },
+] as const;
+
+/** Long viem/bundler errors become one honest sentence; detail goes to the console. */
+function humanize(e: unknown): string {
+  const msg = e instanceof Error ? e.message : String(e);
+  if (/rejected|denied/i.test(msg)) return "Signature declined — nothing was sent.";
+  if (/insufficient/i.test(msg)) return "Not enough balance to cover that send.";
+  if (/429|rate limit/i.test(msg)) return "The network is busy — try again in a moment.";
+  return "The transfer didn't go through. Nothing left your account — try again in a moment.";
+}
 
 export interface TransferResult {
   txHash: `0x${string}`;
@@ -76,21 +107,31 @@ export function useTransfer() {
       try {
         const wallet = activeWallet;
         if (!wallet) throw new Error("No account found. Please sign in again.");
+        const eoa = wallet.address as `0x${string}`;
 
-        const transferCall: Call = {
+        setPhase("sending");
+        const provider = await wallet.getEthereumProvider();
+        const viemProvider = asViemProvider(provider);
+        // The relaying smart account — the permit's spender, so transferFrom
+        // succeeds when the UserOp executes it.
+        const { owner: relayer } = await getSmartAccountClient(viemProvider);
+        const signTyped = typedDataSigner(provider as Eip1193, eoa);
+
+        // Exact-amount permit: fully consumed by this send, no allowance lingers.
+        const permitCall = await buildPermitCall(signTyped, eoa, relayer, token, amountRaw);
+        const transferFromCall: Call = {
           to: token,
           data: encodeFunctionData({
-            abi: ERC20_ABI,
-            functionName: "transfer",
-            args: [to as `0x${string}`, amountRaw],
+            abi: TRANSFER_FROM_ABI,
+            functionName: "transferFrom",
+            args: [eoa, to as `0x${string}`, amountRaw],
           }),
         };
 
-        setPhase("sending");
-        const provider = asViemProvider(await wallet.getEthereumProvider());
-        const receipt = await sendSponsoredCalls(provider, [transferCall]);
+        const r = await sendSponsoredCalls(viemProvider, [permitCall, transferFromCall]);
+        if (!r.success) throw new Error(`reverted (tx ${r.receipt.transactionHash})`);
         setResult({
-          txHash: receipt.receipt.transactionHash as `0x${string}`,
+          txHash: r.receipt.transactionHash as `0x${string}`,
           symbol,
           amount,
           to,
@@ -98,7 +139,8 @@ export function useTransfer() {
         setPhase("done");
         refreshBalances(); // reflect the lower balance immediately
       } catch (e) {
-        setError(e instanceof Error ? e.message : "The transfer didn't go through.");
+        console.error("[transfer]", e);
+        setError(humanize(e));
         setPhase("error");
       }
     },
