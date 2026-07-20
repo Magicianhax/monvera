@@ -8,9 +8,12 @@
 //   /app?tab=<canvas>       → a canvas (portfolio, market, wallet, token, …)
 //   /app?tab=holding&sym=X  → one holding's canvas
 //
-// replaceState only — moving around the app never pollutes browser history;
-// back always leaves the app. The legacy ?grove=<id>&auto=1 deep link keeps
-// working (handled in the shells before this runs).
+// Every view change pushes a history entry, so the browser's back button walks
+// back through the app (canvas → chat → menu) instead of leaving it — the
+// shells listen for popstate and re-apply the URL. Writes that merely
+// normalize the current view (initial load) replace instead. The legacy
+// ?grove=<id>&auto=1 deep link keeps working (handled in the shells before
+// this runs).
 
 const CANVASES = new Set([
   "portfolio", "market", "wallet", "token", "autopilot", "vera", "scan",
@@ -41,7 +44,7 @@ export function readAppUrl(): AppUrlState {
 }
 
 /** Reflect the current view into the URL without touching unrelated params. */
-export function writeAppUrl(state: AppUrlState): void {
+export function writeAppUrl(state: AppUrlState, opts?: { replace?: boolean }): void {
   const q = new URLSearchParams(window.location.search);
   q.delete("tab");
   q.delete("id");
@@ -54,6 +57,7 @@ export function writeAppUrl(state: AppUrlState): void {
   const rest = q.toString();
   const next = `${window.location.pathname}${rest ? `?${rest}` : ""}`;
   if (next !== window.location.pathname + window.location.search) {
-    window.history.replaceState(null, "", next);
+    if (opts?.replace) window.history.replaceState(null, "", next);
+    else window.history.pushState(null, "", next);
   }
 }

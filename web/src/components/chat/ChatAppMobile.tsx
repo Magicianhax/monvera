@@ -102,11 +102,44 @@ export function ChatAppMobile() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+  // State → URL. The first run is skipped (mount is the restore effect's job,
+  // and pushing there would bury the entry the visitor arrived on); afterwards
+  // every view change pushes a history entry so back walks through the app.
+  const urlSynced = useRef(false);
   useEffect(() => {
+    if (!urlSynced.current) { urlSynced.current = true; return; }
     if (grovesView) writeAppUrl({ tab: "groves", id: grovesView.id });
     else if (canvas) writeAppUrl({ tab: canvas, sym: canvas === "holding" ? canvasSymbol : null });
     else writeAppUrl({ tab: home === "chat" ? "chat" : null });
   }, [home, canvas, canvasSymbol, grovesView]);
+
+  // Back/forward: re-apply whatever view the restored URL describes. The sync
+  // effect then no-ops because the URL already matches the applied state.
+  useEffect(() => {
+    const onPop = () => {
+      const u = readAppUrl();
+      if (u.tab === "groves") {
+        setGrovesView({ id: u.id && groveById(u.id) ? u.id : null, auto: false });
+        setGrovesClosing(false);
+      } else {
+        setGrovesView(null);
+        setGrovesClosing(false);
+      }
+      if (u.tab && isCanvasTab(u.tab)) {
+        if (u.tab === "holding" && u.sym) setCanvasSymbol(u.sym.toUpperCase());
+        setCanvas(u.tab as CanvasType);
+        setSheetClosing(false);
+      } else {
+        setCanvas(null);
+        setSheetClosing(false);
+      }
+      // Canvas entries overlay chat/menu — leave the layer beneath untouched.
+      if (u.tab === "chat") setHome("chat");
+      else if (!u.tab) setHome("menu");
+    };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, []);
 
   // The sheet leaves the way it came — slides back down, slightly faster.
   const dismissSheet = () => {
