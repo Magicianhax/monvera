@@ -17,7 +17,7 @@ const SITE = 'https://docs.monvera.best';
 const TAGLINE =
   'An AI broker for real tokenized stocks and funds on Robinhood Chain. Tell Vera a goal and an amount, she builds a diversified basket of real companies, each with a reason and a plain risk read, and one tap invests it. Gasless, non-custodial, from $1.';
 const DETAILS =
-  'Vera is registered on-chain agent #1 and signs a risk assessment that is recorded on-chain with every trade. Not available in the US, Canada, the UK, or Switzerland. Nothing here is investment advice. Backtests are history, not promises.';
+  'Vera is registered on-chain agent #1 and signs a risk assessment that is recorded on-chain with every trade. Available worldwide — users are responsible for their own local rules. Nothing here is investment advice. Backtests are history, not promises.';
 
 const MAX_BYTES = 14_000;
 /**
