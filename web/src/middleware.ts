@@ -24,11 +24,9 @@ export const config = {
   matcher: ["/((?!_next/|.*\\..*).*)"],
 };
 
-// Flip to true ONLY after app.monvera.best is in Privy's allowed origins —
-// redirecting the apex /app there before that breaks every login. Until then
-// the subdomain quietly serves the app (rewrite below) for testing, and the
-// canonical URL stays monvera.best/app.
-const APEX_APP_REDIRECT = false;
+// ON since 2026-07-20: app.monvera.best is in Privy's allowed origins, so the
+// apex /app permanently redirects to the subdomain — the app's canonical home.
+const APEX_APP_REDIRECT = true;
 
 function isHttp(req: NextRequest): boolean {
   // Cloudflare terminates TLS; the original scheme arrives in headers. Check
