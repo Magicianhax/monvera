@@ -19,6 +19,7 @@ import { buildPermitCall } from "@/lib/permit";
 import { typedDataSigner, type Eip1193 } from "@/lib/arcusTrade";
 import { useDemo } from "@/components/demo/DemoProvider";
 import { useRefreshBalances } from "@/hooks/useBalances";
+import { explainError } from "@/lib/explainError";
 
 type Phase = "idle" | "sending" | "done" | "error";
 
@@ -40,14 +41,6 @@ const TRANSFER_FROM_ABI = [
   },
 ] as const;
 
-/** Long viem/bundler errors become one honest sentence; detail goes to the console. */
-function humanize(e: unknown): string {
-  const msg = e instanceof Error ? e.message : String(e);
-  if (/rejected|denied/i.test(msg)) return "Signature declined — nothing was sent.";
-  if (/insufficient/i.test(msg)) return "Not enough balance to cover that send.";
-  if (/429|rate limit/i.test(msg)) return "The network is busy — try again in a moment.";
-  return "The transfer didn't go through. Nothing left your account — try again in a moment.";
-}
 
 export interface TransferResult {
   txHash: `0x${string}`;
@@ -140,7 +133,7 @@ export function useTransfer() {
         refreshBalances(); // reflect the lower balance immediately
       } catch (e) {
         console.error("[transfer]", e);
-        setError(humanize(e));
+        setError(explainError(e));
         setPhase("error");
       }
     },

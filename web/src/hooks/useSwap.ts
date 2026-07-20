@@ -30,6 +30,7 @@ import {
   type Eip1193,
 } from "@/lib/arcusTrade";
 import { useDemo } from "@/components/demo/DemoProvider";
+import { explainError } from "@/lib/explainError";
 import { useRefreshBalances } from "@/hooks/useBalances";
 import { type Asset } from "@/lib/tokens";
 
@@ -238,7 +239,7 @@ export function useSwap() {
         setPhase("done");
         refreshBalances();
       } catch (e) {
-        setError(e instanceof Error ? e.message : "The buy didn't go through.");
+        setError(explainError(e));
         setPhase("error");
       }
     },
@@ -270,7 +271,7 @@ export function useSwap() {
         setPhase("done");
         refreshBalances();
       } catch (e) {
-        setError(e instanceof Error ? e.message : "The sell didn't go through.");
+        setError(explainError(e));
         setPhase("error");
       }
     },

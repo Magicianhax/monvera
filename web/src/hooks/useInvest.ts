@@ -30,6 +30,7 @@ import { useRefreshBalances } from "@/hooks/useBalances";
 import { authHeader } from "@/lib/authedFetch";
 import type { Allocation } from "@/lib/allocation-schema";
 import type { AllocateResult, InvestSuccess } from "@/lib/invest-types";
+import { explainError, explainInvestFailure } from "@/lib/explainError";
 
 /** POST /api/commit-plan response — Vera's signed risk inference for this plan. */
 interface CommitPlan {
@@ -158,7 +159,7 @@ export function useInvest(): UseInvest {
         setPhase("idle");
         return result;
       } catch (e) {
-        setError(e instanceof Error ? e.message : "Vera couldn't build a plan.");
+        setError(explainError(e));
         setPhase("error");
         return null;
       }
@@ -264,6 +265,7 @@ export function useInvest(): UseInvest {
         setPhase("investing");
         const filled: { leg: (typeof active)[number]["leg"]; amountMicro: bigint; txHash: `0x${string}`; settling: boolean }[] = [];
         const filledSyms: string[] = [];
+        const failures: { symbol: string; message: string }[] = [];
         let lastTx: `0x${string}` | null = null;
         let permitDone = false;
         const total = active.length;
@@ -351,6 +353,9 @@ export function useInvest(): UseInvest {
             // "No liquidity" is an expected skip; anything else is logged loudly.
             // Either way the leg is skipped and the rest of the plan still buys.
             console.error(`[invest] leg ${q.leg.symbol} failed (after retry):`, legErr instanceof Error ? legErr.message : legErr);
+            // Keep the reason: when NOTHING fills, the user deserves to know why
+            // in plain words instead of a blank "it didn't go through".
+            failures.push({ symbol: q.leg.symbol, message: legErr instanceof Error ? legErr.message : String(legErr) });
           }
           const doneCount = idx + 1;
           const perLeg = (Date.now() - startedAt) / 1000 / doneCount;
@@ -367,7 +372,7 @@ export function useInvest(): UseInvest {
         }
         if (filled.length === 0) {
           setProgress(null);
-          throw new Error("The investment didn't go through. No funds were moved.");
+          throw new Error(explainInvestFailure(failures));
         }
 
         // 3b. The trust layer: Vera signs the risk inference server-side and the
@@ -449,7 +454,7 @@ export function useInvest(): UseInvest {
             .catch(() => {});
         }
       } catch (e) {
-        setError(e instanceof Error ? e.message : "The investment didn't go through.");
+        setError(explainError(e));
         setPhase("error");
         setProgress(null);
       }

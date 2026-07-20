@@ -15,6 +15,7 @@ import { useSignTypedData } from "@privy-io/react-auth";
 import { useActiveWallet } from "@/hooks/useActiveWallet";
 import { useRefreshBalances } from "@/hooks/useBalances";
 import { useDemo } from "@/components/demo/DemoProvider";
+import { explainError } from "@/lib/explainError";
 import { executeSwap } from "@/hooks/useSwap";
 import { typedDataSigner, waitForRfqFill, type Eip1193 } from "@/lib/arcusTrade";
 import type { Asset } from "@/lib/tokens";
@@ -191,7 +192,7 @@ export function useSellAll() {
             .catch(() => {});
         }
       } catch (e) {
-        setError(e instanceof Error ? e.message : "The sell didn't go through.");
+        setError(explainError(e));
         setPhase("error");
         setProgress(null);
       }

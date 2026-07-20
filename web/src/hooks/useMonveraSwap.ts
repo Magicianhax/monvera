@@ -26,6 +26,7 @@ import { useRefreshBalances } from "@/hooks/useBalances";
 import { authHeader } from "@/lib/authedFetch";
 import { USDG } from "@/lib/tokens";
 import { MONVERA, ERC20_MINI_ABI } from "@/lib/monveraToken";
+import { explainError } from "@/lib/explainError";
 
 type Phase = "idle" | "quoting" | "preparing" | "swapping" | "done" | "error";
 
@@ -181,7 +182,7 @@ export function useMonveraSwap() {
         setPhase("done");
         refreshBalances();
       } catch (e) {
-        setError(e instanceof Error ? e.message : "The buy didn't go through.");
+        setError(explainError(e));
         setPhase("error");
       }
     },
@@ -288,7 +289,7 @@ export function useMonveraSwap() {
         setPhase("done");
         refreshBalances();
       } catch (e) {
-        setError(e instanceof Error ? e.message : "The sell didn't go through.");
+        setError(explainError(e));
         setPhase("error");
       }
     },
