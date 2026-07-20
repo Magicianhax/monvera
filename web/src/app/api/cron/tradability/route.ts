@@ -19,18 +19,47 @@ function authed(req: NextRequest): boolean {
   return a.length === b.length && timingSafeEqual(a, b);
 }
 
+// Hysteresis: a name LOCKS only after this many consecutive missed sweeps
+// (venue books flap and probe 429s read as misses — one bad hour must not
+// flap the UI), and UNLOCKS the moment any sweep finds a route again.
+const LOCK_AFTER = 2;
+
+interface KvNs {
+  get(k: string): Promise<string | null>;
+  put(k: string, v: string, o?: { expirationTtl?: number }): Promise<void>;
+}
+
 export async function GET(req: NextRequest) {
   if (!authed(req)) return unauthorized();
   try {
-    const sweep = await sweepTradability();
+    let kv: KvNs | null = null;
     try {
-      const env = getCloudflareContext().env as { KV?: { put(k: string, v: string, o?: { expirationTtl?: number }): Promise<void> } };
-      // 24h TTL: a broken cron degrades to "stale but honest", then to open.
-      await env.KV?.put(TRADABILITY_KV_KEY, JSON.stringify(sweep), { expirationTtl: 24 * 60 * 60 });
+      kv = (getCloudflareContext().env as { KV?: KvNs }).KV ?? null;
     } catch {
-      /* local dev has no KV — the sweep result still returns */
+      /* local dev has no KV */
     }
-    return Response.json({ ok: sweep.ok.length, dropped: sweep.dropped, asOf: sweep.asOf });
+    const prevMisses: Record<string, number> = await (async () => {
+      try {
+        const raw = await kv?.get(TRADABILITY_KV_KEY);
+        return raw ? ((JSON.parse(raw) as { misses?: Record<string, number> }).misses ?? {}) : {};
+      } catch {
+        return {};
+      }
+    })();
+
+    const sweep = await sweepTradability();
+    const misses: Record<string, number> = {};
+    for (const s of sweep.dropped) misses[s] = (prevMisses[s] ?? 0) + 1;
+    const locked = sweep.dropped.filter((s) => (misses[s] ?? 0) >= LOCK_AFTER);
+    const body = {
+      ok: [...sweep.ok, ...sweep.dropped.filter((s) => (misses[s] ?? 0) < LOCK_AFTER)].sort(),
+      dropped: locked,
+      asOf: sweep.asOf,
+      misses,
+    };
+    // 24h TTL: a broken cron degrades to "stale but honest", then to open.
+    await kv?.put(TRADABILITY_KV_KEY, JSON.stringify(body), { expirationTtl: 24 * 60 * 60 }).catch(() => {});
+    return Response.json({ ok: body.ok.length, locked, pending: sweep.dropped.filter((s) => !locked.includes(s)), asOf: sweep.asOf });
   } catch (err) {
     return serverError("cron-tradability", err);
   }

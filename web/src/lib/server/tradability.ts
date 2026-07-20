@@ -22,8 +22,10 @@ const TTL_MS = 10 * 60 * 1000;
 
 const cache = new Map<string, { ok: boolean; at: number }>();
 
-/** Venue ladder for one direction; returns the best output or null. */
-async function probeVenues(sellToken: Address, buyToken: Address, sellRaw: bigint, sellDec: number): Promise<bigint | null> {
+/** Venue ladder for one direction; returns the best output or null.
+ *  One delayed retry when everything misses — LiFi 429s otherwise read as
+ *  "no liquidity" and poison the sweep with false negatives. */
+async function probeVenues(sellToken: Address, buyToken: Address, sellRaw: bigint, sellDec: number, retry = true): Promise<bigint | null> {
   let out: bigint | null = null;
   if (venueEnabled("uniswap")) out = await uniV4Price(sellToken, buyToken, sellRaw).catch(() => null);
   if (out === null && venueEnabled("lifi")) out = await lifiPrice(sellToken, buyToken, sellRaw, PROBE_TAKER).catch(() => null);
@@ -32,6 +34,10 @@ async function probeVenues(sellToken: Address, buyToken: Address, sellRaw: bigin
   }
   if (out === null && venueEnabled("rialto") && rialtoEnabled()) {
     out = await rialtoPrice(sellToken, buyToken, sellRaw, sellDec, PROBE_TAKER).catch(() => null);
+  }
+  if (out === null && retry) {
+    await new Promise((r) => setTimeout(r, 1_500));
+    return probeVenues(sellToken, buyToken, sellRaw, sellDec, false);
   }
   return out;
 }
