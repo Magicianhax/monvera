@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { GROVES, groveById, grovePreviewMinUsd, MIN_LEG_USD } from "@/lib/groves";
+import { GROVES, groveById, fullDiversificationUsd, MIN_LEG_USD, RECOMMENDED_BUY_USD } from "@/lib/groves";
 import { getGrove } from "@/lib/server/groveService";
 import type { BacktestResult } from "@/lib/server/quant";
 import { TokenLogo } from "@/components/lite/TokenLogo";
@@ -113,10 +113,9 @@ export default async function GrovePage({ params }: { params: Promise<{ id: stri
 
   const feePct = g.feeBps / 100;
   const excludedFromBacktest = g.backtest?.excluded ?? [];
-  // In preview each name is placed as its own order, so the SMALLEST weighted
-  // slice must clear the venue floor — the same formula chat enforces.
-  const previewMin = grovePreviewMinUsd(g);
-  const minSlicePct = Math.min(...g.components.map((c) => c.weightBps)) / 100;
+  // Small buys concentrate into the largest holdings (groveLegsFor); from this
+  // amount every name clears the venue floor at its published weight.
+  const fullUsd = fullDiversificationUsd(g);
 
   return (
     <div className={`site ${v4.root} ${shell.shell}`} data-mode="dark">
@@ -143,6 +142,14 @@ export default async function GrovePage({ params }: { params: Promise<{ id: stri
               Enable auto-manage
             </Link>
           </div>
+          <p className={s.minLine}>
+            Minimum buy {usdWhole(g.minBuyUsd)}. Small amounts buy the largest holdings first —
+            from {usdWhole(fullUsd)} every name is included.
+          </p>
+          <p className={s.minLine}>
+            Every swap pays the trading venue&apos;s spread — under ~$50 it takes a visibly
+            bigger share. {usdWhole(RECOMMENDED_BUY_USD)}+ recommended.
+          </p>
         </header>
 
         {/* ── stats band ── */}
@@ -382,9 +389,11 @@ export default async function GrovePage({ params }: { params: Promise<{ id: stri
             <li className={s.mechItem}>
               <span className={s.mechDot} aria-hidden />
               <span>
-                <b>Venue spread is real and visible.</b> Each leg fills at a live on-chain
-                venue quote, and quotes carry the venue&apos;s spread. That spread goes to the
-                market, not to Monvera — the price you see at confirm is the price you pay.
+                <b>Venue costs vs Monvera&apos;s fee.</b> Every swap pays the trading
+                venue&apos;s spread and LP fees — always, priced into the quote you confirm,
+                and paid to the market, not to Monvera. Monvera&apos;s own fee stays $0 until
+                you exit with a profit. Under ~$50 the venue&apos;s share is visibly bigger —{" "}
+                {usdWhole(RECOMMENDED_BUY_USD)}+ recommended.
               </span>
             </li>
             <li className={s.mechItem}>
@@ -398,21 +407,11 @@ export default async function GrovePage({ params }: { params: Promise<{ id: stri
             <li className={s.mechItem}>
               <span className={s.mechDot} aria-hidden />
               <span>
-                {!g.stats.deployed && previewMin > g.minBuyUsd ? (
-                  <>
-                    <b>Minimum buy: {usdWhole(previewMin)} for now.</b> Until this grove&apos;s
-                    contract opens, each of the {g.components.length} names is placed as its
-                    own order, and the smallest slice ({minSlicePct}%) must clear the
-                    venue&apos;s ~${MIN_LEG_USD} floor. At launch the minimum drops to the
-                    published {usdWhole(g.minBuyUsd)}.
-                  </>
-                ) : (
-                  <>
-                    <b>Minimum buy: {usdWhole(g.minBuyUsd)}.</b> Each of the{" "}
-                    {g.components.length} legs must clear the venue&apos;s ~${MIN_LEG_USD}{" "}
-                    floor, so smaller buys cannot fill the whole basket.
-                  </>
-                )}
+                <b>Minimum buy: {usdWhole(g.minBuyUsd)}.</b>{" "}
+                Small amounts buy the largest holdings first — each placed order must clear
+                the venue&apos;s ~${MIN_LEG_USD} floor, so below {usdWhole(fullUsd)} the buy
+                concentrates into the biggest names. From {usdWhole(fullUsd)} every one of
+                the {g.components.length} names is included.
               </span>
             </li>
           </ul>

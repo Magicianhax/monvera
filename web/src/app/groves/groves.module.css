@@ -68,6 +68,52 @@
   border-radius: 50%;
   background: var(--primary);
 }
+.minSentence {
+  margin: 12px 0 0;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--ink-3);
+  max-width: 64ch;
+  text-wrap: pretty;
+}
+
+/* ── aggregate counters band ── */
+.aggBand {
+  padding: 20px 26px;
+  margin-bottom: clamp(22px, 3vw, 32px);
+}
+.aggStats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px;
+}
+.aggStat {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.aggLbl {
+  font-size: 11.5px;
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+.aggVal {
+  font-family: var(--f-mono);
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.aggNote {
+  margin: 14px 0 0;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--ink-3);
+  text-wrap: pretty;
+}
 
 /* ── the shelf grid ── */
 .grid {

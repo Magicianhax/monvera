@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { getGroves } from "@/lib/server/groveService";
-import { grovePreviewMinUsd } from "@/lib/groves";
+import { fullDiversificationUsd } from "@/lib/groves";
 import { TokenLogo } from "@/components/lite/TokenLogo";
 import { Arrow, SiteFooterV4, SiteNavV4 } from "@/components/site/SiteChromeV4";
 import { pctLabel } from "@/components/site/StrategyCurve";
@@ -30,6 +30,15 @@ export const metadata: Metadata = {
 
 export default async function GrovesPage() {
   const data = await getGroves();
+  const agg = data.groves.reduce(
+    (s2, g) => ({
+      users: s2.users + g.stats.users,
+      managedUsd: s2.managedUsd + g.stats.managedUsd,
+      feesUsd: s2.feesUsd + g.stats.feesUsd,
+    }),
+    { users: 0, managedUsd: 0, feesUsd: 0 },
+  );
+  const anyDeployed = data.groves.some((g) => g.stats.deployed);
 
   return (
     <div className={`site ${v4.root} ${s.shell}`} data-mode="dark">
@@ -48,7 +57,35 @@ export default async function GrovesPage() {
           <p className={s.feeSentence}>
             Free to enter, free to hold. 10% of profit when you exit — that is the whole fee.
           </p>
+          <p className={s.minSentence}>
+            Every Grove starts at $20. Small amounts buy the largest holdings first — every name
+            is included as the amount grows.
+          </p>
         </header>
+
+        {/* Aggregate counters — honest zeros until the GroveManager contract opens,
+            live on-chain reads from day one after. Never hidden, never faked. */}
+        <section className={`${v4.glass} ${s.aggBand}`} aria-label="All-Groves stats">
+          <div className={s.aggStats}>
+            <div className={s.aggStat}>
+              <span className={s.aggLbl}>Investors</span>
+              <span className={s.aggVal}>{agg.users.toLocaleString("en-US")}</span>
+            </div>
+            <div className={s.aggStat}>
+              <span className={s.aggLbl}>Managed</span>
+              <span className={s.aggVal}>{usdWhole(agg.managedUsd)}</span>
+            </div>
+            <div className={s.aggStat}>
+              <span className={s.aggLbl}>Fees paid, ever</span>
+              <span className={s.aggVal}>{usdWhole(agg.feesUsd)}</span>
+            </div>
+          </div>
+          <p className={s.aggNote}>
+            {anyDeployed
+              ? "Read live from the GroveManager contract — public and verifiable on-chain."
+              : "The zeros are honest: these counters read straight from the GroveManager contract, on-chain from day one."}
+          </p>
+        </section>
 
         <div className={s.grid}>
           {data.groves.map((g) => {
@@ -88,30 +125,22 @@ export default async function GrovesPage() {
                   </div>
                   <div className={s.cardStat}>
                     <span className={s.cardStatLbl}>Min buy</span>
-                    {/* Preview places each name as its own order, so the real
-                        minimum today can sit above the published launch min —
-                        show the number the buy flow actually enforces. */}
+                    <span className={s.cardStatVal}>{usdWhole(g.minBuyUsd)}</span>
+                  </div>
+                  {/* Always shown, zeros included — the row goes live with the contract. */}
+                  <div className={s.cardStat}>
+                    <span className={s.cardStatLbl}>{g.stats.users === 1 ? "Investor" : "Investors"}</span>
                     <span className={s.cardStatVal}>
-                      {usdWhole(g.stats.deployed ? g.minBuyUsd : grovePreviewMinUsd(g))}
+                      {g.stats.users.toLocaleString("en-US")} · {usdWhole(g.stats.managedUsd)}
                     </span>
                   </div>
-                  {g.stats.deployed ? (
-                    <div className={s.cardStat}>
-                      <span className={s.cardStatLbl}>{g.stats.users === 1 ? "Investor" : "Investors"}</span>
-                      <span className={s.cardStatVal}>
-                        {g.stats.users.toLocaleString("en-US")} · {usdWhole(g.stats.managedUsd)}
-                      </span>
-                    </div>
-                  ) : (
-                    <div className={s.cardStat}>
-                      <span className={s.cardStatLbl}>Holdings</span>
-                      <span className={s.cardStatVal}>{g.components.length} stocks</span>
-                    </div>
-                  )}
                 </div>
 
                 <div className={s.cardFoot}>
-                  <span className={s.feeLine}>$0 in, $0 to hold · 10% of profit when you exit</span>
+                  <span className={s.feeLine}>
+                    Top holdings first from {usdWhole(g.minBuyUsd)}, every name from{" "}
+                    {usdWhole(fullDiversificationUsd(g))} · 10% of profit at exit
+                  </span>
                   <span className={s.cardArrow} aria-hidden>
                     <Arrow />
                   </span>

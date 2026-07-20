@@ -85,6 +85,14 @@
   margin-top: 26px;
   flex-wrap: wrap;
 }
+.minLine {
+  margin: 14px 0 0;
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: var(--ink-3);
+  max-width: 64ch;
+  text-wrap: pretty;
+}
 
 /* ── stats band ── */
 .statsBand {

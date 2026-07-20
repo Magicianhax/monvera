@@ -12,6 +12,7 @@
 // yet routable is listed in `excluded` with an honest note, never silently
 // dropped.
 import { assetBySymbol } from "./tokens";
+import { capAllocationLegs } from "./arcusShared";
 
 export interface GroveComponent {
   symbol: string;
@@ -43,12 +44,22 @@ export interface GroveDef {
   methodology: string;
   /** Exit fee on profit only, in basis points. 1000 = 10% of profit at exit. */
   feeBps: number;
-  /** Smallest sensible buy: every leg must clear the ~$11 venue floor. */
+  /** Smallest buy, USD. Small amounts CONCENTRATE into the largest holdings
+   *  (groveLegsFor); every name is included from fullDiversificationUsd up. */
   minBuyUsd: number;
+  /** Advisory sizing bar, USD — never blocking. Every swap pays the trading
+   *  venue's spread/LP fees (priced into quotes); below ~$50 those costs take
+   *  a visibly bigger share of the buy, so this is the recommended floor. */
+  recommendedUsd: number;
   rebalancePolicy: string;
   /** False until the GroveManager contract is live — pages ship in preview. */
   launched: boolean;
 }
+
+/** One advisory bar shared by every Grove: venue trading costs are roughly
+ *  fixed per leg, so under ~$50 they take a visibly bigger share — $100+ is
+ *  recommended. Advisory only; minBuyUsd stays the sole hard floor. */
+export const RECOMMENDED_BUY_USD = 100;
 
 export const GROVES: GroveDef[] = [
   {
@@ -92,7 +103,8 @@ export const GROVES: GroveDef[] = [
       "**Weighting.** Market-cap informed with a 20% single-name cap; excess redistributes down the list.\n\n" +
       "**Rebalancing.** The screen re-runs quarterly. Between screens the basket is checked hourly and trades only on drift or risk events. A per-holding impure-income estimate is published so holders can purify that sliver.",
     feeBps: 1000,
-    minBuyUsd: 150,
+    minBuyUsd: 20,
+    recommendedUsd: RECOMMENDED_BUY_USD,
     rebalancePolicy: "checked hourly, trades only on drift or risk events",
     launched: false,
   },
@@ -119,7 +131,8 @@ export const GROVES: GroveDef[] = [
       "**Weighting.** Near-equal across the seven; the index anchor sized above them so no single company decides the basket.\n\n" +
       "**Rebalancing.** Near-zero by design — checked hourly, trades only on drift or risk events.",
     feeBps: 1000,
-    minBuyUsd: 100,
+    minBuyUsd: 20,
+    recommendedUsd: RECOMMENDED_BUY_USD,
     rebalancePolicy: "checked hourly, trades only on drift or risk events",
     launched: false,
   },
@@ -154,7 +167,8 @@ export const GROVES: GroveDef[] = [
       "**Weighting.** Sized by role in the chain: irreplaceable monopolies largest, high-beta assemblers smallest.\n\n" +
       "**Rebalancing.** Checked hourly, trades only on drift or risk events. Chips are cyclical; the basket does not pretend otherwise.",
     feeBps: 1000,
-    minBuyUsd: 150,
+    minBuyUsd: 20,
+    recommendedUsd: RECOMMENDED_BUY_USD,
     rebalancePolicy: "checked hourly, trades only on drift or risk events",
     launched: false,
   },
@@ -184,7 +198,8 @@ export const GROVES: GroveDef[] = [
       "**Weighting.** Fixed weights, heaviest on the businesses with the most durable revenue, no name above 20%.\n\n" +
       "**Rebalancing.** Checked hourly, trades only on drift or risk events. Expect crypto-sized drawdowns.",
     feeBps: 1000,
-    minBuyUsd: 75,
+    minBuyUsd: 20,
+    recommendedUsd: RECOMMENDED_BUY_USD,
     rebalancePolicy: "checked hourly, trades only on drift or risk events",
     launched: false,
   },
@@ -198,22 +213,35 @@ export function groveById(id: string): GroveDef | undefined {
 /** The ~venue floor per placed order, USD. One source for pages + chat. */
 export const MIN_LEG_USD = 11;
 
-/** The real minimum buy TODAY, while the GroveManager contract is not live:
- *  each name is placed as its own order, so the SMALLEST weighted slice must
- *  clear the venue floor. Never below the published minBuyUsd (which applies
- *  at launch, when the contract batches the basket). Shown on the pages, the
- *  chat shelf, and enforced by grove_buy — one formula, no drift. */
-export function grovePreviewMinUsd(g: {
-  minBuyUsd: number;
-  components: { weightBps: number }[];
-}): number {
+export interface GroveLeg {
+  symbol: string;
+  weightPct: number;
+  reason: string;
+}
+
+/** The legs a buy of amountUsd actually places. Small buys CONCENTRATE: the
+ *  same capAllocationLegs greedy the invest plans use keeps components by
+ *  descending weight and drops the tail until every kept leg clears the ~$11
+ *  venue floor at renormalized weights. Full diversification returns as the
+ *  amount grows (fullDiversificationUsd). One formula for pages + chat. */
+export function groveLegsFor(g: GroveDef, amountUsd: number): GroveLeg[] {
+  return capAllocationLegs(
+    g.components.map((c) => ({ symbol: c.symbol, weightPct: c.weightBps / 100, reason: c.reason })),
+    amountUsd,
+  );
+}
+
+/** The smallest buy at which EVERY component clears the ~$11 floor at its
+ *  published weight — "from $N every name is included". Ceiled to a clean $10. */
+export function fullDiversificationUsd(g: { components: { weightBps: number }[] }): number {
   const minBps = Math.min(...g.components.map((c) => c.weightBps));
-  return Math.max(g.minBuyUsd, Math.ceil((MIN_LEG_USD * 10_000) / minBps));
+  return Math.ceil((MIN_LEG_USD * 10_000) / minBps / 10) * 10;
 }
 
 // ── build-time validation ────────────────────────────────────────────────────
 // A registry typo must fail the build, not ship a basket that can't execute.
-// Every leg must also clear the ~$11 venue floor at the stated minimum buy.
+// The minimum buy must place at least one leg that clears the ~$11 venue floor
+// (small buys concentrate via groveLegsFor, so one clean leg is the real bar).
 
 for (const g of GROVES) {
   const sum = g.components.reduce((s, c) => s + c.weightBps, 0);
@@ -225,9 +253,9 @@ for (const g of GROVES) {
       throw new Error(`Grove "${g.id}": component "${c.symbol}" is not in the token registry.`);
     }
   }
-  if (g.minBuyUsd < g.components.length * MIN_LEG_USD) {
+  if (g.minBuyUsd < MIN_LEG_USD) {
     throw new Error(
-      `Grove "${g.id}": minBuyUsd $${g.minBuyUsd} cannot clear the $${MIN_LEG_USD} venue floor across ${g.components.length} legs.`,
+      `Grove "${g.id}": minBuyUsd $${g.minBuyUsd} is under the $${MIN_LEG_USD} venue floor — even a fully concentrated buy could not fill.`,
     );
   }
   const dupes = new Set<string>();

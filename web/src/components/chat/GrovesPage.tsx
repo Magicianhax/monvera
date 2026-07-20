@@ -12,7 +12,7 @@
 // hidden-balances privacy rule does not apply here.
 import { useEffect, useRef, useState } from "react";
 import type { CSSProperties } from "react";
-import { groveById, grovePreviewMinUsd, MIN_LEG_USD } from "@/lib/groves";
+import { groveById, fullDiversificationUsd, MIN_LEG_USD, RECOMMENDED_BUY_USD } from "@/lib/groves";
 import { useGrovesList, useGroveLive, type GroveLive } from "@/hooks/useGroves";
 import type { BacktestResult } from "@/lib/server/quant";
 import { toTile } from "@/lib/displayAssets";
@@ -104,18 +104,13 @@ function ErrorNote({ text, onRetry }: { text: string; onRetry: () => void }) {
 
 function GroveShelfCard({ g, onOpen }: { g: GroveLive; onOpen: (id: string) => void }) {
   const top4 = g.components.slice().sort((a, b) => b.weightBps - a.weightBps).slice(0, 4);
-  const minNow = g.stats.deployed ? g.minBuyUsd : grovePreviewMinUsd(g);
   const bt = g.backtest;
   return (
     <button onClick={() => onOpen(g.id)} style={{ background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 20, padding: "16px 18px", textAlign: "left", display: "flex", flexDirection: "column", gap: 9, minWidth: 0 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
         <span style={{ fontSize: 15, fontWeight: 700, color: "var(--ink)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{g.name}</span>
         <span style={{ fontSize: 11.5, fontWeight: 650, color: "var(--primary)", flex: "none" }}>{g.ticker}</span>
-        <span style={{ marginLeft: "auto", flex: "none" }}>
-          {g.stats.deployed
-            ? <span className="tnum" style={{ fontSize: 11.5, fontWeight: 650, color: "var(--ink-2)" }}>{g.stats.users.toLocaleString("en-US")} investors · {usd0(g.stats.managedUsd)}</span>
-            : <SoonChip />}
-        </span>
+        {!g.stats.deployed && <span style={{ marginLeft: "auto", flex: "none" }}><SoonChip /></span>}
       </div>
       <div style={{ fontSize: 12.5, color: "var(--ink-2)", lineHeight: 1.5 }}>{g.thesis}</div>
       <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
@@ -133,10 +128,16 @@ function GroveShelfCard({ g, onOpen }: { g: GroveLive; onOpen: (id: string) => v
           </span>
         )}
       </div>
-      <div style={{ display: "flex", alignItems: "center", gap: 8, paddingTop: 8, borderTop: "1px solid var(--line-2)" }}>
-        <span className="tnum" style={{ fontSize: 11.5, fontWeight: 650, color: "var(--ink-2)" }}>min {usd0(minNow)}</span>
-        <span style={{ fontSize: 11.5, color: "var(--ink-3)" }}>· {FEE_LINE}</span>
-        <PIcon name="ph-caret-right" size={13} weight="bold" style={{ marginLeft: "auto", color: "var(--ink-3)" }} />
+      <div style={{ display: "flex", flexDirection: "column", gap: 4, paddingTop: 8, borderTop: "1px solid var(--line-2)" }}>
+        {/* Always shown, zeros included — real numbers arrive with the contract. */}
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <span className="tnum" style={{ fontSize: 11.5, fontWeight: 650, color: "var(--ink-2)" }}>{g.stats.users.toLocaleString("en-US")} investor{g.stats.users === 1 ? "" : "s"} · {usd0(g.stats.managedUsd)} managed</span>
+          <PIcon name="ph-caret-right" size={13} weight="bold" style={{ marginLeft: "auto", color: "var(--ink-3)" }} />
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <span className="tnum" style={{ fontSize: 11.5, fontWeight: 650, color: "var(--ink-2)" }}>min {usd0(g.minBuyUsd)}</span>
+          <span style={{ fontSize: 11.5, color: "var(--ink-3)" }}>· {FEE_LINE}</span>
+        </div>
       </div>
     </button>
   );
@@ -146,11 +147,30 @@ function GroveShelf({ onOpen }: { onOpen: (id: string) => void }) {
   const { data, isLoading, isError, refetch } = useGrovesList();
   if (isLoading) return <LoadingPanels heights={[150, 150, 150, 150]} />;
   if (isError || !data) return <ErrorNote text="Couldn't load the Groves — check your connection and try again." onRetry={() => void refetch()} />;
+  // Aggregate strip: honest zeros in preview, live contract reads once deployed.
+  const agg = data.groves.reduce(
+    (s, g) => ({ users: s.users + g.stats.users, managedUsd: s.managedUsd + g.stats.managedUsd, feesUsd: s.feesUsd + g.stats.feesUsd }),
+    { users: 0, managedUsd: 0, feesUsd: 0 },
+  );
+  const anyDeployed = data.groves.some((g) => g.stats.deployed);
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
       <div style={{ fontSize: 13, color: "var(--ink-2)", lineHeight: 1.55, padding: "2px 2px 14px" }}>
         Curated baskets of real tokenized stocks, bought into your own wallet — non-custodial, every weight public.
         $0 entry, $0 management, $0 rebalancing; the only fee is 10% of profit when you exit.
+        From $20 per Grove — small amounts buy the largest holdings first.
+      </div>
+      <div style={card({ padding: "8px 16px", marginBottom: 14 })}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(120px,1fr))", gap: 4 }}>
+          <Stat label="Investors" value={agg.users.toLocaleString("en-US")} sub="across all Groves" />
+          <Stat label="Managed" value={usd0(agg.managedUsd)} sub="on-chain cost basis" />
+          <Stat label="Fees paid, ever" value={usd0(agg.feesUsd)} sub="10% of realized profit only" />
+        </div>
+        <div style={{ fontSize: 11, color: "var(--ink-3)", lineHeight: 1.55, padding: "6px 4px 8px", borderTop: "1px solid var(--line-2)" }}>
+          {anyDeployed
+            ? "Read live from the GroveManager contract — public and verifiable on-chain."
+            : "The zeros are honest: these counters read straight from the GroveManager contract, on-chain from day one."}
+        </div>
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(290px,1fr))", gap: 14 }}>
         {data.groves.map((g) => <GroveShelfCard key={g.id} g={g} onOpen={onOpen} />)}
@@ -177,9 +197,7 @@ function GroveDetail({ id, autoManage, nav }: { id: string; autoManage: boolean;
   if (isError || !g) return <ErrorNote text="Couldn't load this Grove — check your connection and try again." onRetry={() => void refetch()} />;
 
   const feePct = g.feeBps / 100;
-  const previewMin = grovePreviewMinUsd(g);
-  const minNow = g.stats.deployed ? g.minBuyUsd : previewMin;
-  const minSlicePct = Math.min(...g.components.map((c) => c.weightBps)) / 100;
+  const fullUsd = fullDiversificationUsd(g);
   const bt = g.backtest;
   const sectionTitle: CSSProperties = { fontSize: 11, fontWeight: 700, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--ink-3)", marginBottom: 10 };
 
@@ -203,7 +221,13 @@ function GroveDetail({ id, autoManage, nav }: { id: string; autoManage: boolean;
           </button>
         </div>
         <div className="tnum" style={{ fontSize: 11.5, color: "var(--ink-3)", marginTop: 10 }}>
-          Minimum buy {usd0(minNow)} · {FEE_LINE}
+          Minimum buy {usd0(g.minBuyUsd)} · {FEE_LINE}
+        </div>
+        <div style={{ fontSize: 11.5, color: "var(--ink-3)", lineHeight: 1.55, marginTop: 4 }}>
+          Small amounts buy the largest holdings first — from {usd0(fullUsd)} every name is included.
+        </div>
+        <div style={{ fontSize: 11.5, color: "var(--ink-3)", lineHeight: 1.55, marginTop: 4 }}>
+          Every swap pays the trading venue&rsquo;s spread — under ~$50 it takes a visibly bigger share. {usd0(RECOMMENDED_BUY_USD)}+ recommended.
         </div>
       </div>
 
@@ -335,10 +359,8 @@ function GroveDetail({ id, autoManage, nav }: { id: string; autoManage: boolean;
           {[
             <><b>Your wallet holds every share.</b> Monvera never takes custody — no wrapper token, no pooled fund. See, move, or sell your holdings like any other asset you own.</>,
             <><b>Your own high-water mark.</b> The contract tracks your cost basis per wallet, on-chain. The {feePct}% applies only to gains above everything you put in — never to principal, never twice on the same gain.</>,
-            <><b>Venue spread is real and visible.</b> Each leg fills at a live on-chain venue quote; the spread goes to the market, not to Monvera.</>,
-            !g.stats.deployed && previewMin > g.minBuyUsd
-              ? <><b>Minimum buy: {usd0(previewMin)} for now.</b> Until this grove&rsquo;s contract opens, each of the {g.components.length} names is placed as its own order, and the smallest slice ({minSlicePct}%) must clear the venue&rsquo;s ~${MIN_LEG_USD} floor. At launch the minimum drops to the published {usd0(g.minBuyUsd)}.</>
-              : <><b>Minimum buy: {usd0(g.minBuyUsd)}.</b> Each of the {g.components.length} legs must clear the venue&rsquo;s ~${MIN_LEG_USD} floor, so smaller buys cannot fill the whole basket.</>,
+            <><b>Venue costs vs Monvera&rsquo;s fee.</b> Every swap pays the trading venue&rsquo;s spread and LP fees — always, priced into the quote you confirm, paid to the market, not to Monvera. Monvera&rsquo;s own fee stays $0 until you exit with a profit. Under ~$50 the venue&rsquo;s share is visibly bigger — {usd0(RECOMMENDED_BUY_USD)}+ recommended.</>,
+            <><b>Minimum buy: {usd0(g.minBuyUsd)}.</b> Small amounts buy the largest holdings first — each placed order must clear the venue&rsquo;s ~${MIN_LEG_USD} floor, so below {usd0(fullUsd)} the buy concentrates into the biggest names. From {usd0(fullUsd)} every one of the {g.components.length} names is included.</>,
           ].map((node, i) => (
             <div key={i} style={{ display: "flex", gap: 9, fontSize: 12, lineHeight: 1.6, color: "var(--ink-2)" }}>
               <span aria-hidden style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--primary)", flex: "none", marginTop: 6 }} />

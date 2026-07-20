@@ -33,7 +33,7 @@ import { MULTICALL3 } from "@/lib/tokens";
 import { SERVER_RPC_URL } from "@/lib/server/rpc";
 import { ALL_ASSETS } from "@/lib/tokens";
 import { displayFor } from "@/lib/displayAssets";
-import { GROVES, grovePreviewMinUsd, type GroveDef } from "@/lib/groves";
+import { GROVES, groveLegsFor, fullDiversificationUsd, type GroveDef } from "@/lib/groves";
 import { getGroves } from "@/lib/server/groveService";
 
 const BUYABLE = ALL_ASSETS.filter((a) => !displayFor(a.symbol).coming);
@@ -893,9 +893,7 @@ export async function routeVera(ctx: VeraContext): Promise<VeraResult> {
         groves: GROVES.map((g) => {
           const bt = payload?.groves.find((x) => x.id === g.id)?.backtest ?? null;
           return {
-            // The min shown on the shelf is the one THIS chat path enforces —
-            // in preview that's the smallest-slice floor, not the launch min.
-            id: g.id, name: g.name, ticker: g.ticker, thesis: g.thesis, minBuyUsd: groveChatMin(g),
+            id: g.id, name: g.name, ticker: g.ticker, thesis: g.thesis, minBuyUsd: g.minBuyUsd,
             returnPct: bt?.portfolio.returnPct ?? null,
             spyPct: bt?.benchmark.returnPct ?? null,
           };
@@ -915,7 +913,7 @@ export async function routeVera(ctx: VeraContext): Promise<VeraResult> {
           bt ? `Past year: ${bt.portfolio.returnPct >= 0 ? "+" : ""}${bt.portfolio.returnPct.toFixed(1)}% vs ${bt.benchmark.returnPct >= 0 ? "+" : ""}${bt.benchmark.returnPct.toFixed(1)}% for the S&P 500, worst dip −${Math.abs(bt.portfolio.maxDrawdownPct).toFixed(1)}%. History, not a promise.` : "",
           `Fees: $0 to enter, hold, or rebalance — only 10% of profit when you exit, measured against your own cost basis. Full composition, exclusions, and methodology: monvera.best/groves/${g.id}`,
         ].filter(Boolean).join("\n"),
-        suggestions: [`Buy $${groveChatMin(g)} of ${g.name}`, "What Groves do you have?"],
+        suggestions: [`Buy $${g.minBuyUsd} of ${g.name}`, "What Groves do you have?"],
       };
     }
     case "grove_buy": {
@@ -924,41 +922,48 @@ export async function routeVera(ctx: VeraContext): Promise<VeraResult> {
       // TODO(GroveManager): when the contract deploys (NEXT_PUBLIC_GROVE_MANAGER
       // set), this becomes a single GroveManager.buy() — on-chain cost basis,
       // exit-fee tracking, and no per-leg venue floor. Until then the buy runs
-      // per-leg through the existing invest rails (preview mode), which is why
-      // the smallest weighted slice must clear the $11 venue minimum below.
-      const chatMin = groveChatMin(g);
+      // per-leg through the existing invest rails: small amounts CONCENTRATE
+      // into the largest holdings (groveLegsFor keeps every placed leg over
+      // the $11 venue floor), and full diversification returns from fullUsd up.
+      const fullUsd = fullDiversificationUsd(g);
       const cash = Math.floor(ctx.cashUsd ?? 0);
       const amount = turn.amountUsd !== undefined ? Math.floor(turn.amountUsd) : undefined;
       if (amount === undefined) {
-        const sizes = [chatMin, chatMin * 2].filter((v) => v <= cash);
-        if (cash >= chatMin && !sizes.includes(cash)) sizes.push(cash);
+        const sizes = [g.minBuyUsd, g.recommendedUsd, fullUsd].filter((v) => v <= cash);
+        if (cash >= g.minBuyUsd && !sizes.includes(cash)) sizes.push(cash);
         return {
           intent: "reply",
-          message: `How much should go into the ${g.name}? Buying it here places each of its ${g.components.length} names as its own order, so it needs at least $${chatMin}. You have $${(ctx.cashUsd ?? 0).toFixed(2)} in cash.`,
-          suggestions: [...new Set(sizes)].slice(0, 4).map((v) => `Buy $${v} of ${g.name}`),
+          message: `How much should go into the ${g.name}? Anything from $${g.minBuyUsd} works — smaller amounts buy the largest holdings first, and from $${fullUsd} every one of its ${g.components.length} names is included. You have $${(ctx.cashUsd ?? 0).toFixed(2)} in cash.`,
+          suggestions: [...new Set(sizes)].sort((a, b) => a - b).slice(0, 4).map((v) => `Buy $${v} of ${g.name}`),
         };
       }
-      if (amount < chatMin) {
+      if (amount < g.minBuyUsd) {
         return {
           intent: "reply",
-          message: chatMin > g.minBuyUsd
-            ? `Until the GroveManager contract is live, buying the ${g.name} places each name as its own order — the smallest slice (${Math.min(...g.components.map((c) => c.weightBps)) / 100}%) needs $${MIN_LEG_USD}, which puts the minimum here at $${chatMin}. The published $${g.minBuyUsd} minimum applies at launch.`
-            : `The ${g.name} needs at least $${g.minBuyUsd} so every slice clears the $${MIN_LEG_USD} venue minimum.`,
-          suggestions: cash >= chatMin ? [`Buy $${chatMin} of ${g.name}`] : undefined,
+          message: `The ${g.name} starts at $${g.minBuyUsd}. Small amounts buy the largest holdings first; from $${fullUsd} every name is included.`,
+          suggestions: cash >= g.minBuyUsd ? [`Buy $${g.minBuyUsd} of ${g.name}`] : undefined,
         };
       }
       if (amount > cash) {
         return {
           intent: "reply",
           message: `You have $${(ctx.cashUsd ?? 0).toFixed(2)} in cash, so $${amount} won't clear. Size it down?`,
-          suggestions: cash >= chatMin ? [`Buy $${cash} of ${g.name}`] : undefined,
+          suggestions: cash >= g.minBuyUsd ? [`Buy $${cash} of ${g.name}`] : undefined,
         };
       }
-      const allocations = g.components.map((c) => ({ symbol: c.symbol, weightPct: c.weightBps / 100, reason: c.reason.slice(0, 200) }));
+      const legs = groveLegsFor(g, amount);
+      const allocations = legs.map((l) => ({ symbol: l.symbol, weightPct: l.weightPct, reason: l.reason.slice(0, 200) }));
       const backtest = await backtestBasket(allocations).catch(() => null);
+      // Advisory, never blocking: below recommendedUsd the venue's per-leg
+      // trading costs eat a visibly bigger share — warn, then proceed.
+      const sizeNote = amount < g.recommendedUsd
+        ? `Every swap pays the trading venue's spread — under ~$50 it takes a visibly bigger share. $${g.recommendedUsd}+ recommended. `
+        : "";
       return {
         intent: "plan",
-        message: `The ${g.name} is ready: $${amount} across ${g.components.length} names at the published weights, nothing substituted. Entering costs nothing extra — the only fee is 10% of profit when you exit. Look it over, then invest.`,
+        message: sizeNote + (legs.length < g.components.length
+          ? `The ${g.name} is ready. At $${amount} you'll hold the top ${legs.length === 1 ? "name" : `${legs.length} names`} of this Grove — every placed order has to clear the venue's $${MIN_LEG_USD} floor, so smaller buys concentrate; from $${fullUsd} every name is included. Entering costs nothing extra — the only fee is 10% of profit when you exit. Look it over, then invest.`
+          : `The ${g.name} is ready: $${amount} across ${g.components.length} names at the published weights, nothing substituted. Entering costs nothing extra — the only fee is 10% of profit when you exit. Look it over, then invest.`),
         payload: {
           summary: `${g.name} (${g.ticker}) — ${g.thesis}`,
           rationale: g.longThesis,
@@ -982,7 +987,7 @@ export async function routeVera(ctx: VeraContext): Promise<VeraResult> {
           message: turn.action === "enable"
             ? `Auto-manage for the ${g.name} opens when its contract deploys — the hourly drift checks aren't live yet, and I won't pretend to flip a switch that doesn't exist. You can buy the basket today, and auto-manage can be added to your position at launch.`
             : `There's nothing to switch off — auto-manage for the ${g.name} isn't live yet. It opens when its contract deploys.`,
-          suggestions: [`Buy $${groveChatMin(g)} of ${g.name}`, `What's in the ${g.name}?`],
+          suggestions: [`Buy $${g.minBuyUsd} of ${g.name}`, `What's in the ${g.name}?`],
         };
       }
       return { intent: "reply", message: `Auto-manage changes for the ${g.name} aren't wired into chat yet — manage them from monvera.best/groves/${g.id}.` };
@@ -1124,12 +1129,6 @@ function unknownGroveReply(raw: string): VeraResult {
     suggestions: ["What Groves do you have?"],
   };
 }
-
-/** In preview the buy runs per-leg on the venue rails, so the SMALLEST weighted
- *  slice must clear the $11 floor — that can sit above the published minBuyUsd.
- *  Shared formula (lib/groves) so the pages can never disagree with chat; the
- *  GroveManager path removes this (see the TODO in grove_buy). */
-const groveChatMin = grovePreviewMinUsd;
 
 // Fixed, honest risk scores (bps, 0-10000) for the plan card's meter — the
 // sector-concentrated and crypto-beta baskets sit above the diversified cores.
