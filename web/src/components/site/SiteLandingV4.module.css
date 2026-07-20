@@ -1193,9 +1193,17 @@
     display: flex;
   }
   .hero {
-    padding-top: 108px;
+    padding-top: 104px;
     padding-bottom: 72px;
     min-height: 0;
+  }
+  /* one signal line above the headline — the Groves pill wins, the eyebrow
+     is desktop-only (its claim is restated in the lede right below) */
+  .heroEyebrow {
+    display: none;
+  }
+  .heroPill {
+    margin-bottom: 24px;
   }
   .h1 {
     font-size: clamp(3.1rem, 15vw, 4.6rem);
@@ -1214,12 +1222,16 @@
   }
   .heroFoot {
     display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 16px;
-    margin-top: 36px;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 14px 12px;
+    margin-top: 32px;
   }
   .statNum {
-    font-size: 19px;
+    font-size: 16.5px;
+  }
+  .statLbl {
+    font-size: 11px;
+    line-height: 1.45;
   }
   .ticket {
     padding: 12px 0 0;
