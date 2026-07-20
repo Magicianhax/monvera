@@ -11,7 +11,7 @@ import { useSellAll, type SellSelection, type SellSuccess } from "@/hooks/useSel
 import { useMonveraSwap } from "@/hooks/useMonveraSwap";
 import { formatUnits, parseUnits } from "viem";
 import { useSmartAccount } from "@/hooks/useSmartAccount";
-import { usePortfolio, type Portfolio } from "@/hooks/useBalances";
+import { usePortfolio, useBalanceHistory, type Portfolio } from "@/hooks/useBalances";
 import { catFor, displayFor, toTile } from "@/lib/displayAssets";
 import { AssetTile, Confetti, RiskMeter } from "@/components/design";
 import type { useVeraChat } from "@/hooks/useVeraChat";
@@ -24,7 +24,7 @@ import { FAQ } from "@/lib/faq";
 import { haptic } from "@/lib/haptics";
 import { useTheme } from "@/hooks/useTheme";
 import { useColorStyle } from "@/hooks/useColorStyle";
-import { portfolioDayCurve } from "@/lib/portfolioCurve";
+import { portfolioDayCurve, equityCurveFrom } from "@/lib/portfolioCurve";
 import { ConveyorOverlay } from "./ConveyorOverlay";
 import { assetBySymbol } from "@/lib/tokens";
 
@@ -1104,7 +1104,11 @@ function PortfolioCard({ data, nav }: { data?: Portfolio; nav: ChatNav }) {
   const total = data?.totalUsd ?? 0;
   const dayUsd = (data?.holdings ?? []).reduce((s, h) => s + ((h.valueUsd ?? 0) * (h.dayChangePct ?? 0)) / 100, 0);
   // Real intraday value of the holdings — never a synthetic wave under money.
-  const day = portfolioDayCurve(data?.holdings ?? [], data?.cashUsd ?? 0);
+  const { address } = useSmartAccount();
+  const { data: snaps } = useBalanceHistory(address ?? undefined);
+  const day =
+    equityCurveFrom(snaps ?? [], data?.totalUsd ?? 0) ??
+    portfolioDayCurve(data?.holdings ?? [], data?.cashUsd ?? 0);
   const mini = day ? chartPaths(day.curve, 200, 64, { minSpanFrac: 0.02 }) : null;
   return (
     <div style={{ background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 20, marginTop: 14, overflow: "hidden" }}>

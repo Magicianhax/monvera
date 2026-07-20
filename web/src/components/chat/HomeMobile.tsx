@@ -3,7 +3,7 @@
 // Mobile home menu ("Monvera Chat Mobile" design L88-109): balance card, Scan
 // banner, a horizontal Top-movers strip, and the holdings card. Same live hooks
 // as the desktop HomeMenu — only the composition is phone-native.
-import { usePortfolio, type Holding } from "@/hooks/useBalances";
+import { usePortfolio, useBalanceHistory, type Holding } from "@/hooks/useBalances";
 import { useSmartAccount } from "@/hooks/useSmartAccount";
 import { usePrices } from "@/hooks/usePrices";
 import { useMarketSummary } from "@/hooks/useMarket";
@@ -11,13 +11,14 @@ import { STOCKS } from "@/lib/tokens";
 import { toTile } from "@/lib/displayAssets";
 import { AssetTile } from "@/components/design";
 import { PIcon, usd, pctStr, priceStr, dcol, chartPaths, panel, type ChatNav } from "./chatKit";
-import { portfolioDayCurve } from "@/lib/portfolioCurve";
+import { portfolioDayCurve, equityCurveFrom } from "@/lib/portfolioCurve";
 import { useHidden, setHidden, money } from "./privacy";
 
 export function HomeMobile({ nav }: { nav: ChatNav }) {
   const hidden = useHidden();
   const { address } = useSmartAccount();
   const { data: port } = usePortfolio(address ?? undefined);
+  const { data: snaps } = useBalanceHistory(address ?? undefined);
   const { data: prices } = usePrices();
   const { data: market } = useMarketSummary();
 
@@ -28,9 +29,9 @@ export function HomeMobile({ nav }: { nav: ChatNav }) {
   const holdings: Holding[] = (port?.holdings ?? []).filter((h) => h.asset.symbol !== "MONVERA").slice().sort((a, b) => (b.valueUsd ?? 0) - (a.valueUsd ?? 0));
   const dayU = holdings.reduce((s, h) => s + (h.valueUsd ?? 0) * ((h.dayChangePct ?? 0) / 100), 0);
 
-  // Real intraday value of what they actually hold — never a synthetic wave
-  // under a real balance (that reads as their money moving when it isn't).
-  const day = portfolioDayCurve(port?.holdings ?? [], cash);
+  // Real equity curve (hourly snapshots incl. deposits/trades) once enough
+  // history exists; real intraday holdings curve until then. Never synthetic.
+  const day = equityCurveFrom(snaps ?? [], total) ?? portfolioDayCurve(port?.holdings ?? [], cash);
   const home = day ? chartPaths(day.curve, 380, 90, { minSpanFrac: 0.02 }) : null;
 
   const strip = STOCKS.map((a) => ({ sym: a.symbol, name: a.name, day: market?.summary[a.symbol]?.dayChangePct ?? 0, price: prices?.prices[a.symbol]?.priceUsd }))

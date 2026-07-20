@@ -49,6 +49,8 @@ export default {
       ctx.waitUntil(hit("/api/cron/autopilot"));
       // Hourly two-way liquidity sweep — feeds /api/tradability from KV.
       ctx.waitUntil(hit("/api/cron/tradability"));
+      // Hourly balance snapshots — the real equity curve (D1, /api/balance-history).
+      ctx.waitUntil(hit("/api/cron/balances"));
     }
     if (cron === "0 13 * * 1") ctx.waitUntil(hit("/api/cron/digest"));
     // Keep the $MONVERA chart warm: the route persists every successful series

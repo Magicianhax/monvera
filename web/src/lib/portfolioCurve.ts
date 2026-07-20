@@ -20,6 +20,28 @@ interface CurveHolding {
 
 const N = 24; // common resolution for all holdings
 
+export interface EquitySnapshot {
+  takenAt: number;
+  totalUsd: number;
+}
+
+/**
+ * The real equity curve: hourly balance snapshots (from /api/balance-history)
+ * with the LIVE total appended as the final point. Needs at least 3 snapshots
+ * to say anything — below that, callers fall back to the intraday holdings
+ * curve. Snapshots capture deposits, sends, and trades — the intraday curve
+ * can't.
+ */
+export function equityCurveFrom(snapshots: EquitySnapshot[], liveTotalUsd: number, hours = 24): DayCurve | null {
+  const since = Math.floor(Date.now() / 1000) - hours * 3600;
+  const pts = snapshots.filter((s) => s.takenAt >= since).map((s) => s.totalUsd);
+  if (pts.length < 3) return null;
+  const curve = [...pts, liveTotalUsd];
+  const open = curve[0];
+  const changeUsd = liveTotalUsd - open;
+  return { curve, changeUsd, changePct: open > 0 ? (changeUsd / open) * 100 : 0 };
+}
+
 /** Linear-resample a series to exactly `n` points (keeps first + last). */
 function resample(series: number[], n: number): number[] {
   if (series.length === n) return series;

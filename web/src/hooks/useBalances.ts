@@ -147,6 +147,26 @@ export function usePortfolio(address?: string) {
   return query;
 }
 
+/** Hourly balance snapshots (the real equity curve) — /api/balance-history. */
+export function useBalanceHistory(address?: string, hours = 48) {
+  const demo = useDemo();
+  return useQuery({
+    queryKey: ["balance-history", address, hours],
+    enabled: !demo && Boolean(address),
+    staleTime: 5 * 60_000,
+    refetchInterval: 10 * 60_000,
+    queryFn: async (): Promise<{ takenAt: number; totalUsd: number }[]> => {
+      const res = await fetch(`/api/balance-history?address=${address}&hours=${hours}`);
+      const json = await res.json();
+      if (!res.ok) throw new Error(typeof json?.error === "string" ? json.error : "Couldn't load balance history.");
+      return ((json as { snapshots: { takenAt: number; totalUsd: number }[] }).snapshots ?? []).map((s) => ({
+        takenAt: s.takenAt,
+        totalUsd: s.totalUsd,
+      }));
+    },
+  });
+}
+
 // $MONVERA appears in the portfolio like any holding, but it is NOT an Arcus
 // asset: it trades only on the token screen (Uniswap route), never through the
 // stock sell/trade flows. Callers that route to Arcus must skip this symbol.

@@ -8,7 +8,7 @@
 // theme's inset-highlight selector keys off that exact serialized string.
 import { useMemo } from "react";
 import { useSmartAccount } from "@/hooks/useSmartAccount";
-import { usePortfolio } from "@/hooks/useBalances";
+import { usePortfolio, useBalanceHistory } from "@/hooks/useBalances";
 import { useMonveraPrice, useMonveraChart } from "@/hooks/useMonveraToken";
 import { useMarketSummary } from "@/hooks/useMarket";
 import { usePrices } from "@/hooks/usePrices";
@@ -16,7 +16,7 @@ import { STOCKS } from "@/lib/tokens";
 import { toTile } from "@/lib/displayAssets";
 import { AssetTile } from "@/components/design";
 import { PIcon, ChatMark, ChartHover, usd, pctStr, priceStr, dcol, chartPaths, curve, type ChatNav } from "./chatKit";
-import { portfolioDayCurve } from "@/lib/portfolioCurve";
+import { portfolioDayCurve, equityCurveFrom } from "@/lib/portfolioCurve";
 import { useHidden, setHidden, money } from "./privacy";
 
 // The token chart falls back to a synthetic shape while history loads. The
@@ -90,6 +90,7 @@ export function HomeMenu({ nav }: { nav: ChatNav }) {
   const hidden = useHidden();
   const { address } = useSmartAccount();
   const { data: pf } = usePortfolio(address ?? undefined);
+  const { data: snaps } = useBalanceHistory(address ?? undefined);
   const { data: token } = useMonveraPrice();
   const { data: tokenHistory } = useMonveraChart("1d");
   const { data: market } = useMarketSummary();
@@ -163,7 +164,11 @@ export function HomeMenu({ nav }: { nav: ChatNav }) {
             </div>
             <div style={{ marginTop: 12 }}>
               {(() => {
-                const day = portfolioDayCurve(pf?.holdings ?? [], pf?.cashUsd ?? 0);
+                // Real equity curve (hourly snapshots incl. deposits/trades)
+                // once enough history exists; intraday holdings curve until then.
+                const day =
+                  equityCurveFrom(snaps ?? [], pf?.totalUsd ?? 0) ??
+                  portfolioDayCurve(pf?.holdings ?? [], pf?.cashUsd ?? 0);
                 if (!day) {
                   return (
                     <div style={{ height: 130, display: "flex", alignItems: "center", justifyContent: "center", borderTop: "1px dashed var(--line-2)", fontSize: 12.5, color: "var(--ink-3)" }}>
