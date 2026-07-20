@@ -17,6 +17,7 @@ import { useGrovesList, useGroveLive, type GroveLive } from "@/hooks/useGroves";
 import type { BacktestResult } from "@/lib/server/quant";
 import { toTile } from "@/lib/displayAssets";
 import { AssetTile } from "@/components/design";
+import { GroveCover } from "@/components/GroveCover";
 import { PIcon, usd0, pctStr, priceStr, dcol, type ChatNav } from "./chatKit";
 
 // ── shared bits ──────────────────────────────────────────────────────────────
@@ -102,41 +103,51 @@ function ErrorNote({ text, onRetry }: { text: string; onRetry: () => void }) {
 
 // ── the shelf ────────────────────────────────────────────────────────────────
 
+// Big square tile: generative cover art (or the registry's raster override) on
+// top, then ticker+name, thesis, holdings row, and the stats/fee foot. The
+// 1:1 aspect is the preferred size — content can stretch it slightly on narrow
+// columns rather than clip.
 function GroveShelfCard({ g, onOpen }: { g: GroveLive; onOpen: (id: string) => void }) {
   const top4 = g.components.slice().sort((a, b) => b.weightBps - a.weightBps).slice(0, 4);
   const bt = g.backtest;
   return (
-    <button onClick={() => onOpen(g.id)} style={{ background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 20, padding: "16px 18px", textAlign: "left", display: "flex", flexDirection: "column", gap: 9, minWidth: 0 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
-        <span style={{ fontSize: 15, fontWeight: 700, color: "var(--ink)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{g.name}</span>
-        <span style={{ fontSize: 11.5, fontWeight: 650, color: "var(--primary)", flex: "none" }}>{g.ticker}</span>
-        {!g.stats.deployed && <span style={{ marginLeft: "auto", flex: "none" }}><SoonChip /></span>}
+    <button onClick={() => onOpen(g.id)} style={{ background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 20, padding: 0, overflow: "hidden", textAlign: "left", display: "flex", flexDirection: "column", aspectRatio: "1 / 1", minWidth: 0 }}>
+      {/* cover band — the grove's motif under its accent wash */}
+      <div style={{ position: "relative", flex: "none", width: "100%", aspectRatio: "2 / 1", borderBottom: "1px solid var(--line-2)" }}>
+        <GroveCover id={g.id} coverImage={g.coverImage} />
+        {!g.stats.deployed && <span style={{ position: "absolute", top: 10, right: 10, zIndex: 2 }}><SoonChip /></span>}
       </div>
-      <div style={{ fontSize: 12.5, color: "var(--ink-2)", lineHeight: 1.5 }}>{g.thesis}</div>
-      <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
-        <span style={{ display: "inline-flex", flex: "none" }}>
-          {top4.map((c, i) => (
-            <span key={c.symbol} style={{ display: "inline-flex", marginLeft: i ? -8 : 0, borderRadius: 9, boxShadow: "0 0 0 2px var(--bg)", position: "relative", zIndex: 4 - i }}>
-              <AssetTile asset={toTile(c.symbol, c.name)} size={28} radius={9} />
-            </span>
-          ))}
-        </span>
-        <span style={{ fontSize: 11, color: "var(--ink-3)", flex: "none" }}>+{g.components.length - top4.length} more</span>
-        {bt && (
-          <span className="tnum" style={{ marginLeft: "auto", fontSize: 12, fontWeight: 650, color: dcol(bt.portfolio.returnPct), whiteSpace: "nowrap" }}>
-            {pctStr(bt.portfolio.returnPct)} 1y<span style={{ color: "var(--ink-3)", fontWeight: 550 }}> · SPY {pctStr(bt.benchmark.returnPct)}</span>
-          </span>
-        )}
-      </div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 4, paddingTop: 8, borderTop: "1px solid var(--line-2)" }}>
-        {/* Always shown, zeros included — real numbers arrive with the contract. */}
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <span className="tnum" style={{ fontSize: 11.5, fontWeight: 650, color: "var(--ink-2)" }}>{g.stats.users.toLocaleString("en-US")} investor{g.stats.users === 1 ? "" : "s"} · {usd0(g.stats.managedUsd)} managed</span>
-          <PIcon name="ph-caret-right" size={13} weight="bold" style={{ marginLeft: "auto", color: "var(--ink-3)" }} />
+      <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", gap: 7, padding: "12px 16px 14px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+          <span style={{ fontSize: 15, fontWeight: 700, color: "var(--ink)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{g.name}</span>
+          <span style={{ fontSize: 11.5, fontWeight: 650, color: "var(--primary)", flex: "none" }}>{g.ticker}</span>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <span className="tnum" style={{ fontSize: 11.5, fontWeight: 650, color: "var(--ink-2)" }}>min {usd0(g.minBuyUsd)}</span>
-          <span style={{ fontSize: 11.5, color: "var(--ink-3)" }}>· {FEE_LINE}</span>
+        <div style={{ fontSize: 12.5, color: "var(--ink-2)", lineHeight: 1.5, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{g.thesis}</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+          <span style={{ display: "inline-flex", flex: "none" }}>
+            {top4.map((c, i) => (
+              <span key={c.symbol} style={{ display: "inline-flex", marginLeft: i ? -8 : 0, borderRadius: 9, boxShadow: "0 0 0 2px var(--bg)", position: "relative", zIndex: 4 - i }}>
+                <AssetTile asset={toTile(c.symbol, c.name)} size={28} radius={9} />
+              </span>
+            ))}
+          </span>
+          <span style={{ fontSize: 11, color: "var(--ink-3)", flex: "none" }}>+{g.components.length - top4.length} more</span>
+          {bt && (
+            <span className="tnum" style={{ marginLeft: "auto", fontSize: 12, fontWeight: 650, color: dcol(bt.portfolio.returnPct), whiteSpace: "nowrap" }}>
+              {pctStr(bt.portfolio.returnPct)} 1y<span style={{ color: "var(--ink-3)", fontWeight: 550 }}> · SPY {pctStr(bt.benchmark.returnPct)}</span>
+            </span>
+          )}
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 4, paddingTop: 8, marginTop: "auto", borderTop: "1px solid var(--line-2)" }}>
+          {/* Always shown, zeros included — real numbers arrive with the contract. */}
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span className="tnum" style={{ fontSize: 11.5, fontWeight: 650, color: "var(--ink-2)" }}>{g.stats.users.toLocaleString("en-US")} investor{g.stats.users === 1 ? "" : "s"} · {usd0(g.stats.managedUsd)} managed</span>
+            <PIcon name="ph-caret-right" size={13} weight="bold" style={{ marginLeft: "auto", color: "var(--ink-3)" }} />
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span className="tnum" style={{ fontSize: 11.5, fontWeight: 650, color: "var(--ink-2)" }}>min {usd0(g.minBuyUsd)}</span>
+            <span style={{ fontSize: 11.5, color: "var(--ink-3)" }}>· {FEE_LINE}</span>
+          </div>
         </div>
       </div>
     </button>
@@ -172,7 +183,8 @@ function GroveShelf({ onOpen }: { onOpen: (id: string) => void }) {
             : "The zeros are honest: these counters read straight from the GroveManager contract, on-chain from day one."}
         </div>
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(290px,1fr))", gap: 14 }}>
+      {/* 2-up desktop in the center column, 1-up mobile — big square tiles. */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(min(340px,100%),1fr))", gap: 16 }}>
         {data.groves.map((g) => <GroveShelfCard key={g.id} g={g} onOpen={onOpen} />)}
       </div>
       <div style={{ fontSize: 11, color: "var(--ink-3)", textAlign: "center", padding: "16px 8px 4px" }}>
@@ -203,8 +215,12 @@ function GroveDetail({ id, autoManage, nav }: { id: string; autoManage: boolean;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-      {/* ── hero ── */}
-      <div style={{ background: `linear-gradient(135deg,color-mix(in srgb,var(--primary) 12%,transparent),transparent 62%),var(--panel)`, border: "1px solid var(--line)", borderRadius: 22, padding: "20px 22px" }}>
+      {/* ── hero (wide cover band, then the copy) ── */}
+      <div style={{ background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 22, overflow: "hidden" }}>
+        <div style={{ position: "relative", width: "100%", height: "clamp(112px, 20vw, 156px)", borderBottom: "1px solid var(--line-2)" }}>
+          <GroveCover id={g.id} coverImage={g.coverImage} />
+        </div>
+        <div style={{ background: "linear-gradient(135deg,color-mix(in srgb,var(--primary) 9%,transparent),transparent 62%)", padding: "18px 22px 20px" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
           <span style={{ fontSize: 12.5, fontWeight: 700, color: "var(--primary)" }}>{g.ticker}</span>
           <span style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: ".05em", textTransform: "uppercase", color: "var(--ink-3)", padding: "3px 9px", borderRadius: 999, border: "1px solid var(--line)" }}>{g.category}</span>
@@ -228,6 +244,7 @@ function GroveDetail({ id, autoManage, nav }: { id: string; autoManage: boolean;
         </div>
         <div style={{ fontSize: 11.5, color: "var(--ink-3)", lineHeight: 1.55, marginTop: 4 }}>
           Every swap pays the trading venue&rsquo;s spread — under ~$50 it takes a visibly bigger share. {usd0(RECOMMENDED_BUY_USD)}+ recommended.
+        </div>
         </div>
       </div>
 

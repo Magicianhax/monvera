@@ -5,6 +5,7 @@ import { GROVES, groveById, fullDiversificationUsd, MIN_LEG_USD, RECOMMENDED_BUY
 import { getGrove } from "@/lib/server/groveService";
 import type { BacktestResult } from "@/lib/server/quant";
 import { TokenLogo } from "@/components/lite/TokenLogo";
+import { GroveCover } from "@/components/GroveCover";
 import { Arrow, SiteFooterV4, SiteNavV4 } from "@/components/site/SiteChromeV4";
 import { pctLabel } from "@/components/site/StrategyCurve";
 import { usd, usdWhole } from "@/lib/format";
@@ -124,6 +125,11 @@ export default async function GrovePage({ params }: { params: Promise<{ id: stri
         <Link href="/groves" className={s.backLink}>
           ← All groves
         </Link>
+
+        {/* ── cover band — the grove's motif (or registry raster override) ── */}
+        <div className={s.coverBand} aria-hidden>
+          <GroveCover id={g.id} coverImage={g.coverImage} />
+        </div>
 
         {/* ── header ── */}
         <header className={s.head}>

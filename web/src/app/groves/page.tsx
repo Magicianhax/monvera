@@ -3,6 +3,7 @@ import Link from "next/link";
 import { getGroves } from "@/lib/server/groveService";
 import { fullDiversificationUsd } from "@/lib/groves";
 import { TokenLogo } from "@/components/lite/TokenLogo";
+import { GroveCover } from "@/components/GroveCover";
 import { Arrow, SiteFooterV4, SiteNavV4 } from "@/components/site/SiteChromeV4";
 import { pctLabel } from "@/components/site/StrategyCurve";
 import { usdWhole } from "@/lib/format";
@@ -93,10 +94,15 @@ export default async function GrovesPage() {
             const rest = g.components.length - top.length;
             return (
               <Link key={g.id} href={`/groves/${g.id}`} className={`${v4.glass} ${s.card}`}>
+                {/* generative cover art (or the registry's raster override) */}
+                <div className={s.cover}>
+                  <GroveCover id={g.id} coverImage={g.coverImage} />
+                  {!g.stats.deployed && <span className={`${s.soon} ${s.soonOverlay}`}>Opens soon</span>}
+                </div>
+                <div className={s.cardBody}>
                 <div className={s.cardTop}>
                   <span className={s.ticker}>{g.ticker}</span>
                   <span className={s.chip}>{g.category}</span>
-                  {!g.stats.deployed && <span className={s.soon}>Opens soon</span>}
                 </div>
                 <h2 className={s.cardName}>{g.name}</h2>
                 <p className={s.cardThesis}>{g.thesis}</p>
@@ -144,6 +150,7 @@ export default async function GrovesPage() {
                   <span className={s.cardArrow} aria-hidden>
                     <Arrow />
                   </span>
+                </div>
                 </div>
               </Link>
             );

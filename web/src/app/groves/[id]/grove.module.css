@@ -26,6 +26,18 @@
   color: var(--primary-bright);
 }
 
+/* ── cover band (components/GroveCover fills it) ── */
+.coverBand {
+  position: relative;
+  width: 100%;
+  height: clamp(140px, 22vw, 210px);
+  border-radius: var(--r);
+  overflow: hidden;
+  border: 1px solid var(--line);
+  margin-bottom: clamp(20px, 3vw, 30px);
+  background: rgba(18, 22, 26, 0.5);
+}
+
 /* ── header ── */
 .head {
   margin-bottom: clamp(28px, 4vw, 40px);

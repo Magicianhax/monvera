@@ -115,20 +115,46 @@
   text-wrap: pretty;
 }
 
-/* ── the shelf grid ── */
+/* ── the shelf grid — big square tiles, 2-up desktop, 1-up mobile ── */
 .grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(430px, 100%), 1fr));
-  gap: 20px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 22px;
 }
 .card {
   display: flex;
   flex-direction: column;
-  gap: 13px;
-  padding: 26px;
+  padding: 0;
+  overflow: hidden;
+  aspect-ratio: 1 / 1; /* preferred square — content may stretch it slightly, never clip */
   color: inherit;
   text-decoration: none;
   transition: transform 0.22s var(--ease), border-color 0.22s var(--ease), box-shadow 0.22s var(--ease);
+}
+/* cover band — the grove's generative motif (components/GroveCover) under its
+   accent wash; a raster in the registry's coverImage replaces the SVG. */
+.cover {
+  position: relative;
+  flex: none;
+  width: 100%;
+  aspect-ratio: 21 / 9;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+.soonOverlay {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  z-index: 2;
+  margin-left: 0;
+  backdrop-filter: blur(6px);
+}
+.cardBody {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 20px 24px 22px;
 }
 .card:hover {
   transform: translateY(-4px);
@@ -270,13 +296,19 @@
 }
 
 /* ── mobile ── */
+@media (max-width: 860px) {
+  .grid {
+    grid-template-columns: 1fr;
+  }
+}
 @media (max-width: 760px) {
   .main {
     padding-inline: 18px;
     padding-top: 112px;
   }
-  .card {
-    padding: 20px;
+  .cardBody {
+    padding: 16px 18px 18px;
+    gap: 10px;
   }
   .cardStats {
     grid-template-columns: repeat(2, minmax(0, 1fr));

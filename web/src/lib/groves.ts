@@ -54,6 +54,11 @@ export interface GroveDef {
   rebalancePolicy: string;
   /** False until the GroveManager contract is live — pages ship in preview. */
   launched: boolean;
+  /** Optional raster cover art. Unset, every surface renders the grove's
+   *  code-native SVG motif (components/GroveCover). To override: drop art into
+   *  web/public/groves/<id>.jpg and set this to "/groves/<id>.jpg" — cards and
+   *  detail bands switch to the image automatically, accent wash preserved. */
+  coverImage?: string;
 }
 
 /** One advisory bar shared by every Grove: venue trading costs are roughly
