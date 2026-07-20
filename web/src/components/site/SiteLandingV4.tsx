@@ -11,11 +11,8 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { VeraOrb } from "@/components/design/Brand";
 import { GroveCover } from "@/components/GroveCover";
-import { TokenLogo } from "@/components/lite/TokenLogo";
 import { displayFor } from "@/lib/displayAssets";
-import { usdWhole } from "@/lib/format";
 import { assetBySymbol } from "@/lib/tokens";
-import { pctLabel } from "./StrategyCurve";
 import {
   Arrow,
   DEX_URL,
@@ -37,21 +34,13 @@ export interface VeraStatsV4 {
   latest: { label: string; usdc: number | null; txUrl: string } | null;
 }
 
-// Compact server-fed teaser for the Groves section — same live layer as
-// /groves, trimmed to what the landing cards actually show.
+// Compact server-fed teaser for the Groves highlight — just enough to render
+// the four cover tiles; everything else lives on /groves.
 export interface GroveTeaserV4 {
   id: string;
   ticker: string;
   name: string;
-  category: string;
-  thesis: string;
   coverImage?: string;
-  backtestPct: number | null;
-  benchPct: number | null;
-  minBuyUsd: number;
-  deployed: boolean;
-  topHoldings: { symbol: string; name: string }[];
-  moreCount: number;
 }
 
 // The hero exchange: seven legs, $30 each — every leg over the $11 venue
@@ -281,81 +270,33 @@ export function SiteLandingV4({
         </div>
       </section>
 
-      {/* ── Groves: the flagship — curated baskets of the shelf above ── */}
+      {/* ── Groves highlight: one band, same weight as the $MONVERA strip ── */}
       {groves.length > 0 && (
         <section className={s.groves} aria-label="Monvera Groves">
           <div className={s.wrap}>
-            <div className={`${s.grovesHead} ${s.rv}`} data-rv>
-              <p className={s.eyebrow}>New &middot; Monvera Groves</p>
-              <h2 className={`${s.display} ${s.h2}`}>
-                Strategies you own, <em>not funds you buy.</em>
-              </h2>
-              <p className={`${s.lede} ${s.grovesLede}`}>
-                A Grove is a curated basket of real tokenized stocks that Vera buys straight
-                into your own wallet and manages in the open &mdash; composition, backtests,
-                and every trade published, non-custodial from the first share.
-              </p>
-              <p className={`${s.grovesFee} ${s.mono}`}>
-                $0 entry &middot; $0 management &middot; 10% of profit, only at exit
-              </p>
-            </div>
-            <div className={s.grovesGrid}>
-              {groves.map((g, i) => (
-                <Link
-                  key={g.id}
-                  href={`/groves/${g.id}`}
-                  className={`${s.glass} ${s.gCard} ${s.rv}`}
-                  data-rv
-                  style={{ transitionDelay: `${i * 80}ms` }}
-                >
-                  <span className={s.gCover}>
-                    <GroveCover id={g.id} coverImage={g.coverImage} />
-                    {!g.deployed && <span className={s.gSoon}>Opens soon</span>}
-                  </span>
-                  <span className={s.gBody}>
-                    <span className={s.gTop}>
-                      <span className={`${s.gTicker} ${s.mono}`}>{g.ticker}</span>
-                      <span className={s.gChip}>{g.category}</span>
-                    </span>
-                    <span className={s.gName}>{g.name}</span>
-                    <span className={s.gThesis}>{g.thesis}</span>
-                    <span
-                      className={s.gLogos}
-                      aria-label={`Top holdings: ${g.topHoldings.map((c) => c.symbol).join(", ")}`}
-                    >
-                      {g.topHoldings.map((c) => (
-                        <span key={c.symbol} className={s.gRing}>
-                          <TokenLogo symbol={c.symbol} name={c.name} size={26} />
-                        </span>
-                      ))}
-                      {g.moreCount > 0 && <span className={s.gMore}>+{g.moreCount} more</span>}
-                    </span>
-                    <span className={s.gStats}>
-                      <span className={s.gStat}>
-                        <span className={s.gStatLbl}>1y backtest</span>
-                        <span className={`${s.gStatVal} ${s.gAccent}`}>
-                          {g.backtestPct != null ? pctLabel(g.backtestPct) : "—"}
-                        </span>
-                      </span>
-                      <span className={s.gStat}>
-                        <span className={s.gStatLbl}>S&amp;P 500 &middot; same yr</span>
-                        <span className={s.gStatVal}>
-                          {g.benchPct != null ? pctLabel(g.benchPct) : "—"}
-                        </span>
-                      </span>
-                      <span className={s.gStat}>
-                        <span className={s.gStatLbl}>Min buy</span>
-                        <span className={s.gStatVal}>{usdWhole(g.minBuyUsd)}</span>
-                      </span>
-                    </span>
-                  </span>
+            <div className={`${s.glass} ${s.grovesCard} ${s.rv}`} data-rv>
+              <div className={s.grovesText}>
+                <p className={s.eyebrow}>New &middot; Groves</p>
+                <h2 className={`${s.display} ${s.grovesH}`}>
+                  Strategies you own, <em>not funds you buy.</em>
+                </h2>
+                <p className={s.grovesDesc}>
+                  Curated baskets of real stocks, bought straight into your own wallet and
+                  managed in the open. $0 entry, $0 management &mdash; 10% of profit, only
+                  when you exit.
+                </p>
+                <Link href="/groves" className={s.cta}>
+                  Explore the Groves <Arrow />
                 </Link>
-              ))}
-            </div>
-            <div className={`${s.grovesCtas} ${s.rv}`} data-rv>
-              <Link href="/groves" className={s.cta}>
-                Explore the Groves <Arrow />
-              </Link>
+              </div>
+              <div className={s.grovesTiles}>
+                {groves.map((g) => (
+                  <Link key={g.id} href={`/groves/${g.id}`} className={s.gTile}>
+                    <GroveCover id={g.id} coverImage={g.coverImage} />
+                    <span className={s.gTileName}>{g.name}</span>
+                  </Link>
+                ))}
+              </div>
             </div>
           </div>
         </section>

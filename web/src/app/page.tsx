@@ -16,23 +16,12 @@ export default async function Home() {
     getGroves().catch(() => null),
   ]);
   const latest = record?.recentRecommendations?.[0] ?? null;
-  const groves: GroveTeaserV4[] = (grovesData?.groves ?? []).map((g) => {
-    const top = [...g.components].sort((a, b) => b.weightBps - a.weightBps).slice(0, 4);
-    return {
-      id: g.id,
-      ticker: g.ticker,
-      name: g.name,
-      category: g.category,
-      thesis: g.thesis,
-      coverImage: g.coverImage,
-      backtestPct: g.backtest?.portfolio.returnPct ?? null,
-      benchPct: g.backtest?.benchmark.returnPct ?? null,
-      minBuyUsd: g.minBuyUsd,
-      deployed: g.stats.deployed,
-      topHoldings: top.map((c) => ({ symbol: c.symbol, name: c.name })),
-      moreCount: Math.max(0, g.components.length - top.length),
-    };
-  });
+  const groves: GroveTeaserV4[] = (grovesData?.groves ?? []).map((g) => ({
+    id: g.id,
+    ticker: g.ticker,
+    name: g.name,
+    coverImage: g.coverImage,
+  }));
   return (
     <SiteLandingV4
       groves={groves}

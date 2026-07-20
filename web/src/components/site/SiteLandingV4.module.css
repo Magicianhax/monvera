@@ -676,171 +676,79 @@
   padding: 4px 10px;
 }
 
-/* ── Groves: the flagship shelf ── */
+/* ── Groves highlight: one glass band, tokenCard weight ── */
 .groves {
-  padding-block: 120px 110px;
+  padding-block: 110px 0;
   background:
     radial-gradient(55% 60% at 12% 0%, rgba(95, 180, 145, 0.1), transparent 65%),
     var(--canvas);
 }
-.grovesHead {
-  max-width: 720px;
-  margin-bottom: 52px;
-}
-.grovesLede {
-  margin: 18px 0 0;
-}
-.grovesFee {
-  margin: 16px 0 0;
-  font-size: 12px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--primary-bright);
-}
-.grovesGrid {
+.grovesCard {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 22px;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+  gap: clamp(28px, 4vw, 52px);
+  align-items: center;
+  padding: 38px 40px;
+  border-radius: var(--r-xl);
 }
-.gCard {
+.grovesText {
   display: flex;
   flex-direction: column;
-  overflow: hidden;
-  text-decoration: none;
+  align-items: flex-start;
+  gap: 16px;
+}
+.grovesH {
+  font-size: clamp(1.9rem, 3.4vw, 2.6rem);
+  line-height: 1.05;
   color: var(--ink);
-  border-radius: var(--r-lg);
-  transition: transform 0.22s var(--ease), border-color 0.22s var(--ease), box-shadow 0.22s var(--ease);
 }
-.gCard:hover {
-  transform: translateY(-4px);
-  border-color: rgba(87, 201, 155, 0.35);
-  box-shadow: var(--glass-hi), 0 16px 44px rgba(0, 0, 0, 0.55), 0 0 30px rgba(67, 186, 133, 0.1);
+.grovesH em {
+  font-style: italic;
+  font-weight: 480;
+  color: var(--primary-bright);
 }
-.gCover {
+.grovesDesc {
+  font-size: 15px;
+  color: var(--ink-2);
+  margin: 0;
+  max-width: 460px;
+  text-wrap: pretty;
+}
+.grovesText .cta {
+  margin-top: 8px;
+}
+.grovesTiles {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.gTile {
   position: relative;
   display: block;
-  aspect-ratio: 21 / 9;
-  flex: none;
-  border-bottom: 1px solid var(--glass-stroke);
-}
-.gSoon {
-  position: absolute;
-  top: 12px;
-  right: 12px;
-  z-index: 2;
-  font-family: var(--f-mono);
-  font-size: 10.5px;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--ink);
-  background: rgba(12, 15, 18, 0.66);
+  aspect-ratio: 16 / 9;
+  border-radius: var(--r);
+  overflow: hidden;
   border: 1px solid var(--glass-stroke);
-  border-radius: var(--r-pill);
-  padding: 4px 10px;
-  -webkit-backdrop-filter: blur(8px);
-  backdrop-filter: blur(8px);
+  transition: transform 0.2s var(--ease), border-color 0.2s var(--ease);
 }
-.gBody {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 20px 22px 22px;
+.gTile:hover {
+  transform: translateY(-3px);
+  border-color: rgba(87, 201, 155, 0.4);
 }
-.gTop {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-.gTicker {
-  font-size: 12.5px;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  color: var(--primary-bright);
-}
-.gChip {
+.gTileName {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 2;
+  padding: 18px 12px 9px;
   font-family: var(--f-mono);
-  font-size: 10.5px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--ink-3);
-  border: 1px solid var(--line);
-  border-radius: var(--r-pill);
-  padding: 3px 10px;
-}
-.gName {
-  font-family: var(--f-display);
-  font-size: 24px;
-  font-weight: 600;
-  letter-spacing: -0.01em;
-  line-height: 1.1;
-}
-.gThesis {
-  font-size: 14px;
-  color: var(--ink-2);
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-.gLogos {
-  display: flex;
-  align-items: center;
-  margin-top: 4px;
-}
-.gRing {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 30px;
-  height: 30px;
-  border-radius: 50%;
-  background: #fff;
-  border: 2px solid var(--canvas-3);
-  overflow: hidden;
-  flex: none;
-}
-.gRing + .gRing {
-  margin-left: -8px;
-}
-.gMore {
-  margin-left: 10px;
-  font-family: var(--f-mono);
-  font-size: 11.5px;
-  color: var(--ink-3);
-}
-.gStats {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
-  margin-top: 8px;
-  padding-top: 14px;
-  border-top: 1px solid rgba(255, 255, 255, 0.07);
-}
-.gStat {
-  display: grid;
-  gap: 2px;
-}
-.gStatLbl {
   font-size: 11px;
-  letter-spacing: 0.02em;
-  color: var(--ink-3);
-}
-.gStatVal {
-  font-family: var(--f-mono);
-  font-size: 15px;
-  font-weight: 600;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
   color: var(--ink);
-  font-variant-numeric: tabular-nums;
-}
-.gAccent {
-  color: var(--primary-bright);
-}
-.grovesCtas {
-  display: flex;
-  align-items: center;
-  gap: 20px;
-  margin-top: 46px;
-  flex-wrap: wrap;
+  background: linear-gradient(180deg, transparent, rgba(12, 15, 18, 0.78));
 }
 
 /* ── "what you can say" ── */
@@ -1234,9 +1142,8 @@
     grid-template-columns: 1fr;
     max-width: 560px;
   }
-  .grovesGrid {
+  .grovesCard {
     grid-template-columns: 1fr;
-    max-width: 560px;
   }
   .paperGrid {
     grid-template-columns: 1fr;
@@ -1353,22 +1260,17 @@
     margin-bottom: 18px;
   }
   .groves {
-    padding-block: 80px 76px;
+    padding-block: 72px 0;
   }
-  .grovesHead {
-    margin-bottom: 36px;
+  .grovesCard {
+    padding: 26px 20px;
   }
-  .gCover {
+  .grovesText .cta {
+    align-self: stretch;
+    justify-content: center;
+  }
+  .gTile {
     aspect-ratio: 2 / 1;
-  }
-  .gName {
-    font-size: 21px;
-  }
-  .grovesCtas {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 14px;
-    margin-top: 34px;
   }
   .paper {
     padding-block: 84px;
