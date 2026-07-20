@@ -181,6 +181,12 @@ function applyCap<T extends { weightPct: number }>(legs: T[], capPct: number): T
   return out;
 }
 
+/** Meaningful per-leg size for baskets: each Solana leg is an independent swap
+ *  with its own fees and slippage, so small budgets CONCENTRATE into the
+ *  top-weighted names instead of shattering into $1-2 slivers. Bigger budgets
+ *  naturally unlock the basket's full diversification. */
+export const BASKET_TARGET_LEG_USD = 10;
+
 export async function resolveBasket(id: BasketId, amountUsd: number): Promise<Allocation> {
   const def = BASKETS[id];
   let tickers = def.tickers;
@@ -199,10 +205,17 @@ export async function resolveBasket(id: BasketId, amountUsd: number): Promise<Al
   });
   const total = raw.reduce((s, a) => s + a.weightPct, 0) || 1;
   const scaled = raw.map((a) => ({ ...a, weightPct: (a.weightPct / total) * 100 }));
-  const capped = capAllocationLegs(applyCap(scaled, def.singleNameCapPct), amountUsd, SOL_MIN_LEG_USD);
+  const capped = capAllocationLegs(
+    applyCap(scaled, def.singleNameCapPct),
+    amountUsd,
+    Math.max(SOL_MIN_LEG_USD, BASKET_TARGET_LEG_USD)
+  );
+  const concentrated = capped.length < raw.length;
   return {
     summary: `${def.title}: ${capped.length} tokenized stocks for $${amountUsd}.`,
-    rationale: def.description,
+    rationale: concentrated
+      ? `${def.description} At $${amountUsd} the basket concentrates into its ${capped.length} top-weighted names so every position stays meaningful (~$${BASKET_TARGET_LEG_USD}+ per stock); a larger budget unlocks the full ${raw.length}-name spread.`
+      : def.description,
     riskScore: BASKET_RISK[id],
     allocations: capped,
   };

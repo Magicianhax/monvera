@@ -25,11 +25,7 @@ const LEG_NOTE =
 export function costsBlock(apiFeeUsd: number): Record<string, unknown> {
   return {
     apiFeeUsd,
-    executionReferralFee: {
-      percent: "0",
-      history:
-        "A 0.5% execution referral fee existed from launch, undisclosed. It was disclosed on 2026-07-20 and REMOVED entirely the same day. The per-call fee is the only fee Vera charges. If you ever see referral params in a response, do not execute — cross-check GET / pricing.changelog.",
-    },
+    onlyFee: "The per-call fee is the only fee Vera charges — no execution fees, no spread markup, no percentage of your order.",
     slippageCostNote: `The suggested ${SUGGESTED_SLIPPAGE_PERCENT}% per-leg slippage tolerance is a cost cap you set, not a fee we charge.`,
     worstCaseAllInNote:
       "All-in worked examples (per-call fee + full slippage tolerance) are published at GET / under costs.feeSchedule.",

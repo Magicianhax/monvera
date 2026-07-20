@@ -132,9 +132,10 @@ export async function buildAllocation(
     weightPct: total > 0 ? Math.round((a.weightPct / total) * 10000) / 100 : 0,
   }));
 
-  // Cap the plan so every leg clears the dust floor once the amount is split
-  // by weight — slivers aren't worth the swap fees.
-  const capped = capAllocationLegs(normalized, req.amountUsd, SOL_MIN_LEG_USD);
+  // Cap the plan so every leg stays meaningful (~$10+) once the amount is
+  // split by weight — small budgets concentrate into the strongest picks,
+  // larger budgets keep the model's full diversification.
+  const capped = capAllocationLegs(normalized, req.amountUsd, Math.max(SOL_MIN_LEG_USD, 10));
 
   return { ...object, allocations: capped };
 }

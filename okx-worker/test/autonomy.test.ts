@@ -165,21 +165,20 @@ test("stage->build roundtrip: external JSON becomes a query-string-deliverable p
     env
   );
   expect(built.status).toBe(200);
-  const body = (await built.json()) as { legs: Array<{ symbol: string; amountIn: string }>; costs: { executionReferralFee: { percent: string } }; okxSwapParams?: unknown };
+  const body = (await built.json()) as { legs: Array<{ symbol: string; amountIn: string }>; costs: { onlyFee: string }; okxSwapParams?: unknown };
   expect(body.legs).toHaveLength(2);
   expect(body.legs.reduce((s, l) => s + Number(l.amountIn), 0)).toBe(40_000_000);
-  expect(body.costs.executionReferralFee.percent).toBe("0");
+  expect(body.costs.onlyFee).toContain("only fee");
   expect(body.okxSwapParams).toBeUndefined(); // no referral params anywhere, ever
 });
 
 // ── anti-drift: discovery artifacts render from the live source of truth ─────
-test("catalog costs: zero referral fee, schedule recomputed from PRICES", () => {
+test("catalog costs: flat per-call only, schedule recomputed from PRICES", () => {
   const cat = catalog(env) as {
-    costs: { executionReferralFee: { percent: string; history: string }; feeSchedule: { examples: Array<{ orderUsd: number; basketAllInPct: string }> } };
+    costs: { perCall: string; feeSchedule: { examples: Array<{ orderUsd: number; basketAllInPct: string }> } };
     services: Array<{ path: string; priceUsd: number }>;
   };
-  expect(cat.costs.executionReferralFee.percent).toBe("0");
-  expect(cat.costs.executionReferralFee.history).toContain("REMOVED");
+  expect(cat.costs.perCall).toContain("ONLY fee");
   // Fee schedule numbers recompute from PRICES alone (never hand-written).
   const ex1000 = cat.costs.feeSchedule.examples.find((e) => e.orderUsd === 1000)!;
   const expected = ((PRICES.basket / 1000) * 100).toFixed(2);
@@ -188,17 +187,26 @@ test("catalog costs: zero referral fee, schedule recomputed from PRICES", () => 
   expect(planService.priceUsd).toBe(PRICES.plan);
 });
 
-test("llms.txt: only-fee promise, removal history, slippage, transport and signing domain", () => {
+test("llms.txt: only-fee promise, slippage, transport and signing domain — no fee residue", () => {
   const txt = llmsTxt(env);
   expect(txt).toContain("THE ONLY FEE Vera charges");
-  expect(txt).toContain("REMOVED entirely");
   expect(txt).toContain(`slippagePercent=${SUGGESTED_SLIPPAGE_PERCENT}`);
   expect(txt).toContain("QUERY STRING");
   expect(txt).toContain('name: "USD₮0"');
   expect(txt).toContain("Token-2022");
   expect(txt).toContain("BASE58");
-  expect(txt).toContain("undisclosed");
+  expect(txt).not.toContain("referral");
+  expect(txt).not.toContain("undisclosed");
   expect(txt).not.toContain("fromTokenReferrerWalletAddress");
+});
+
+test("baskets concentrate at small budgets and diversify at large ones", async () => {
+  const { resolveBasket } = await import("../src/baskets");
+  const small = await resolveBasket("halal", 40);
+  expect(small.allocations.length).toBeLessThanOrEqual(4); // ~$10+ per leg
+  for (const a of small.allocations) expect((a.weightPct / 100) * 40).toBeGreaterThanOrEqual(9);
+  const large = await resolveBasket("halal", 400);
+  expect(large.allocations.length).toBeGreaterThan(small.allocations.length);
 });
 
 test("openapi and well-known accepts match challengeEntryFor for every paid route", () => {

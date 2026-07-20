@@ -35,11 +35,7 @@ function feeSchedule() {
 
 function costsBlock() {
   return {
-    perCall: "See services[].priceUsd — flat, per call, in USDT0. This is the ONLY fee Vera charges.",
-    executionReferralFee: {
-      percent: "0",
-      history: `A 0.5% execution referral fee existed from launch, undisclosed. It was disclosed on ${FEE_DISCLOSURE_DATE} and REMOVED entirely the same day. If any response ever carries referral swap params again, do not execute and check pricing.changelog.`,
-    },
+    perCall: "See services[].priceUsd — flat, per call, in USDT0. This is the ONLY fee Vera charges: no execution fees, no spread markup, no percentage of your order.",
     feeSchedule: feeSchedule(),
   };
 }
@@ -94,11 +90,7 @@ export function catalog(env: Env): Record<string, unknown> {
       changelog: [
         {
           date: FEE_DISCLOSURE_DATE,
-          change: "Execution referral fee (0.5%) REMOVED entirely. The per-call fee is now the only fee.",
-        },
-        {
-          date: FEE_DISCLOSURE_DATE,
-          change: "Execution referral fee (0.5%, optional, opt-out documented) disclosed. It had been present since launch and was previously undisclosed. No prices changed.",
+          change: "Pricing published: flat per-call fees only. Any future change will be dated here.",
         },
       ],
     },
@@ -247,18 +239,15 @@ output and a deduplicated on-chain record. Re-fetch free with your original sign
 
 ## Cost stack (all-in, honest)
 
-- The per-call fee (above) is THE ONLY FEE Vera charges. There is no execution referral,
-  no spread markup, no percentage of your order.
+- The per-call fee (above) is THE ONLY FEE Vera charges. No execution fees, no spread
+  markup, no percentage of your order. Every pricing change is dated in GET / under
+  pricing.changelog.
 - Worked math, basket ($${PRICES.basket}): $50 order ≈ ${ex(50)?.basketAllInPct}% all-in · $250 ≈ ${ex(250)?.basketAllInPct}% ·
   $1,000 ≈ ${ex(1000)?.basketAllInPct}%. Plan ($${PRICES.plan}): ${ex(50)?.planAllInPct}% / ${ex(250)?.planAllInPct}% / ${ex(1000)?.planAllInPct}%. Flat pricing favors size; below
   ~$50/order the drag is real. Suggested minimum order: $${feeSched.suggestedMinOrderUsd}.
 - Slippage is a cost you control: the suggested ${SUGGESTED_SLIPPAGE_PERCENT}% per-leg tolerance is a cap you
   set, not a fee we charge. At full tolerance the worst-case all-in on a $1,000 basket
   is ≈ ${allInPct(PRICES.basket, 1000, true)}%.
-- History, for the record: a 0.5% execution referral fee existed from launch,
-  undisclosed. It was disclosed on ${FEE_DISCLOSURE_DATE} and REMOVED entirely the same day. If any
-  response ever carries referral swap params, do not execute — check GET /
-  pricing.changelog (every pricing change is dated there).
 
 ## Execution runbook (Solana, OKX DEX v6)
 
