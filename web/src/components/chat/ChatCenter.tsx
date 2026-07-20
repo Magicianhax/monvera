@@ -103,6 +103,69 @@ function Linkify({ text }: { text: string }) {
   );
 }
 
+// GFM-style table support for Vera's replies: a run of `| … |` lines with a
+// `|---|` separator renders as a real table (cells still get Linkify, so bold
+// and links work inside). Everything else falls through to plain Linkify —
+// this is block-splitting, not a markdown engine.
+const isTableRow = (l: string | undefined): l is string =>
+  !!l && /^\s*\|.*\|\s*$/.test(l);
+const isSepRow = (l: string | undefined): boolean =>
+  !!l && /^\s*\|[\s:|-]+\|\s*$/.test(l) && l.includes("-");
+const splitRow = (l: string): string[] =>
+  l.trim().replace(/^\|/, "").replace(/\|$/, "").split("|").map((c) => c.trim());
+
+function VeraRich({ text }: { text: string }) {
+  const lines = text.split("\n");
+  const out: ReactNode[] = [];
+  let buf: string[] = [];
+  let i = 0;
+  const flush = () => {
+    if (!buf.length) return;
+    out.push(<Linkify key={`t${out.length}`} text={buf.join("\n")} />);
+    buf = [];
+  };
+  while (i < lines.length) {
+    if (isTableRow(lines[i]) && isSepRow(lines[i + 1])) {
+      const header = splitRow(lines[i]);
+      i += 2;
+      const rows: string[][] = [];
+      while (isTableRow(lines[i])) { rows.push(splitRow(lines[i])); i++; }
+      flush();
+      out.push(
+        <div key={`tb${out.length}`} style={{ overflowX: "auto", margin: "10px 0" }}>
+          <table style={{ borderCollapse: "collapse", fontSize: 13.5, minWidth: "min(100%, 320px)" }}>
+            <thead>
+              <tr>
+                {header.map((h, hi) => (
+                  <th key={hi} style={{ textAlign: hi === 0 ? "left" : "right", padding: "6px 12px 6px 0", borderBottom: "1px solid var(--line)", color: "var(--ink-3)", fontWeight: 500, fontSize: 12, whiteSpace: "nowrap" }}>
+                    <Linkify text={h} />
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r, ri) => (
+                <tr key={ri}>
+                  {r.map((c, ci) => (
+                    <td key={ci} style={{ textAlign: ci === 0 ? "left" : "right", padding: "6px 12px 6px 0", borderBottom: "1px solid color-mix(in srgb, var(--line) 45%, transparent)", fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>
+                      <Linkify text={c} />
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>,
+      );
+    } else {
+      buf.push(lines[i]);
+      i++;
+    }
+  }
+  flush();
+  return <>{out}</>;
+}
+
 /** Human token quantity from raw 18dp — whole numbers when big, precise when tiny. */
 function fmtTok(raw: bigint): string {
   const n = Number(formatUnits(raw, 18));
@@ -735,7 +798,7 @@ ${seller.error.slice(0, 160)}`, payload: { suggestions: ["Try again"] } }).catch
             const live = !!plan && i === msgs.length - 1 && idleish && !busy;
             return (
               <VeraRow key={m.id}>
-                {m.content ? <div style={{ fontSize: 15.5, lineHeight: 1.6, color: "var(--ink)", whiteSpace: "pre-wrap" }}><Linkify text={m.content} /></div> : null}
+                {m.content ? <div style={{ fontSize: 15.5, lineHeight: 1.6, color: "var(--ink)", whiteSpace: "pre-wrap" }}><VeraRich text={m.content} /></div> : null}
                 {/* chat-native $MONVERA order — confirm executes via the token swap rails */}
                 {(() => {
                   const to = (m.payload as { tokenOrder?: { side: "buy" | "sell"; amountUsd: number } } | null)?.tokenOrder;

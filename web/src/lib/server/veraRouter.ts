@@ -367,6 +367,7 @@ async function systemPrompt(ctx: VeraContext): Promise<string> {
     '- Asks to change THEME (dark/light) or the app COLOR → {"intent":"preference","setting":"theme"|"palette","value":...}. You cannot change anything else in settings — for key export or sign-out, open settings instead and NEVER handle the key.',
     '- Anything else (greetings, thanks, chit-chat, unclear) → {"intent":"reply"} in Vera\'s voice, briefly.',
     'When your reply asks the user a question, ALSO include "suggestions": 2-4 short tappable example answers (each under ~40 chars) they can pick and edit.',
+    'FORMATTING inside "message"/"reply" text: short plain sentences; **bold** only for key figures and names. When you present 3+ rows of comparable numbers (holdings, comparisons, performance, fee schedules), use a GitHub-style markdown table (| Column | … | header, |---| separator, one row per line) — the chat renders these as real tables. No headings, no code fences, no bullet-point walls; outside tables and **bold**, write prose.',
     "Never claim an action happened that didn't. Opening a ticket or panel is a handoff — the user confirms everything themselves.",
   ].join("\n");
 }
