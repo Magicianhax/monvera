@@ -70,6 +70,26 @@ export function middleware(req: NextRequest) {
     return NextResponse.redirect(url, 301);
   }
 
+  // ── 1b. the app lives at app.monvera.best ──
+  // On the subdomain, "/" (and /app itself) serve the app page — query params
+  // (?tab=…) carry over so every in-app link works there. On the apex, /app*
+  // permanently redirects to the subdomain. Dev on localhost is untouched.
+  const host = req.nextUrl.hostname;
+  if (host === "app.monvera.best") {
+    if (req.nextUrl.pathname === "/" || req.nextUrl.pathname === "/app") {
+      const url = req.nextUrl.clone();
+      url.pathname = "/app";
+      return NextResponse.rewrite(url);
+    }
+  } else if (host === "monvera.best" || host === "www.monvera.best") {
+    if (req.nextUrl.pathname === "/app" || req.nextUrl.pathname.startsWith("/app/")) {
+      const url = req.nextUrl.clone();
+      url.hostname = "app.monvera.best";
+      url.pathname = "/";
+      return NextResponse.redirect(url, 301);
+    }
+  }
+
   // ── 2. geo-gate (product + money APIs only) ──
   const path = req.nextUrl.pathname;
   const gatedPage = GATED_PAGES.some((p) => path === p || path.startsWith(p + "/"));
