@@ -111,7 +111,10 @@ function GroveShelfCard({ g, onOpen }: { g: GroveLive; onOpen: (id: string) => v
   const top4 = g.components.slice().sort((a, b) => b.weightBps - a.weightBps).slice(0, 4);
   const bt = g.backtest;
   return (
-    <button onClick={() => onOpen(g.id)} style={{ background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 20, padding: 0, overflow: "hidden", textAlign: "left", display: "flex", flexDirection: "column", aspectRatio: "1 / 1", minWidth: 0, minHeight: 0, contain: "size" }}>
+    // The square lives on a plain div — buttons are quirky about aspect-ratio,
+    // so the button just fills the box absolutely.
+    <div style={{ position: "relative", aspectRatio: "1 / 1", contain: "size", minWidth: 0, borderRadius: 20, overflow: "hidden", border: "1px solid var(--line)", background: "var(--panel)" }}>
+    <button onClick={() => onOpen(g.id)} style={{ position: "absolute", inset: 0, padding: 0, border: 0, background: "transparent", textAlign: "left", display: "flex", flexDirection: "column", minWidth: 0, minHeight: 0, width: "100%", height: "100%" }}>
       {/* cover band — the grove's motif under its accent wash */}
       <div style={{ position: "relative", flex: "none", width: "100%", aspectRatio: "2 / 1", borderBottom: "1px solid var(--line-2)" }}>
         <GroveCover id={g.id} coverImage={g.coverImage} />
@@ -151,6 +154,7 @@ function GroveShelfCard({ g, onOpen }: { g: GroveLive; onOpen: (id: string) => v
         </div>
       </div>
     </button>
+    </div>
   );
 }
 
