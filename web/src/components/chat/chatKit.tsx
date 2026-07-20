@@ -296,6 +296,9 @@ export interface ChatNav {
   openSell: (symbol: string) => void;
   /** Feed a goal/instruction straight into the Vera conversation. */
   askVera: (text: string) => void;
+  /** Open the in-app Groves surface — the shelf, or one Grove's full page.
+   *  `auto` lands on the (gated) auto-manage section of the detail page. */
+  openGroves: (id?: string, opts?: { auto?: boolean }) => void;
   openSend: () => void;
   openReceive: () => void;
   openSettings: () => void;

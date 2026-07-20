@@ -5,16 +5,18 @@
 // vera_threads) · center (home menu | chat) · right canvas (contextual panel).
 // Overlays: order ticket, send/receive, settings. Vera's history lives in D1
 // via useVeraChat; the intelligence itself stays on the existing invest rails.
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useTheme } from "@/hooks/useTheme";
 import { useSmartAccount } from "@/hooks/useSmartAccount";
 import { useVeraChat } from "@/hooks/useVeraChat";
+import { groveById } from "@/lib/groves";
 import { CHAT_THEME_CSS, CHAT_STYLE_CSS, CANVAS_META, ChatOrb, ChatMark, PIcon, type CanvasType, type ChatNav } from "./chatKit";
 import { useColorStyle } from "@/hooks/useColorStyle";
 import { useNotifications } from "@/hooks/useNotifications";
 import { useWatchlistSync } from "@/hooks/useWatchlistSync";
 import { ChatCenter, type ChatCenterHandle } from "./ChatCenter";
 import { HomeMenu } from "./HomeMenu";
+import { GrovesPage } from "./GrovesPage";
 import { CanvasBody } from "./CanvasBody";
 import { OrderTicket, type OrderState } from "./OrderTicket";
 import { TokenOrderTicket } from "./TokenOrderTicket";
@@ -61,6 +63,24 @@ export function ChatApp() {
     try { return typeof window !== "undefined" && localStorage.getItem("mv.canvasWide") === "1"; } catch { return false; }
   });
   const [pendingAsk, setPendingAsk] = useState<string | null>(null);
+  // In-app Groves surface — a FULL-PAGE takeover of the center (chat/menu come
+  // back untouched when it closes). null = closed; id null = the shelf.
+  const [grovesView, setGrovesView] = useState<{ id: string | null; auto: boolean } | null>(null);
+
+  // /groves deep link: the public Grove pages' CTAs land on "/app?grove=<id>"
+  // (+ "&auto=1" for auto-manage) — open that Grove's in-app page and strip
+  // the params so a refresh doesn't re-open. Runs once per mount.
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search);
+    const g = groveById((q.get("grove") ?? "").toLowerCase());
+    if (!g) return;
+    const auto = q.get("auto") === "1";
+    q.delete("grove");
+    q.delete("auto");
+    const rest = q.toString();
+    window.history.replaceState(null, "", `${window.location.pathname}${rest ? `?${rest}` : ""}`);
+    setGrovesView({ id: g.id, auto });
+  }, []);
 
   // Exit mirrors the entrance (slides back out right, slightly faster), so the
   // canvas leaves the way it came instead of vanishing.
@@ -78,11 +98,12 @@ export function ChatApp() {
       if (sym) setCanvasSymbol(sym);
     },
     closeCanvas: dismissCanvas,
-    goChat: () => setHome("chat"),
-    goMenu: () => { setHome("menu"); dismissCanvas(); },
+    goChat: () => { setHome("chat"); setGrovesView(null); },
+    goMenu: () => { setHome("menu"); setGrovesView(null); dismissCanvas(); },
     openBuy: (symbol) => setOrder({ symbol, side: "buy" }),
     openSell: (symbol) => setOrder({ symbol, side: "sell" }),
-    askVera: (text) => { setHome("chat"); setPendingAsk(text); },
+    askVera: (text) => { setHome("chat"); setGrovesView(null); setPendingAsk(text); },
+    openGroves: (id, opts) => { dismissCanvas(); setGrovesView({ id: id ?? null, auto: !!opts?.auto }); },
     openSend: () => setPayMode("send"),
     openReceive: () => setPayMode("receive"),
     openSettings: () => setSettingsOpen(true),
@@ -189,9 +210,11 @@ export function ChatApp() {
         </div>
       </nav>
 
-      {/* ── center ── */}
+      {/* ── center (Groves takes the whole surface over; back restores it) ── */}
       <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
-        {home === "menu" ? <HomeMenu nav={nav} /> : <ChatCenter nav={nav} chat={chat} narrowed={!!canvas} pendingAsk={pendingAsk} consumeAsk={consumeAsk} />}
+        {grovesView
+          ? <GrovesPage groveId={grovesView.id} autoManage={grovesView.auto} nav={nav} onOpen={(id) => setGrovesView({ id, auto: false })} onBack={() => setGrovesView(grovesView.id ? { id: null, auto: false } : null)} />
+          : home === "menu" ? <HomeMenu nav={nav} /> : <ChatCenter nav={nav} chat={chat} narrowed={!!canvas} pendingAsk={pendingAsk} consumeAsk={consumeAsk} />}
       </div>
 
       {/* ── right canvas ── */}

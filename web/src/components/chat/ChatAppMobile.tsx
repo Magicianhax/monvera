@@ -6,16 +6,18 @@
 // (History + canvas launchers + settings/logout), and full-screen canvas sheets.
 // The canvas bodies, conversation, and overlays are REUSED from the desktop
 // build (they're scope-agnostic — CSS vars carry the .mvm theme).
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useTheme } from "@/hooks/useTheme";
 import { useSmartAccount } from "@/hooks/useSmartAccount";
 import { useMonveraPrice } from "@/hooks/useMonveraToken";
 import { useVeraChat } from "@/hooks/useVeraChat";
+import { groveById } from "@/lib/groves";
 import { CHAT_THEME_CSS, CHAT_STYLE_CSS, CANVAS_META, ChatOrb, ChatMark, PIcon, priceStr, type CanvasType, type ChatNav } from "./chatKit";
 import { useColorStyle } from "@/hooks/useColorStyle";
 import { useNotifications } from "@/hooks/useNotifications";
 import { useWatchlistSync } from "@/hooks/useWatchlistSync";
 import { HomeMobile } from "./HomeMobile";
+import { GrovesPage } from "./GrovesPage";
 import { ChatCenter } from "./ChatCenter";
 import { CanvasBody } from "./CanvasBody";
 import { OrderTicket, type OrderState } from "./OrderTicket";
@@ -60,6 +62,31 @@ export function ChatAppMobile() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [pendingAsk, setPendingAsk] = useState<string | null>(null);
+  // In-app Groves surface — a full-screen page over the shell (its own sheet,
+  // below the canvas sheet so holdings tapped inside it open on top).
+  const [grovesView, setGrovesView] = useState<{ id: string | null; auto: boolean } | null>(null);
+  const [grovesClosing, setGrovesClosing] = useState(false);
+  const grovesTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const closeGroves = () => {
+    if (grovesTimer.current || !grovesView) return;
+    setGrovesClosing(true);
+    grovesTimer.current = setTimeout(() => { setGrovesView(null); setGrovesClosing(false); grovesTimer.current = null; }, 250);
+  };
+
+  // /groves deep link: the public Grove pages' CTAs land on "/app?grove=<id>"
+  // (+ "&auto=1" for auto-manage) — open that Grove's in-app page and strip
+  // the params so a refresh doesn't re-open. Runs once per mount.
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search);
+    const g = groveById((q.get("grove") ?? "").toLowerCase());
+    if (!g) return;
+    const auto = q.get("auto") === "1";
+    q.delete("grove");
+    q.delete("auto");
+    const rest = q.toString();
+    window.history.replaceState(null, "", `${window.location.pathname}${rest ? `?${rest}` : ""}`);
+    setGrovesView({ id: g.id, auto });
+  }, []);
 
   // The sheet leaves the way it came — slides back down, slightly faster.
   const dismissSheet = () => {
@@ -77,11 +104,18 @@ export function ChatAppMobile() {
       setDrawer(false);
     },
     closeCanvas: dismissSheet,
-    goChat: () => { setHome("chat"); setDrawer(false); dismissSheet(); },
-    goMenu: () => { setHome("menu"); setDrawer(false); dismissSheet(); },
+    goChat: () => { setHome("chat"); setDrawer(false); dismissSheet(); closeGroves(); },
+    goMenu: () => { setHome("menu"); setDrawer(false); dismissSheet(); closeGroves(); },
     openBuy: (symbol) => setOrder({ symbol, side: "buy" }),
     openSell: (symbol) => setOrder({ symbol, side: "sell" }),
-    askVera: (text) => { setHome("chat"); dismissSheet(); setPendingAsk(text); },
+    askVera: (text) => { setHome("chat"); dismissSheet(); closeGroves(); setPendingAsk(text); },
+    openGroves: (id, opts) => {
+      if (grovesTimer.current) { clearTimeout(grovesTimer.current); grovesTimer.current = null; }
+      setGrovesClosing(false);
+      setGrovesView({ id: id ?? null, auto: !!opts?.auto });
+      setDrawer(false);
+      dismissSheet();
+    },
     openSend: () => setPayMode("send"),
     openReceive: () => setPayMode("receive"),
     openSettings: () => setSettingsOpen(true),
@@ -196,6 +230,14 @@ export function ChatAppMobile() {
             of popping (interruptible CSS transition). */}
         <div onClick={() => setDrawer(false)} style={{ position: "absolute", inset: 0, zIndex: 40, background: "rgba(8,14,10,.35)", opacity: drawer ? 1 : 0, pointerEvents: drawer ? "auto" : "none", transition: "opacity .3s cubic-bezier(.22,1,.36,1)" }} />
       </div>
+
+      {/* full-screen Groves page — below the canvas sheet, so a holding tapped
+          inside a composition opens on top and closes back to the Grove */}
+      {grovesView && (
+        <div className={grovesClosing ? "sheet sheet-out aur" : "sheet aur"} style={{ position: "absolute", inset: 0, zIndex: 60, background: "var(--bg)", display: "flex", flexDirection: "column" }}>
+          <GrovesPage mobile groveId={grovesView.id} autoManage={grovesView.auto} nav={nav} onOpen={(id) => setGrovesView({ id, auto: false })} onBack={() => (grovesView.id ? setGrovesView({ id: null, auto: false }) : closeGroves())} />
+        </div>
+      )}
 
       {/* full-screen canvas sheet */}
       {canvas && meta && (

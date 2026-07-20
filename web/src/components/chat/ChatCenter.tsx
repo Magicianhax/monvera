@@ -532,6 +532,7 @@ ${seller.error.slice(0, 160)}`, payload: { suggestions: ["Try again"] } }).catch
     if (target === "send") nav.openSend();
     else if (target === "receive") nav.openReceive();
     else if (target === "settings") nav.openSettings();
+    else if (target === "groves") nav.openGroves(symbol);
     else nav.openCanvas(target as Parameters<typeof nav.openCanvas>[0], symbol);
   };
 
@@ -611,9 +612,9 @@ ${seller.error.slice(0, 160)}`, payload: { suggestions: ["Try again"] } }).catch
     lastGroveRef.current = null;
     if (threadId) append({
       threadId, role: "vera", kind: "success",
-      // Grove buys get a line linking the receipt back to the Grove's page.
-      content: grove ? `That's the ${grove.name} in your wallet, at its published weights. Track it any time: monvera.best/groves/${grove.id}` : "",
-      payload: investSuccess,
+      // Grove buys get a line + an open chip back to the IN-APP Grove page.
+      content: grove ? `That's the ${grove.name} in your wallet, at its published weights.` : "",
+      payload: grove ? { ...investSuccess, open: { target: "groves", symbol: grove.id } } : investSuccess,
     }).catch(() => {});
     reset();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -802,7 +803,7 @@ ${seller.error.slice(0, 160)}`, payload: { suggestions: ["Try again"] } }).catch
                 {(() => {
                   const op = (m.payload as { open?: { target: string; symbol?: string } } | null)?.open;
                   if (!op) return null;
-                  const label = OPEN_LABELS[op.symbol ? `holding` : op.target] ?? op.target;
+                  const label = op.target === "groves" ? "the Grove" : (OPEN_LABELS[op.symbol ? `holding` : op.target] ?? op.target);
                   return (
                     <button
                       onClick={() => openTarget(op.target, op.symbol)}
@@ -845,14 +846,14 @@ ${seller.error.slice(0, 160)}`, payload: { suggestions: ["Try again"] } }).catch
                     </div>
                   );
                 })()}
-                {/* the Grove shelf — compact cards; tap one to ask what's inside */}
+                {/* the Grove shelf — compact cards; tap one to open its in-app page */}
                 {(() => {
                   const gl = (m.payload as { groveList?: GroveListItem[] } | null)?.groveList;
                   if (!Array.isArray(gl) || gl.length === 0) return null;
                   return (
                     <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 8, maxWidth: 440 }}>
                       {gl.map((g) => (
-                        <button key={g.id} disabled={busy} onClick={() => void submit(`What's in the ${g.name}?`)} style={{ textAlign: "left", background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 16, padding: "12px 14px", opacity: busy ? 0.6 : 1 }}>
+                        <button key={g.id} disabled={busy} onClick={() => nav.openGroves(g.id)} style={{ textAlign: "left", background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 16, padding: "12px 14px", opacity: busy ? 0.6 : 1 }}>
                           <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
                             <span style={{ fontSize: 14, fontWeight: 700, color: "var(--ink)" }}>{g.name}</span>
                             <span style={{ fontSize: 11.5, fontWeight: 650, color: "var(--primary)" }}>{g.ticker}</span>
@@ -866,7 +867,7 @@ ${seller.error.slice(0, 160)}`, payload: { suggestions: ["Try again"] } }).catch
                           )}
                         </button>
                       ))}
-                      <div style={{ fontSize: 11, color: "var(--ink-3)", textAlign: "center" }}>Tap a Grove for what&rsquo;s inside · only fee: 10% of profit when you exit · backtests are history, not promises</div>
+                      <div style={{ fontSize: 11, color: "var(--ink-3)", textAlign: "center" }}>Tap a Grove to open it · only fee: 10% of profit when you exit · backtests are history, not promises</div>
                     </div>
                   );
                 })()}
