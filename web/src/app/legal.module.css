@@ -1,0 +1,21 @@
+/* Shared styling for the legal documents (/terms, /privacy) — doc-shell voice,
+   quiet type, generous measure. */
+.doc {
+  display: grid;
+  gap: 26px;
+}
+.h {
+  font-size: 17px;
+  font-weight: 650;
+  color: var(--s-ink);
+  letter-spacing: -0.01em;
+  margin: 0 0 8px;
+}
+.p {
+  font-size: 14.5px;
+  line-height: 1.7;
+  color: var(--s-ink-2);
+  max-width: 68ch;
+  margin: 0 0 10px;
+  text-wrap: pretty;
+}

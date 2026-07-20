@@ -1116,6 +1116,14 @@
   margin: 0;
   text-wrap: pretty;
 }
+.footLegalLink {
+  color: var(--ink-2);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.footLegalLink:hover {
+  color: var(--primary-bright);
+}
 .footChain {
   font-family: var(--f-mono);
   font-size: 11.5px;

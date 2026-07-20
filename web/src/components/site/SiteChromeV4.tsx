@@ -206,8 +206,9 @@ export function SiteFooterV4() {
           <p className={s.footSmall}>
             &copy; 2026 Monvera. Nothing on this page is investment advice. Tokenized stocks
             are volatile and you can lose money. Vera shows every plan before it executes and
-            never takes custody of your assets. Not available in the US, Canada, the UK, or
-            Switzerland.
+            never takes custody of your assets.{" "}
+            <Link href="/terms" className={s.footLegalLink}>Terms</Link> &middot;{" "}
+            <Link href="/privacy" className={s.footLegalLink}>Privacy</Link>
           </p>
           <div className={`${s.footChain} ${s.mono}`}>
             Built on <b>Robinhood Chain</b>

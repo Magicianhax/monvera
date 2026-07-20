@@ -59,7 +59,7 @@ export const FAQ: FaqItem[] = [
   },
   {
     q: "Where is Monvera available?",
-    a: "Most of the world. It is not available in the United States, Canada, the United Kingdom, or Switzerland. Tokenized stocks carry risk and this is not investment advice, so only invest what you can leave for a while.",
+    a: "Worldwide. It is your responsibility to make sure trading tokenized stocks is lawful where you live. Tokenized stocks carry risk and this is not investment advice, so only invest what you can leave for a while.",
   },
   {
     q: "How do I get help?",

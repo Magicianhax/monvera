@@ -20,7 +20,7 @@ const CORE_FACTS = [
   "$MONVERA tone: upbeat and proud — it's the home team's token. Quote its live price factually when asked, WITHOUT editorializing (no 'small/volatile/be careful' framing, no dwelling on red days). Never call it an investment product, never predict its price; if someone directly asks about its risk, answer briefly and honestly, then move on.",
   "Scan to Buy: photograph any product and Vera finds the listed companies behind it and builds a plan.",
   "Autopilot: recurring investing within hard, revocable limits the user authorizes once (amount, cadence, risk ceiling). The user can start, update, or stop it in the Autopilot panel.",
-  "Minimum investment is about $1 for plans; single legs need at least $11 (venue minimum). Not available in the US, Canada, the UK, or Switzerland.",
+  "Minimum investment is about $1 for plans; single legs need at least $11 (venue minimum). Available worldwide — users are responsible for their own local rules.",
   "Docs live at docs.monvera.best. X: @monvera_best. Support: support@monvera.best.",
   "Backtests use 12 months of real history and are shown next to the S&P 500. History is never a promise of future returns; stocks can go down as well as up.",
   "A holding marked 'settling' is a fill that arrived wrapped from the venue and unwraps automatically, usually within 1-15 minutes. It is already bought, fully the user's, and counted in their balance. It just can't be sold until it lands. Nothing is stuck and nothing needs doing.",

@@ -92,6 +92,38 @@ function LoadingPanels({ heights }: { heights: number[] }) {
   );
 }
 
+// Shelf skeleton that mirrors the LOADED layout exactly — intro line, stats
+// band, then the same 2-up grid of tall cover cards — so nothing jumps when
+// the data lands.
+function ShelfSkeleton() {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 0 }} aria-label="Loading" role="status">
+      <div style={{ padding: "2px 2px 14px" }}>
+        <div className="glassin" style={{ height: 13, width: "92%", borderRadius: 7, opacity: 0.4 }} />
+        <div className="glassin" style={{ height: 13, width: "70%", borderRadius: 7, opacity: 0.4, marginTop: 8 }} />
+      </div>
+      <div className="glassin" style={card({ height: 92, opacity: 0.55, marginBottom: 14 })} />
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(min(340px,100%),1fr))", gap: 16 }}>
+        {[0, 1, 2, 3].map((i) => (
+          <div key={i} className="glassin" style={card({ overflow: "hidden", opacity: 0.55, animationDelay: `${i * 0.07}s`, padding: 0 })}>
+            <div style={{ aspectRatio: "2 / 1", background: "var(--panel-2)" }} />
+            <div style={{ padding: "14px 16px 18px" }}>
+              <div style={{ height: 11, width: 90, borderRadius: 6, background: "var(--panel-2)" }} />
+              <div style={{ height: 18, width: "60%", borderRadius: 8, background: "var(--panel-2)", marginTop: 10 }} />
+              <div style={{ height: 12, width: "88%", borderRadius: 6, background: "var(--panel-2)", marginTop: 10 }} />
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 14 }}>
+                {[0, 1, 2, 3].map((j) => (
+                  <div key={j} style={{ height: 26, borderRadius: 8, background: "var(--panel-2)" }} />
+                ))}
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function ErrorNote({ text, onRetry }: { text: string; onRetry: () => void }) {
   return (
     <div style={card({ padding: "26px 20px", textAlign: "center" })}>
@@ -167,7 +199,7 @@ function GroveShelfCard({ g, onOpen }: { g: GroveLive; onOpen: (id: string) => v
 
 function GroveShelf({ onOpen }: { onOpen: (id: string) => void }) {
   const { data, isLoading, isError, refetch } = useGrovesList();
-  if (isLoading) return <LoadingPanels heights={[150, 150, 150, 150]} />;
+  if (isLoading) return <ShelfSkeleton />;
   if (isError || !data) return <ErrorNote text="Couldn't load the Groves — check your connection and try again." onRetry={() => void refetch()} />;
   // Aggregate strip: honest zeros in preview, live contract reads once deployed.
   const agg = data.groves.reduce(

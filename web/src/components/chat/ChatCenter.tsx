@@ -1104,8 +1104,8 @@ function PortfolioCard({ data, nav }: { data?: Portfolio; nav: ChatNav }) {
   const total = data?.totalUsd ?? 0;
   const dayUsd = (data?.holdings ?? []).reduce((s, h) => s + ((h.valueUsd ?? 0) * (h.dayChangePct ?? 0)) / 100, 0);
   // Real intraday value of the holdings — never a synthetic wave under money.
-  const day = portfolioDayCurve(data?.holdings ?? []);
-  const mini = day ? chartPaths(day.curve, 200, 64) : null;
+  const day = portfolioDayCurve(data?.holdings ?? [], data?.cashUsd ?? 0);
+  const mini = day ? chartPaths(day.curve, 200, 64, { minSpanFrac: 0.02 }) : null;
   return (
     <div style={{ background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 20, marginTop: 14, overflow: "hidden" }}>
       <button onClick={() => nav.openCanvas("portfolio")} style={{ width: "100%", textAlign: "left", padding: "18px 20px", display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 16, borderBottom: "1px solid var(--line)" }}>

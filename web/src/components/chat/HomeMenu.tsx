@@ -163,7 +163,7 @@ export function HomeMenu({ nav }: { nav: ChatNav }) {
             </div>
             <div style={{ marginTop: 12 }}>
               {(() => {
-                const day = portfolioDayCurve(pf?.holdings ?? []);
+                const day = portfolioDayCurve(pf?.holdings ?? [], pf?.cashUsd ?? 0);
                 if (!day) {
                   return (
                     <div style={{ height: 130, display: "flex", alignItems: "center", justifyContent: "center", borderTop: "1px dashed var(--line-2)", fontSize: 12.5, color: "var(--ink-3)" }}>
@@ -171,7 +171,7 @@ export function HomeMenu({ nav }: { nav: ChatNav }) {
                     </div>
                   );
                 }
-                const paths = chartPaths(day.curve, 640, 130);
+                const paths = chartPaths(day.curve, 640, 130, { minSpanFrac: 0.02 });
                 return (
                   <ChartHover series={day.curve} vh={130} fmt={(v) => usd(v)}>
                     <svg viewBox="0 0 640 130" preserveAspectRatio="none" width="100%" height="130" style={{ display: "block" }}>

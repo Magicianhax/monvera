@@ -9,15 +9,14 @@ import { NextResponse, type NextRequest } from "next/server";
 //    typing in iOS Safari. A permanent 301 here closes the http path no
 //    matter what the edge setting says.
 //
-// 2. Geo-gate — Monvera is not offered in the US, Canada, the UK, or
-//    Switzerland (Robinhood Chain stock-token restrictions + our
-//    launch-compliance decision). Country comes from Cloudflare's
-//    CF-IPCountry header; absent header (local dev) allows — the gate is a
-//    compliance screen, not a security boundary.
-const BLOCKED = new Set(["US", "CA", "GB", "CH"]);
+// 2. Host canonicalization — the app lives at app.monvera.best (flag-gated).
+//
+// The geo-gate (US/CA/GB/CH → 451) was REMOVED 2026-07-20 by owner decision:
+// it tracked the Arcus venue's restrictions, and Arcus is out of the venue
+// set. Monvera is open worldwide. The gate lives in git history if a future
+// venue needs it back.
 
-// The https redirect must see EVERY request, so the matcher is broad; the
-// geo-gate applies only to the product + money-moving APIs below. Static
+// The https redirect must see EVERY request, so the matcher is broad. Static
 // assets (_next, files with extensions) are excluded to keep them on the
 // fast path — they are only ever referenced from pages that already
 // redirected to https.
@@ -30,17 +29,6 @@ export const config = {
 // the subdomain quietly serves the app (rewrite below) for testing, and the
 // canonical URL stays monvera.best/app.
 const APEX_APP_REDIRECT = false;
-
-const GATED_PAGES = ["/app"];
-const GATED_APIS = ["/api/quote", "/api/allocate", "/api/portfolio-review", "/api/autopilot", "/api/pimlico", "/api/vera"];
-
-// Social / link-preview crawlers only read a page's OG metadata to build a card;
-// they don't "use" the product. They run from US datacenters, so the geo-gate's
-// 451 /restricted rewrite left every shared /app link with no preview card on X,
-// Slack, Discord, etc. Let them through to the real page (200 + OG). Real users
-// are still gated by country below.
-const CRAWLER_UA =
-  /facebookexternalhit|facebot|twitterbot|slackbot|slack-imgproxy|discordbot|linkedinbot|telegrambot|whatsapp|pinterest|redditbot|applebot|googlebot|bingbot|skypeuripreview|embedly|iframely|vkshare|google-inspectiontool|mastodon|opengraph|w3c_validator/i;
 
 function isHttp(req: NextRequest): boolean {
   // Cloudflare terminates TLS; the original scheme arrives in headers. Check
@@ -79,17 +67,13 @@ export function middleware(req: NextRequest) {
   // ── 1b. the app lives at app.monvera.best ──
   // On the subdomain, "/" (and /app itself) serve the app page — query params
   // (?tab=…) carry over so every in-app link works there. On the apex, /app*
-  // permanently redirects to the subdomain. Dev on localhost is untouched.
-  // The rewrite is DEFERRED (not returned here) so the geo-gate below still
-  // screens the effective /app path — returning early would hand the app to
-  // blocked regions via the subdomain.
+  // permanently redirects to the subdomain (once the flag is on).
   const host = req.nextUrl.hostname;
-  let subdomainRewrite: URL | null = null;
   if (host === "app.monvera.best") {
     if (req.nextUrl.pathname === "/" || req.nextUrl.pathname === "/app") {
       const url = req.nextUrl.clone();
       url.pathname = "/app";
-      subdomainRewrite = url;
+      return NextResponse.rewrite(url);
     }
   } else if (APEX_APP_REDIRECT && (host === "monvera.best" || host === "www.monvera.best")) {
     if (req.nextUrl.pathname === "/app" || req.nextUrl.pathname.startsWith("/app/")) {
@@ -100,36 +84,5 @@ export function middleware(req: NextRequest) {
     }
   }
 
-  // ── 2. geo-gate (product + money APIs only) ──
-  // Gate on the effective path, so the subdomain's rewritten "/" counts as /app.
-  const path = subdomainRewrite ? subdomainRewrite.pathname : req.nextUrl.pathname;
-  const gatedPage = GATED_PAGES.some((p) => path === p || path.startsWith(p + "/"));
-  const gatedApi = GATED_APIS.some((p) => path === p || path.startsWith(p + "/"));
-  if (!gatedPage && !gatedApi) {
-    return subdomainRewrite ? NextResponse.rewrite(subdomainRewrite) : NextResponse.next();
-  }
-
-  // Link-preview crawlers may bypass the gate ONLY for pages, so a shared /app
-  // link renders its OG card. User-Agent is spoofable, which is acceptable here:
-  // the geo-gate is a compliance screen (already VPN-bypassable) and a page view
-  // moves no money. The money-moving APIs are NEVER header-bypassable — a spoofed
-  // UA must not reach a gated endpoint.
-  if (gatedPage && !gatedApi && CRAWLER_UA.test(req.headers.get("user-agent") ?? "")) {
-    return subdomainRewrite ? NextResponse.rewrite(subdomainRewrite) : NextResponse.next();
-  }
-
-  const country = req.headers.get("cf-ipcountry")?.toUpperCase();
-  if (!country || !BLOCKED.has(country)) {
-    return subdomainRewrite ? NextResponse.rewrite(subdomainRewrite) : NextResponse.next();
-  }
-
-  if (path.startsWith("/api/")) {
-    return NextResponse.json(
-      { error: "Monvera is not available in your region." },
-      { status: 451 },
-    );
-  }
-  const url = req.nextUrl.clone();
-  url.pathname = "/restricted";
-  return NextResponse.rewrite(url, { status: 451 });
+  return NextResponse.next();
 }

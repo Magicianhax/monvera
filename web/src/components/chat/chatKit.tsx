@@ -76,9 +76,17 @@ function smooth(p: [number, number][]): string {
   }
   return d.join(" ");
 }
-export function chartPaths(series: number[], w: number, h: number): { line: string; area: string } {
-  const pad = 6, mx = Math.max(...series), mn = Math.min(...series), sp = mx - mn || 1;
-  const pts: [number, number][] = series.map((v, i) => [(i / (series.length - 1)) * w, pad + (h - pad * 2) - ((v - mn) / sp) * (h - pad * 2)]);
+export function chartPaths(series: number[], w: number, h: number, opts?: { minSpanFrac?: number }): { line: string; area: string } {
+  const pad = 6, mx = Math.max(...series), mn = Math.min(...series);
+  // minSpanFrac: floor the y-domain at a fraction of the latest value, so a
+  // near-flat series (a mostly-cash balance) renders CALM instead of having
+  // its sub-percent noise auto-stretched into dramatic swings.
+  const floor = opts?.minSpanFrac ? Math.abs(series[series.length - 1] ?? 0) * opts.minSpanFrac : 0;
+  const rawSp = mx - mn;
+  const sp = Math.max(rawSp, floor) || 1;
+  const mid = (mx + mn) / 2;
+  const lo = rawSp >= sp ? mn : mid - sp / 2;
+  const pts: [number, number][] = series.map((v, i) => [(i / (series.length - 1)) * w, pad + (h - pad * 2) - ((v - lo) / sp) * (h - pad * 2)]);
   const line = smooth(pts);
   return { line, area: line + " L " + w + " " + h + " L 0 " + h + " Z" };
 }

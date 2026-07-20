@@ -38,12 +38,16 @@ function resample(series: number[], n: number): number[] {
  * Aggregate value curve for the holdings' current value over today. Returns null
  * when nothing is priced (no honest curve to draw). Holdings without a live
  * spark contribute a flat line at their current value.
+ *
+ * Pass `cashUsd` so the curve is the TOTAL balance through the day — without
+ * it, a $0.01 position under $0.72 of cash renders as the whole chart and its
+ * noise reads as the user's money swinging.
  */
-export function portfolioDayCurve(holdings: CurveHolding[]): DayCurve | null {
+export function portfolioDayCurve(holdings: CurveHolding[], cashUsd = 0): DayCurve | null {
   const priced = holdings.filter((h) => (h.valueUsd ?? 0) > 0);
   if (priced.length === 0) return null;
 
-  const sum = new Array<number>(N).fill(0);
+  const sum = new Array<number>(N).fill(cashUsd);
   let anyMovement = false;
   for (const h of priced) {
     const value = h.valueUsd ?? 0;

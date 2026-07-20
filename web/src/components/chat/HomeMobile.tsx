@@ -30,8 +30,8 @@ export function HomeMobile({ nav }: { nav: ChatNav }) {
 
   // Real intraday value of what they actually hold — never a synthetic wave
   // under a real balance (that reads as their money moving when it isn't).
-  const day = portfolioDayCurve(port?.holdings ?? []);
-  const home = day ? chartPaths(day.curve, 380, 90) : null;
+  const day = portfolioDayCurve(port?.holdings ?? [], cash);
+  const home = day ? chartPaths(day.curve, 380, 90, { minSpanFrac: 0.02 }) : null;
 
   const strip = STOCKS.map((a) => ({ sym: a.symbol, name: a.name, day: market?.summary[a.symbol]?.dayChangePct ?? 0, price: prices?.prices[a.symbol]?.priceUsd }))
     .filter((m) => m.price !== undefined && m.day !== 0)

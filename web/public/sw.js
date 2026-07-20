@@ -135,9 +135,17 @@ self.addEventListener("fetch", (event) => {
         try {
           return await fetch(request);
         } catch {
-          const cached =
-            (await cacheMatch(PRECACHE, request)) || (await cacheMatch(PRECACHE, OFFLINE_URL));
-          return cached || offlineResponse();
+          // One short retry before declaring the world offline — mobile radios
+          // waking from sleep fail the FIRST request constantly, and falling
+          // straight to the offline page reads as "the app is down".
+          try {
+            await new Promise((r) => setTimeout(r, 450));
+            return await fetch(request);
+          } catch {
+            const cached =
+              (await cacheMatch(PRECACHE, request)) || (await cacheMatch(PRECACHE, OFFLINE_URL));
+            return cached || offlineResponse();
+          }
         }
       })().catch(() => offlineResponse()),
     );
