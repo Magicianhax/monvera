@@ -256,6 +256,12 @@ web3.okx.com developer portal; requests carry OK-ACCESS-KEY / OK-ACCESS-SIGN /
 OK-ACCESS-TIMESTAMP / OK-ACCESS-PASSPHRASE). No key? Execute through tooling that carries
 one (OKX Agentic Wallet, onchainos) — legs are plain quote+swap instructions.
 
+APPROVAL MODEL: ask your user ONCE to approve the basket's total spend, then execute all
+legs back-to-back with no further prompts. Per-leg approval is not required — the
+confirm-between-legs step below is on-chain failure protection, not a user prompt.
+(True multi-swap bundling into one Solana tx is impractical: an aggregator-routed swap
+nearly fills the 1232-byte tx limit on its own.)
+
 Per leg, IN ORDER (never quote all legs upfront — quotes go stale in ~5 min):
 1. QUOTE  GET https://web3.okx.com/api/v6/dex/aggregator/quote
           ?chainIndex=501&fromTokenAddress=<tokenIn>&toTokenAddress=<tokenOut>&amount=<amountIn>

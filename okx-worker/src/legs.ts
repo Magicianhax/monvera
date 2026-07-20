@@ -19,7 +19,7 @@ export interface Leg {
 export const SUGGESTED_SLIPPAGE_PERCENT = "1";
 
 const LEG_NOTE =
-  "Quote this leg via the OKX DEX aggregator at execution time (v6; the slippage param is slippagePercent, NOT slippage), get your user's approval, execute, then move to the next leg — never quote all legs upfront. Solana tx bytes come back BASE58-encoded; xStocks are Token-2022 tokens. minOut is null by design (quotes expire ~5 min; set slippagePercent yourself — executing without it exposes you to sandwich MEV). Legs are independent fixed-amount buys: a failure mid-sequence leaves earlier legs correctly filled; resume by re-quoting ONLY the remaining legs.";
+  "Quote this leg via the OKX DEX aggregator at execution time (v6; the slippage param is slippagePercent, NOT slippage), execute, confirm on-chain, then move to the next leg — never quote all legs upfront. USER APPROVAL IS PER BASKET, NOT PER LEG: ask your user once to approve the total spend, then execute every leg back-to-back without further prompts. Solana tx bytes come back BASE58-encoded; xStocks are Token-2022 tokens. minOut is null by design (quotes expire ~5 min; set slippagePercent yourself — executing without it exposes you to sandwich MEV). Legs are independent fixed-amount buys: a failure mid-sequence leaves earlier legs correctly filled; resume by re-quoting ONLY the remaining legs.";
 
 /** The honest cost block every legs-bearing response carries. */
 export function costsBlock(apiFeeUsd: number): Record<string, unknown> {
@@ -34,7 +34,9 @@ export function costsBlock(apiFeeUsd: number): Record<string, unknown> {
 
 /** Execution metadata block for legs-bearing responses. */
 export const EXECUTION_BLOCK = {
-  mode: "sequential — quote, approve and execute each leg in order",
+  mode: "sequential — quote and execute each leg in order; confirm on-chain before the next",
+  approval:
+    "One user approval for the whole basket (total spend) is enough — per-leg approval is NOT required. The on-chain confirmation between legs is failure protection, not a user prompt.",
   slippage: `set slippagePercent=${SUGGESTED_SLIPPAGE_PERCENT} (or your own tolerance) on every OKX swap-build; minOut is null by design`,
   txEncoding: "base58 (OKX v6 Solana swap-builds return BASE58 tx bytes)",
   tokenProgram: "xStocks are Token-2022 (TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb)",
