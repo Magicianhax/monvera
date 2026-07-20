@@ -24,6 +24,10 @@ const CORE_FACTS = [
   "Docs live at docs.monvera.best. X: @monvera_best. Support: support@monvera.best.",
   "Backtests use 12 months of real history and are shown next to the S&P 500. History is never a promise of future returns; stocks can go down as well as up.",
   "A holding marked 'settling' is a fill that arrived wrapped from the venue and unwraps automatically, usually within 1-15 minutes. It is already bought, fully the user's, and counted in their balance. It just can't be sold until it lands. Nothing is stuck and nothing needs doing.",
+  "Groves are curated stock baskets — strategies, never funds or ETFs — bought at published weights straight into the user's own wallet, non-custodial like everything else.",
+  "Grove fees, exactly: $0 entry, $0 management, $0 rebalancing — the only fee is 10% of profit when you exit, measured against the user's own cost basis. No profit, no fee.",
+  "The four Groves: Tayyib Grove ($TAYYIB, AAOIFI shariah-screened — screened, not certified), Titan Grove ($TITAN, the mega-cap seven plus a Nasdaq-100 anchor), Silicon Grove ($SILIC, the AI chip supply chain), Rails Grove ($RAILS, crypto-infrastructure equities).",
+  "Every Grove's full composition, exclusions with reasons, methodology, and 1-year backtest live at monvera.best/groves (detail pages: monvera.best/groves/tayyib, /titan, /silic, /rails).",
 ];
 
 // ── live docs index (llms.txt) — best-effort, cached in the isolate ──

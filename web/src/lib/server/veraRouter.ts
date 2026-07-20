@@ -33,6 +33,8 @@ import { MULTICALL3 } from "@/lib/tokens";
 import { SERVER_RPC_URL } from "@/lib/server/rpc";
 import { ALL_ASSETS } from "@/lib/tokens";
 import { displayFor } from "@/lib/displayAssets";
+import { GROVES, grovePreviewMinUsd, type GroveDef } from "@/lib/groves";
+import { getGroves } from "@/lib/server/groveService";
 
 const BUYABLE = ALL_ASSETS.filter((a) => !displayFor(a.symbol).coming);
 
@@ -178,6 +180,27 @@ const TurnSchema = z.discriminatedUnion("intent", [
     amountUsd: z.number().positive().max(1_000_000).optional().describe("Dollars, ONLY if the user stated an amount."),
     message: z.string().max(400).optional().describe("One line confirming you opened the ticket."),
   }),
+  z.object({
+    intent: z.literal("grove_list"),
+    message: z.string().max(300).optional(),
+  }),
+  z.object({
+    intent: z.literal("grove_info"),
+    groveId: z.string().min(1).max(24).describe('Which Grove: "tayyib", "titan", "silic", or "rails".'),
+    message: z.string().max(200).optional(),
+  }),
+  z.object({
+    intent: z.literal("grove_buy"),
+    groveId: z.string().min(1).max(24),
+    amountUsd: z.number().positive().max(1_000_000).optional().describe("Dollars — ONLY if the user stated an amount."),
+    message: z.string().max(300).optional(),
+  }),
+  z.object({
+    intent: z.literal("grove_auto"),
+    groveId: z.string().min(1).max(24),
+    action: z.enum(["enable", "disable"]),
+    message: z.string().max(200).optional(),
+  }),
 ]);
 export type VeraTurn = z.infer<typeof TurnSchema>;
 
@@ -202,7 +225,8 @@ export type VeraResult =
   | { intent: "preference"; setting: "theme" | "palette"; value: string; message: string }
   | { intent: "order"; symbol: string; side: "buy" | "sell"; amountUsd?: number; message: string }
   | { intent: "token_order"; side: "buy" | "sell"; amountUsd: number; message: string }
-  | { intent: "autopilot"; amountUsd: number; cadence: "daily" | "weekly" | "biweekly" | "monthly"; risk: "careful" | "balanced" | "bolder"; message: string };
+  | { intent: "autopilot"; amountUsd: number; cadence: "daily" | "weekly" | "biweekly" | "monthly"; risk: "careful" | "balanced" | "bolder"; message: string }
+  | { intent: "grove_list"; message: string; groves: { id: string; name: string; ticker: string; thesis: string; minBuyUsd: number; returnPct: number | null; spyPct: number | null }[] };
 
 const SYMBOLS = new Set(BUYABLE.map((a: { symbol: string }) => a.symbol));
 
@@ -332,6 +356,7 @@ async function systemPrompt(ctx: VeraContext): Promise<string> {
     '- Asks to COMPARE two or three stocks ("AAPL vs NVDA") → {"intent":"compare","symbols":[...]}.',
     '- Asks about THEIR OWN history — what they have bought, their past invests, their transfers → {"intent":"my_activity"}.',
     '- Asks about a THEME or sector basket ("what\'s in your AI theme", "show me themes") → {"intent":"themes","slug": optional}. Asks about your named STRATEGIES / model portfolios ("what\'s your steadiest strategy") → {"intent":"strategies"}.',
+    '- Asks about GROVES — my curated strategy baskets ($TAYYIB shariah-screened, $TITAN mag-7, $SILIC chips, $RAILS crypto equities): "what groves/baskets do you have" → {"intent":"grove_list"}. Asks what\'s IN one or about one → {"intent":"grove_info","groveId":"tayyib"|"titan"|"silic"|"rails"}. Wants to BUY one → {"intent":"grove_buy","groveId":...,"amountUsd": only if they said a number}. Wants auto-manage on/off for one → {"intent":"grove_auto","groveId":...,"action":"enable"|"disable"}.',
     '- Asks about their WATCHLIST, or to watch/unwatch a stock → {"intent":"watchlist","action":"list"|"add"|"remove","symbol":...}.',
     '- Asks about the $MONVERA BUYBACK, treasury, or revenue → {"intent":"buyback"}.',
     '- Asks whether a stock is BUYABLE / has liquidity right now → {"intent":"liquidity","symbol":...}.',
@@ -860,6 +885,108 @@ export async function routeVera(ctx: VeraContext): Promise<VeraResult> {
         suggestions: payload.strategies.slice(0, 3).map((st) => `Invest $50 in ${st.name}`),
       };
     }
+    case "grove_list": {
+      const payload = await getGroves().catch(() => null);
+      return {
+        intent: "grove_list",
+        message: turn.message ?? "My Groves — curated stock baskets bought straight into your wallet at published weights. $0 to enter, hold, or rebalance; the only fee is 10% of profit when you exit. Tap one for what's inside.",
+        groves: GROVES.map((g) => {
+          const bt = payload?.groves.find((x) => x.id === g.id)?.backtest ?? null;
+          return {
+            // The min shown on the shelf is the one THIS chat path enforces —
+            // in preview that's the smallest-slice floor, not the launch min.
+            id: g.id, name: g.name, ticker: g.ticker, thesis: g.thesis, minBuyUsd: groveChatMin(g),
+            returnPct: bt?.portfolio.returnPct ?? null,
+            spyPct: bt?.benchmark.returnPct ?? null,
+          };
+        }),
+      };
+    }
+    case "grove_info": {
+      const g = resolveGrove(turn.groveId);
+      if (!g) return unknownGroveReply(turn.groveId);
+      const bt = (await getGroves().catch(() => null))?.groves.find((x) => x.id === g.id)?.backtest ?? null;
+      const holdings = g.components.map((c) => `${c.symbol} ${c.weightBps / 100}%`).join(" · ");
+      return {
+        intent: "reply",
+        message: [
+          `${g.name} (${g.ticker}): ${g.thesis}`,
+          `The basket, ${g.components.length} names: ${holdings}`,
+          bt ? `Past year: ${bt.portfolio.returnPct >= 0 ? "+" : ""}${bt.portfolio.returnPct.toFixed(1)}% vs ${bt.benchmark.returnPct >= 0 ? "+" : ""}${bt.benchmark.returnPct.toFixed(1)}% for the S&P 500, worst dip −${Math.abs(bt.portfolio.maxDrawdownPct).toFixed(1)}%. History, not a promise.` : "",
+          `Fees: $0 to enter, hold, or rebalance — only 10% of profit when you exit, measured against your own cost basis. Full composition, exclusions, and methodology: monvera.best/groves/${g.id}`,
+        ].filter(Boolean).join("\n"),
+        suggestions: [`Buy $${groveChatMin(g)} of ${g.name}`, "What Groves do you have?"],
+      };
+    }
+    case "grove_buy": {
+      const g = resolveGrove(turn.groveId);
+      if (!g) return unknownGroveReply(turn.groveId);
+      // TODO(GroveManager): when the contract deploys (NEXT_PUBLIC_GROVE_MANAGER
+      // set), this becomes a single GroveManager.buy() — on-chain cost basis,
+      // exit-fee tracking, and no per-leg venue floor. Until then the buy runs
+      // per-leg through the existing invest rails (preview mode), which is why
+      // the smallest weighted slice must clear the $11 venue minimum below.
+      const chatMin = groveChatMin(g);
+      const cash = Math.floor(ctx.cashUsd ?? 0);
+      const amount = turn.amountUsd !== undefined ? Math.floor(turn.amountUsd) : undefined;
+      if (amount === undefined) {
+        const sizes = [chatMin, chatMin * 2].filter((v) => v <= cash);
+        if (cash >= chatMin && !sizes.includes(cash)) sizes.push(cash);
+        return {
+          intent: "reply",
+          message: `How much should go into the ${g.name}? Buying it here places each of its ${g.components.length} names as its own order, so it needs at least $${chatMin}. You have $${(ctx.cashUsd ?? 0).toFixed(2)} in cash.`,
+          suggestions: [...new Set(sizes)].slice(0, 4).map((v) => `Buy $${v} of ${g.name}`),
+        };
+      }
+      if (amount < chatMin) {
+        return {
+          intent: "reply",
+          message: chatMin > g.minBuyUsd
+            ? `Until the GroveManager contract is live, buying the ${g.name} places each name as its own order — the smallest slice (${Math.min(...g.components.map((c) => c.weightBps)) / 100}%) needs $${MIN_LEG_USD}, which puts the minimum here at $${chatMin}. The published $${g.minBuyUsd} minimum applies at launch.`
+            : `The ${g.name} needs at least $${g.minBuyUsd} so every slice clears the $${MIN_LEG_USD} venue minimum.`,
+          suggestions: cash >= chatMin ? [`Buy $${chatMin} of ${g.name}`] : undefined,
+        };
+      }
+      if (amount > cash) {
+        return {
+          intent: "reply",
+          message: `You have $${(ctx.cashUsd ?? 0).toFixed(2)} in cash, so $${amount} won't clear. Size it down?`,
+          suggestions: cash >= chatMin ? [`Buy $${cash} of ${g.name}`] : undefined,
+        };
+      }
+      const allocations = g.components.map((c) => ({ symbol: c.symbol, weightPct: c.weightBps / 100, reason: c.reason.slice(0, 200) }));
+      const backtest = await backtestBasket(allocations).catch(() => null);
+      return {
+        intent: "plan",
+        message: `The ${g.name} is ready: $${amount} across ${g.components.length} names at the published weights, nothing substituted. Entering costs nothing extra — the only fee is 10% of profit when you exit. Look it over, then invest.`,
+        payload: {
+          summary: `${g.name} (${g.ticker}) — ${g.thesis}`,
+          rationale: g.longThesis,
+          riskScore: GROVE_RISK_BPS[g.id] ?? 6000,
+          allocations,
+          backtest,
+          amountUsd: amount,
+          model: "grove",
+          grove: { id: g.id, name: g.name },
+        },
+      };
+    }
+    case "grove_auto": {
+      const g = resolveGrove(turn.groveId);
+      if (!g) return unknownGroveReply(turn.groveId);
+      // TODO(GroveManager): at deploy, wire enable/disable to the contract's
+      // auto-manage authorization (on-chain caps) instead of this preview note.
+      if (!g.launched) {
+        return {
+          intent: "reply",
+          message: turn.action === "enable"
+            ? `Auto-manage for the ${g.name} opens when its contract deploys — the hourly drift checks aren't live yet, and I won't pretend to flip a switch that doesn't exist. You can buy the basket today, and auto-manage can be added to your position at launch.`
+            : `There's nothing to switch off — auto-manage for the ${g.name} isn't live yet. It opens when its contract deploys.`,
+          suggestions: [`Buy $${groveChatMin(g)} of ${g.name}`, `What's in the ${g.name}?`],
+        };
+      }
+      return { intent: "reply", message: `Auto-manage changes for the ${g.name} aren't wired into chat yet — manage them from monvera.best/groves/${g.id}.` };
+    }
     case "watchlist": {
       if (!ctx.userId) return { intent: "reply", message: "I couldn't reach your watchlist just now — try again in a moment." };
       const sym = (turn.symbol ?? "").toUpperCase();
@@ -979,6 +1106,34 @@ export async function routeVera(ctx: VeraContext): Promise<VeraResult> {
 // $11 venue floor or is dropped and the rest renormalized.
 const MIN_LEG_USD = 11;
 const EXPLORER = "https://robinhoodchain.blockscout.com/tx/";
+
+// ── groves: chat-side helpers ────────────────────────────────────────────────
+
+/** Match "tayyib", "$TITAN", "Silicon Grove", "rails" → the registry entry. */
+function resolveGrove(raw: string): GroveDef | undefined {
+  const v = raw.trim().toLowerCase().replace(/^\$/, "").replace(/\s+grove$/, "");
+  return GROVES.find(
+    (g) => g.id === v || g.ticker.slice(1).toLowerCase() === v || g.name.toLowerCase().replace(/\s+grove$/, "") === v,
+  );
+}
+
+function unknownGroveReply(raw: string): VeraResult {
+  return {
+    intent: "reply",
+    message: `I don't have a "${raw}" Grove. The four: ${GROVES.map((g) => `${g.name} (${g.ticker})`).join(", ")}.`,
+    suggestions: ["What Groves do you have?"],
+  };
+}
+
+/** In preview the buy runs per-leg on the venue rails, so the SMALLEST weighted
+ *  slice must clear the $11 floor — that can sit above the published minBuyUsd.
+ *  Shared formula (lib/groves) so the pages can never disagree with chat; the
+ *  GroveManager path removes this (see the TODO in grove_buy). */
+const groveChatMin = grovePreviewMinUsd;
+
+// Fixed, honest risk scores (bps, 0-10000) for the plan card's meter — the
+// sector-concentrated and crypto-beta baskets sit above the diversified cores.
+const GROVE_RISK_BPS: Record<string, number> = { tayyib: 5500, titan: 5000, silic: 7000, rails: 8500 };
 
 /** "3 days ago" from a unix-SECONDS timestamp (what D1 and the chain store). */
 function relTime(sec: number): string {

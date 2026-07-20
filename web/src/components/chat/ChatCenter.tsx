@@ -18,7 +18,7 @@ import type { useVeraChat } from "@/hooks/useVeraChat";
 import type { AllocateResult, InvestSuccess } from "@/lib/invest-types";
 import { authHeader } from "@/lib/authedFetch";
 import { setAutopilotPrefill, setOrderAmountPrefill, consumeAdoptedPlan } from "./autopilotPrefill";
-import { ChatOrb, PIcon, chartPaths, curve, dcol, pctStr, usd, usd0, type ChatNav } from "./chatKit";
+import { ChatOrb, PIcon, chartPaths, dcol, pctStr, usd, usd0, type ChatNav } from "./chatKit";
 import { useAvatar, avatarCss } from "./avatar";
 import { FAQ } from "@/lib/faq";
 import { haptic } from "@/lib/haptics";
@@ -43,7 +43,7 @@ const THINK_TRACKS: { re: RegExp; beats: string[] }[] = [
   { re: /\b(alert|notification|inbox|watchlist|autopilot|missed|unread)\b/i, beats: ["Checking your account…", "One moment…"] },
   { re: /\b(price|market|moved|history|compare|vs\.?|gainers|losers|volatile|steadiest|quote|worth|get me)\b/i, beats: ["Checking live prices…", "Reading the tape…", "Almost there…"] },
   { re: /\b(what did i|my activity|track record|receipts|buyback|treasury)\b/i, beats: ["Reading the records…", "Checking on-chain…"] },
-  { re: /\b(invest|plan|grow|safe|rebalance|buy|sell|cash out|scan|portfolio)\b/i, beats: THINK },
+  { re: /\b(invest|plan|grow|safe|rebalance|buy|sell|cash out|scan|portfolio|grove|basket)\b/i, beats: THINK },
 ];
 function thinkTrackFor(text: string): string[] {
   for (const t of THINK_TRACKS) if (t.re.test(text)) return t.beats;
@@ -109,6 +109,21 @@ function fmtTok(raw: bigint): string {
   if (n >= 1000) return n.toLocaleString("en-US", { maximumFractionDigits: 0 });
   return n.toLocaleString("en-US", { maximumFractionDigits: n >= 1 ? 2 : 6 });
 }
+
+/** One Grove on the shelf (veraRouter grove_list → payload.groveList). */
+interface GroveListItem {
+  id: string;
+  name: string;
+  ticker: string;
+  thesis: string;
+  minBuyUsd: number;
+  returnPct: number | null;
+  spyPct: number | null;
+}
+
+/** A grove-tagged plan payload — same AllocateResult the rails execute, plus
+ *  which Grove it came from so the receipt can link back to /groves/<id>. */
+type GrovePlan = AllocateResult & { grove?: { id: string; name: string } };
 
 /** Persisted receipt for a chat-native $MONVERA fill (payload.tokenReceipt). */
 interface TokenReceipt {
@@ -417,7 +432,8 @@ ${seller.error.slice(0, 160)}`, payload: { suggestions: ["Try again"] } }).catch
         | { intent: "preference"; setting: "theme" | "palette"; value: string; message: string }
         | { intent: "order"; symbol: string; side: "buy" | "sell"; amountUsd?: number; message: string }
         | { intent: "token_order"; side: "buy" | "sell"; amountUsd: number; message: string }
-        | { intent: "autopilot"; amountUsd: number; cadence: "daily" | "weekly" | "biweekly" | "monthly"; risk: "careful" | "balanced" | "bolder"; message: string };
+        | { intent: "autopilot"; amountUsd: number; cadence: "daily" | "weekly" | "biweekly" | "monthly"; risk: "careful" | "balanced" | "bolder"; message: string }
+        | { intent: "grove_list"; message: string; groves: GroveListItem[] };
       stopThinking();
 
       if (turn.intent === "plan") {
@@ -448,6 +464,10 @@ ${seller.error.slice(0, 160)}`, payload: { suggestions: ["Try again"] } }).catch
         if (turn.side === "buy") nav.openBuy(turn.symbol); else nav.openSell(turn.symbol);
       } else if (turn.intent === "token_order") {
         post({ threadId, role: "vera", content: turn.message, payload: { tokenOrder: { side: turn.side, amountUsd: turn.amountUsd } } });
+      } else if (turn.intent === "grove_list") {
+        // The shelf persists in the thread — each card asks for that Grove's
+        // composition; a grove_buy comes back as a normal plan card.
+        post({ threadId, role: "vera", content: turn.message, payload: { groveList: turn.groves } });
       } else if (turn.intent === "autopilot") {
         // Vera collected amount/cadence/risk in chat — hand them to the canvas
         // prefilled; the user reviews and hits Start (authorization stays theirs).
@@ -485,6 +505,10 @@ ${seller.error.slice(0, 160)}`, payload: { suggestions: ["Try again"] } }).catch
   };
 
   const [placingPlan, setPlacingPlan] = useState<AllocateResult | null>(null);
+  // Which Grove the in-flight invest came from (if any) — read when the success
+  // card lands so the receipt links back to /groves/<id>. A ref, not state:
+  // placingPlan is cleared on the same phase change the success watcher fires on.
+  const lastGroveRef = useRef<{ id: string; name: string } | null>(null);
   // "How should we place it?" — the old app's choice: Vera signs silently
   // (auto) or the user approves every signature (manual).
   const [modeAsk, setModeAsk] = useState<AllocateResult | null>(null);
@@ -492,6 +516,7 @@ ${seller.error.slice(0, 160)}`, payload: { suggestions: ["Try again"] } }).catch
     if (busyRef.current || !address || !canInvest) return;
     haptic.medium();
     setModeAsk(null);
+    lastGroveRef.current = (plan as GrovePlan).grove ?? null;
     setPlacingPlan(plan);
     threadRef.current = activeId ?? threadRef.current;
     void placeInvest(plan, plan.amountUsd, address, mode);
@@ -582,7 +607,14 @@ ${seller.error.slice(0, 160)}`, payload: { suggestions: ["Try again"] } }).catch
     haptic.success();
     setCelebrate(true);
     const threadId = activeId ?? threadRef.current;
-    if (threadId) append({ threadId, role: "vera", kind: "success", content: "", payload: investSuccess }).catch(() => {});
+    const grove = lastGroveRef.current;
+    lastGroveRef.current = null;
+    if (threadId) append({
+      threadId, role: "vera", kind: "success",
+      // Grove buys get a line linking the receipt back to the Grove's page.
+      content: grove ? `That's the ${grove.name} in your wallet, at its published weights. Track it any time: monvera.best/groves/${grove.id}` : "",
+      payload: investSuccess,
+    }).catch(() => {});
     reset();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase, investSuccess]);
@@ -810,6 +842,31 @@ ${seller.error.slice(0, 160)}`, payload: { suggestions: ["Try again"] } }).catch
                       {sugg.slice(0, 4).map((sg) => (
                         <button key={sg} disabled={busy} onClick={() => setDraft(String(sg))} style={{ padding: "8px 13px", border: "1px solid var(--line)", borderRadius: 999, fontSize: 12.5, fontWeight: 600, background: "var(--panel)", color: "var(--ink-2)", whiteSpace: "nowrap", opacity: busy ? 0.5 : 1 }}>{String(sg)}</button>
                       ))}
+                    </div>
+                  );
+                })()}
+                {/* the Grove shelf — compact cards; tap one to ask what's inside */}
+                {(() => {
+                  const gl = (m.payload as { groveList?: GroveListItem[] } | null)?.groveList;
+                  if (!Array.isArray(gl) || gl.length === 0) return null;
+                  return (
+                    <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 8, maxWidth: 440 }}>
+                      {gl.map((g) => (
+                        <button key={g.id} disabled={busy} onClick={() => void submit(`What's in the ${g.name}?`)} style={{ textAlign: "left", background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 16, padding: "12px 14px", opacity: busy ? 0.6 : 1 }}>
+                          <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+                            <span style={{ fontSize: 14, fontWeight: 700, color: "var(--ink)" }}>{g.name}</span>
+                            <span style={{ fontSize: 11.5, fontWeight: 650, color: "var(--primary)" }}>{g.ticker}</span>
+                            <span className="tnum" style={{ marginLeft: "auto", fontSize: 12, fontWeight: 650, color: "var(--ink-2)", whiteSpace: "nowrap" }}>min {usd0(g.minBuyUsd)}</span>
+                          </div>
+                          <div style={{ fontSize: 12.5, color: "var(--ink-2)", lineHeight: 1.5, marginTop: 3 }}>{g.thesis}</div>
+                          {typeof g.returnPct === "number" && (
+                            <div className="tnum" style={{ fontSize: 12, fontWeight: 650, marginTop: 4, color: dcol(g.returnPct) }}>
+                              {pctStr(g.returnPct)} past year{typeof g.spyPct === "number" ? <span style={{ color: "var(--ink-3)", fontWeight: 550 }}> · S&P 500 {pctStr(g.spyPct)}</span> : null}
+                            </div>
+                          )}
+                        </button>
+                      ))}
+                      <div style={{ fontSize: 11, color: "var(--ink-3)", textAlign: "center" }}>Tap a Grove for what&rsquo;s inside · only fee: 10% of profit when you exit · backtests are history, not promises</div>
                     </div>
                   );
                 })()}
