@@ -1,42 +1,53 @@
-import { SiteLanding } from "@/components/site/SiteLanding";
+import { SiteLandingV4, type GroveTeaserV4 } from "@/components/site/SiteLandingV4";
 import { getVeraRecordServer } from "@/lib/server/executorLogs";
-import { getPublicStrategies } from "@/lib/server/strategies";
+import { getGroves } from "@/lib/server/groveService";
 import { riskLabel, txUrl } from "@/lib/format";
 
 // Marketing site — the public landing at the root URL. The product itself lives
-// at /app (see app/app/page.tsx). Vera's on-chain identity + latest signed plan
-// are read server-side (same source as /agent) and embedded as a proof card;
-// revalidates hourly.
+// at /app (see app/app/page.tsx). Vera's on-chain record + latest signed plan
+// are read server-side (same source as /agent) and rendered as the hero stats
+// and the paper receipt; revalidates hourly. Groves come from the same live
+// layer as /groves — if that read fails the section simply doesn't render.
 export const revalidate = 3600;
 
-const AGENT_ID = process.env.NEXT_PUBLIC_STAX_AGENT_ID || "1";
-const IDENTITY_REGISTRY = process.env.NEXT_PUBLIC_IDENTITY_REGISTRY || "";
-const REGISTRY_LIVE =
-  !!IDENTITY_REGISTRY &&
-  IDENTITY_REGISTRY.toLowerCase() !== "0x0000000000000000000000000000000000000000";
-
 export default async function Home() {
-  // The strategy preview shows the real book (same engine as /strategies). If it
-  // cannot be read, the section simply does not render rather than showing stubs.
-  const [record, book] = await Promise.all([
+  const [record, grovesData] = await Promise.all([
     getVeraRecordServer().catch(() => null),
-    getPublicStrategies().catch(() => null),
+    getGroves().catch(() => null),
   ]);
   const latest = record?.recentRecommendations?.[0] ?? null;
-  const vera = {
-    agentId: AGENT_ID,
-    registryLive: REGISTRY_LIVE,
-    plans: record?.totalRecommendations ?? 0,
-    invested: record?.totalExecutedUsd ?? 0,
-    placed: record?.executedCount ?? 0,
-    latest: latest
-      ? {
-          label: riskLabel(latest.riskScore).label,
-          placed: latest.usdcSpent !== undefined,
-          usdc: latest.usdcSpent ?? null,
-          txUrl: txUrl(latest.txHash),
-        }
-      : null,
-  };
-  return <SiteLanding veraStats={vera} strategies={book?.strategies ?? []} />;
+  const groves: GroveTeaserV4[] = (grovesData?.groves ?? []).map((g) => {
+    const top = [...g.components].sort((a, b) => b.weightBps - a.weightBps).slice(0, 4);
+    return {
+      id: g.id,
+      ticker: g.ticker,
+      name: g.name,
+      category: g.category,
+      thesis: g.thesis,
+      coverImage: g.coverImage,
+      backtestPct: g.backtest?.portfolio.returnPct ?? null,
+      benchPct: g.backtest?.benchmark.returnPct ?? null,
+      minBuyUsd: g.minBuyUsd,
+      deployed: g.stats.deployed,
+      topHoldings: top.map((c) => ({ symbol: c.symbol, name: c.name })),
+      moreCount: Math.max(0, g.components.length - top.length),
+    };
+  });
+  return (
+    <SiteLandingV4
+      groves={groves}
+      veraStats={{
+        plans: record?.totalRecommendations ?? 0,
+        invested: record?.totalExecutedUsd ?? 0,
+        placed: record?.executedCount ?? 0,
+        latest: latest
+          ? {
+              label: riskLabel(latest.riskScore).label,
+              usdc: latest.usdcSpent ?? null,
+              txUrl: txUrl(latest.txHash),
+            }
+          : null,
+      }}
+    />
+  );
 }
