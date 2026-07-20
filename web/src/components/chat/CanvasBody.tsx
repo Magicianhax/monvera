@@ -1219,7 +1219,10 @@ function InsightsPanel({ nav }: { nav: ChatNav }) {
 export function CanvasBody({ type, symbol, nav }: { type: CanvasType; symbol: string; nav: ChatNav }) {
   switch (type) {
     case "market": return <MarketPanel nav={nav} />;
-    case "holding": return <HoldingPanel symbol={symbol} nav={nav} />;
+    // MONVERA has no stock data source (/api/market rejects it), so the stock
+    // template would render dead stats and a fake chart — the token panel is
+    // its real page no matter which list opened it.
+    case "holding": return symbol === "MONVERA" ? <TokenPanel nav={nav} /> : <HoldingPanel symbol={symbol} nav={nav} />;
     case "portfolio": return <PortfolioPanel nav={nav} />;
     case "vera": return <VeraPanel />;
     case "wallet": return <WalletPanel nav={nav} />;

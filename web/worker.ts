@@ -47,5 +47,20 @@ export default {
     ctx.waitUntil(hit("/api/cron/alerts"));
     if (cron === "0 * * * *") ctx.waitUntil(hit("/api/cron/autopilot"));
     if (cron === "0 13 * * 1") ctx.waitUntil(hit("/api/cron/digest"));
+    // Keep the $MONVERA chart warm: the route persists every successful series
+    // to KV for 24h, so even occasional upstream luck keeps all ranges served.
+    // Sequential with gaps — a burst would guarantee the upstream 429.
+    ctx.waitUntil(
+      (async () => {
+        for (const range of ["5m", "1h", "4h", "1d", "7d"]) {
+          try {
+            await env.WORKER_SELF_REFERENCE.fetch(`https://monvera.best/api/token-chart?range=${range}`);
+          } catch {
+            /* best-effort */
+          }
+          await new Promise((r) => setTimeout(r, 4_000));
+        }
+      })(),
+    );
   },
 };

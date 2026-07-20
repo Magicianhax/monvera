@@ -33,12 +33,24 @@ const RANGES: Record<string, { tf: string; agg: number; limit: number }> = {
   "7d": { tf: "hour", agg: 12, limit: 180 }, // longer 12h view
 };
 
+// CoinGecko's on-chain API serves the same pools with PER-KEY rate limits —
+// the free GeckoTerminal endpoint throttles per IP, and Workers egress IPs are
+// shared platform-wide, so from Cloudflare it 429s essentially always. Set
+// COINGECKO_API_KEY (a free demo key works) and the route switches upstream.
+const CG_BASE = `https://api.coingecko.com/api/v3/onchain/networks/robinhood/pools/${POOL}/ohlcv`;
+
 async function ohlcv(tf: string, agg: number, limit: number): Promise<number[]> {
-  const res = await fetch(`${BASE}/${tf}?aggregate=${agg}&limit=${limit}`, {
-    headers: { accept: "application/json" },
+  const cgKey = process.env.COINGECKO_API_KEY;
+  const url = cgKey ? `${CG_BASE}/${tf}?aggregate=${agg}&limit=${limit}` : `${BASE}/${tf}?aggregate=${agg}&limit=${limit}`;
+  const res = await fetch(url, {
+    headers: {
+      accept: "application/json",
+      "user-agent": "Mozilla/5.0 (compatible; MonveraBot/1.0; +https://monvera.best)",
+      ...(cgKey ? { "x-cg-demo-api-key": cgKey } : {}),
+    },
     signal: AbortSignal.timeout(8_000),
   });
-  if (!res.ok) throw new Error(`geckoterminal ${res.status}`);
+  if (!res.ok) throw new Error(`${cgKey ? "coingecko" : "geckoterminal"} ${res.status}`);
   const json = (await res.json()) as { data?: { attributes?: { ohlcv_list?: number[][] } } };
   // ohlcv_list is [ts, open, high, low, close, volume], NEWEST first → reverse
   // to chronological and take the close of each candle.
@@ -118,14 +130,14 @@ export async function GET(req: NextRequest) {
   let series: number[] = [];
   try {
     series = await ohlcv(cfg.tf, cfg.agg, cfg.limit);
-  } catch {
-    /* fall through to hourly */
+  } catch (err) {
+    console.error(`[token-chart] ${range} upstream failed:`, err instanceof Error ? err.message : err);
   }
   if (series.length === 0 && !(cfg.tf === "hour" && cfg.agg === 1)) {
     try {
       series = await ohlcv("hour", 1, 168);
-    } catch {
-      /* fall through to stale */
+    } catch (err) {
+      console.error("[token-chart] hourly fallback failed:", err instanceof Error ? err.message : err);
     }
   }
 
