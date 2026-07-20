@@ -5,12 +5,23 @@
 // Signed out: the chat-design AuthScreen (aurora + glass) owns the viewport.
 // Signed in: the chat-first shells (ChatApp / ChatAppMobile) own all chrome.
 import { useEffect, useState } from "react";
+import dynamic from "next/dynamic";
 import { usePrivy } from "@privy-io/react-auth";
 import { AuthScreen } from "@/components/chat/AuthScreen";
-import { ChatApp } from "@/components/chat/ChatApp";
-import { ChatAppMobile } from "@/components/chat/ChatAppMobile";
 import { ToastProvider } from "@/components/design/Toast";
 import { Web3Providers } from "@/components/Web3Providers";
+
+// The signed-in shells are the heaviest thing we ship (every canvas, chart, and
+// order flow hangs off them). A signed-out visitor only ever sees AuthScreen,
+// so their chunks are deferred until Privy says the user is authenticated —
+// the sign-in screen paints without waiting for the whole product to download.
+// ssr:false because both shells are browser-only (window/matchMedia at mount).
+// While that chunk arrives, hold the same breathing-orb screen the user was
+// already looking at (AuthScreen's not-ready state) — signing in must never
+// flash a blank viewport.
+const shellLoading = () => <AuthScreen ready={false} />;
+const ChatApp = dynamic(() => import("@/components/chat/ChatApp").then((m) => m.ChatApp), { ssr: false, loading: shellLoading });
+const ChatAppMobile = dynamic(() => import("@/components/chat/ChatAppMobile").then((m) => m.ChatAppMobile), { ssr: false, loading: shellLoading });
 
 // The chat-first design ships as a responsive split at 761px (the "Monvera Chat"
 // / "Monvera Chat Mobile" sub-designs). Both variants own all of their own
