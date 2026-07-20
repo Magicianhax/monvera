@@ -7,6 +7,7 @@
 // The canvas bodies, conversation, and overlays are REUSED from the desktop
 // build (they're scope-agnostic — CSS vars carry the .mvm theme).
 import { useCallback, useEffect, useRef, useState } from "react";
+import { readAppUrl, writeAppUrl, isCanvasTab } from "./appUrl";
 import { useTheme } from "@/hooks/useTheme";
 import { useSmartAccount } from "@/hooks/useSmartAccount";
 import { useMonveraPrice } from "@/hooks/useMonveraToken";
@@ -87,6 +88,25 @@ export function ChatAppMobile() {
     window.history.replaceState(null, "", `${window.location.pathname}${rest ? `?${rest}` : ""}`);
     setGrovesView({ id: g.id, auto });
   }, []);
+
+  // Restore the view from the URL on load, then keep the URL in sync so a
+  // refresh (or a shared link) lands back on the same page.
+  useEffect(() => {
+    const u = readAppUrl();
+    if (!u.tab) return;
+    if (u.tab === "chat") setHome("chat");
+    else if (u.tab === "groves") setGrovesView({ id: u.id && groveById(u.id) ? u.id : null, auto: false });
+    else if (isCanvasTab(u.tab)) {
+      if (u.tab === "holding" && u.sym) setCanvasSymbol(u.sym.toUpperCase());
+      setCanvas(u.tab as CanvasType);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  useEffect(() => {
+    if (grovesView) writeAppUrl({ tab: "groves", id: grovesView.id });
+    else if (canvas) writeAppUrl({ tab: canvas, sym: canvas === "holding" ? canvasSymbol : null });
+    else writeAppUrl({ tab: home === "chat" ? "chat" : null });
+  }, [home, canvas, canvasSymbol, grovesView]);
 
   // The sheet leaves the way it came — slides back down, slightly faster.
   const dismissSheet = () => {
