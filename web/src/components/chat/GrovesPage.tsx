@@ -111,12 +111,12 @@ function GroveShelfCard({ g, onOpen }: { g: GroveLive; onOpen: (id: string) => v
   const top4 = g.components.slice().sort((a, b) => b.weightBps - a.weightBps).slice(0, 4);
   const bt = g.backtest;
   return (
-    // The square lives on a plain div — buttons are quirky about aspect-ratio,
-    // so the button just fills the box absolutely.
-    <div style={{ position: "relative", aspectRatio: "1 / 1", contain: "size", minWidth: 0, borderRadius: 20, overflow: "hidden", border: "1px solid var(--line)", background: "var(--panel)" }}>
-    <button onClick={() => onOpen(g.id)} style={{ position: "absolute", inset: 0, padding: 0, border: 0, background: "transparent", textAlign: "left", display: "flex", flexDirection: "column", minWidth: 0, minHeight: 0, width: "100%", height: "100%" }}>
+    // Height follows content — text is never allowed to clip; the wide 2:1
+    // cover carries the size, so the tile reads near-square on the 2-up grid.
+    <div style={{ position: "relative", minWidth: 0, borderRadius: 20, overflow: "hidden", border: "1px solid var(--line)", background: "var(--panel)" }}>
+    <button onClick={() => onOpen(g.id)} style={{ padding: 0, border: 0, background: "transparent", textAlign: "left", display: "flex", flexDirection: "column", minWidth: 0, width: "100%" }}>
       {/* cover band — the grove's motif under its accent wash */}
-      <div style={{ position: "relative", flex: "0 1 auto", minHeight: 96, width: "100%", aspectRatio: "2 / 1", overflow: "hidden", borderBottom: "1px solid var(--line-2)" }}>
+      <div style={{ position: "relative", flex: "none", width: "100%", aspectRatio: "2 / 1", overflow: "hidden", borderBottom: "1px solid var(--line-2)" }}>
         <GroveCover id={g.id} coverImage={g.coverImage} />
         {!g.stats.deployed && <span style={{ position: "absolute", top: 10, right: 10, zIndex: 2 }}><SoonChip /></span>}
       </div>
@@ -199,7 +199,7 @@ function GroveShelf({ onOpen }: { onOpen: (id: string) => void }) {
         </div>
       </div>
       {/* 2-up desktop in the center column, 1-up mobile — big square tiles. */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(min(340px,100%),1fr))", gap: 16 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(min(480px,100%),1fr))", gap: 16 }}>
         {data.groves.map((g) => <GroveShelfCard key={g.id} g={g} onOpen={onOpen} />)}
       </div>
       <div style={{ fontSize: 11, color: "var(--ink-3)", textAlign: "center", padding: "16px 8px 4px" }}>
