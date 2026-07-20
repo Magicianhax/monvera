@@ -51,7 +51,7 @@ export const FAQ: FaqItem[] = [
   },
   {
     q: "Is every trade really recorded on-chain?",
-    a: "Yes. Vera signs each recommendation with a cryptographic signature, and it is verified and recorded on Robinhood Chain in the same transaction as your trades. Your track record cannot be edited after the fact, and the Activity screen links every buy, sell, and transfer to its on-chain receipt.",
+    a: "Yes. Each recommendation is signed and recorded on Robinhood Chain in the same transaction as your trades, so anyone can check it on the public explorer. The Activity screen links every buy, sell, and transfer to its on-chain receipt.",
   },
   {
     q: "Who is behind Vera?",

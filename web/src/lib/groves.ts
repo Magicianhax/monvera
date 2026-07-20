@@ -261,6 +261,11 @@ for (const g of GROVES) {
     if (!assetBySymbol(c.symbol)) {
       throw new Error(`Grove "${g.id}": component "${c.symbol}" is not in the token registry.`);
     }
+    if (c.weightBps <= 0) {
+      throw new Error(
+        `Grove "${g.id}": component "${c.symbol}" has weight ${c.weightBps} bps — every weight must be positive (a zero weight makes fullDiversificationUsd divide by zero).`,
+      );
+    }
   }
   if (g.minBuyUsd < MIN_LEG_USD) {
     throw new Error(

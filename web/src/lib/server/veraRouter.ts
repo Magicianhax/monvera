@@ -9,7 +9,7 @@ import "server-only";
 // from allocate.ts because the Virtuals proxy strips response_format.
 import { z } from "zod";
 import { generateObject } from "ai";
-import { resolveAllocationModel, activeModelId } from "@/lib/server/aiModel";
+import { resolveModelChain, activeModelId } from "@/lib/server/aiModel";
 import { buildAllocation, extractJson, rawTextFrom } from "@/lib/server/allocate";
 import { backtestBasket } from "@/lib/server/quant";
 import { reviewPortfolio } from "@/lib/server/portfolioReview";
@@ -448,26 +448,41 @@ function salvageTurn(raw: string): VeraTurn {
 
 /** One turn of Vera's brain. Throws only on total inference failure. */
 export async function routeVera(ctx: VeraContext): Promise<VeraResult> {
-  let turn: VeraTurn;
-  try {
-    const { object } = await generateObject({
-      model: resolveAllocationModel(),
-      schema: TurnSchema,
-      system: await systemPrompt(ctx),
-      prompt: ctx.text,
-      maxRetries: 1,
-      abortSignal: AbortSignal.timeout(28_000),
-    });
-    turn = object;
-  } catch (err) {
-    // The Virtuals proxy strips response_format, so the model may answer with
-    // wrapped JSON, partial JSON, or plain prose. Salvage in order: parse the
-    // JSON; else deliver the model's own words as a reply. A turn should only
-    // fail when there is genuinely nothing to show.
-    const raw = rawTextFrom(err);
-    if (!raw) throw err;
-    turn = salvageTurn(raw);
+  // Real failover: every configured provider in precedence order. A Virtuals
+  // outage (5xx/timeout, no salvageable text) degrades to the next provider
+  // instead of failing the user's turn.
+  const system = await systemPrompt(ctx);
+  const chain = resolveModelChain();
+  let turn: VeraTurn | null = null;
+  let lastErr: unknown = null;
+  for (const { provider, model } of chain) {
+    try {
+      const { object } = await generateObject({
+        model,
+        schema: TurnSchema,
+        system,
+        prompt: ctx.text,
+        temperature: 0.3,
+        maxRetries: 1,
+        abortSignal: AbortSignal.timeout(28_000),
+      });
+      turn = object;
+      break;
+    } catch (err) {
+      // The Virtuals proxy strips response_format, so the model may answer with
+      // wrapped JSON, partial JSON, or plain prose. Salvage in order: parse the
+      // JSON; else deliver the model's own words as a reply. Only a response
+      // with nothing to show (provider down, hard timeout) moves down the chain.
+      const raw = rawTextFrom(err);
+      if (raw) {
+        turn = salvageTurn(raw);
+        break;
+      }
+      lastErr = err;
+      console.error(`[vera] provider ${provider} failed with no salvageable text; trying next.`, err);
+    }
   }
+  if (!turn) throw lastErr ?? new Error("No inference provider produced a turn.");
 
   switch (turn.intent) {
     case "build_plan": {
@@ -815,19 +830,18 @@ export async function routeVera(ctx: VeraContext): Promise<VeraResult> {
       if (syms.length < 2) return { intent: "reply", message: "I need two symbols from the tradable universe to compare." };
       const stats = await universeStatsRows(syms).catch(() => []);
       const hist = await Promise.all(syms.map((x) => getHistory(x, "1M").catch(() => null)));
+      // Rendered as a real table by the chat's markdown-table block.
       const rows = syms.map((sym, i) => {
         const st = stats.find((r) => r.symbol === sym);
         const h = hist[i];
-        const bits = [`${displayFor(sym).name || sym} (${sym})`];
-        if (h) bits.push(`${h.changePct >= 0 ? "+" : ""}${h.changePct.toFixed(1)}% past month`);
-        if (st?.ret1yPct !== null && st?.ret1yPct !== undefined) bits.push(`${st.ret1yPct >= 0 ? "+" : ""}${st.ret1yPct.toFixed(0)}% past year`);
-        if (st?.volPct !== null && st?.volPct !== undefined) bits.push(`${st.volPct.toFixed(0)}% volatility`);
-        if (st?.maxDrawdownPct !== null && st?.maxDrawdownPct !== undefined) bits.push(`worst dip −${st.maxDrawdownPct.toFixed(0)}%`);
-        return "• " + bits.join(" · ");
+        const pct = (v: number | null | undefined, dp = 0) =>
+          v === null || v === undefined ? "—" : `${v >= 0 ? "+" : ""}${v.toFixed(dp)}%`;
+        return `| **${sym}** ${displayFor(sym).name || ""} | ${h ? pct(h.changePct, 1) : "—"} | ${pct(st?.ret1yPct)} | ${st?.volPct !== null && st?.volPct !== undefined ? st.volPct.toFixed(0) + "%" : "—"} | ${st?.maxDrawdownPct !== null && st?.maxDrawdownPct !== undefined ? "−" + st.maxDrawdownPct.toFixed(0) + "%" : "—"} |`;
       });
       const steadier = stats.filter((r) => typeof r.volPct === "number").sort((a, b) => (a.volPct as number) - (b.volPct as number))[0];
       const tail = steadier ? `\n${steadier.symbol} has been the steadier one: lower swings, not necessarily better returns.` : "";
-      return { intent: "reply", message: [`Here's how they stack up:`, ...rows].join("\n") + tail, suggestions: syms.map((x) => `Buy $25 of ${x}`) };
+      const table = ["| Stock | 1 month | 1 year | Volatility | Worst dip |", "|---|---|---|---|---|", ...rows].join("\n");
+      return { intent: "reply", message: `Here's how they stack up:\n${table}${tail}`, suggestions: syms.map((x) => `Buy $25 of ${x}`) };
     }
     case "my_activity": {
       if (!ctx.address) {
@@ -913,13 +927,26 @@ export async function routeVera(ctx: VeraContext): Promise<VeraResult> {
           `The basket, ${g.components.length} names: ${holdings}`,
           bt ? `Past year: ${bt.portfolio.returnPct >= 0 ? "+" : ""}${bt.portfolio.returnPct.toFixed(1)}% vs ${bt.benchmark.returnPct >= 0 ? "+" : ""}${bt.benchmark.returnPct.toFixed(1)}% for the S&P 500, worst dip −${Math.abs(bt.portfolio.maxDrawdownPct).toFixed(1)}%. History, not a promise.` : "",
           `Fees: $0 to enter, hold, or rebalance — only 10% of profit when you exit, measured against your own cost basis. Full composition, exclusions, and methodology: monvera.best/groves/${g.id}`,
+          g.launched ? "" : "It opens soon — buys aren't live quite yet, but the whole basket is public today.",
         ].filter(Boolean).join("\n"),
-        suggestions: [`Buy $${g.minBuyUsd} of ${g.name}`, "What Groves do you have?"],
+        suggestions: g.launched
+          ? [`Buy $${g.minBuyUsd} of ${g.name}`, "What Groves do you have?"]
+          : ["What Groves do you have?", `How has ${g.ticker} performed?`],
       };
     }
     case "grove_buy": {
       const g = resolveGrove(turn.groveId);
       if (!g) return unknownGroveReply(turn.groveId);
+      // Groves ship in "Opens soon" preview until the GroveManager contract is
+      // live — no buys before then, and no describing exit-fee mechanics that
+      // aren't deployed yet. Flip `launched` in the registry to open the doors.
+      if (!g.launched) {
+        return {
+          intent: "reply",
+          message: `The ${g.name} opens soon — the contract behind Groves isn't live yet, so I can't place this one today. You can already see the full basket, weights, and backtest, and I'll take buys the moment it opens.`,
+          suggestions: [`What's in ${g.ticker}?`, "What Groves do you have?"],
+        };
+      }
       // TODO(GroveManager): when the contract deploys (NEXT_PUBLIC_GROVE_MANAGER
       // set), this becomes a single GroveManager.buy() — on-chain cost basis,
       // exit-fee tracking, and no per-leg venue floor. Until then the buy runs
@@ -1061,15 +1088,16 @@ export async function routeVera(ctx: VeraContext): Promise<VeraResult> {
         rows = usable.filter((r) => typeof r.ret1yPct === "number").sort((a, b) => (b.ret1yPct as number) - (a.ret1yPct as number)).slice(0, 5);
         head = "Strongest over the past year:";
       }
+      // Rendered as a real table by the chat's markdown-table block.
       const lines = rows.map((r) => {
-        const bits: string[] = [];
-        if (typeof r.ret1yPct === "number") bits.push(`${r.ret1yPct >= 0 ? "+" : ""}${r.ret1yPct.toFixed(0)}% 1y`);
-        if (typeof r.volPct === "number") bits.push(`${r.volPct.toFixed(0)}% vol`);
-        return `• ${displayFor(r.symbol).name || r.symbol} (${r.symbol}) — ${bits.join(" · ")}`;
+        const ret = typeof r.ret1yPct === "number" ? `${r.ret1yPct >= 0 ? "+" : ""}${r.ret1yPct.toFixed(0)}%` : "—";
+        const vol = typeof r.volPct === "number" ? `${r.volPct.toFixed(0)}%` : "—";
+        return `| **${r.symbol}** ${displayFor(r.symbol).name || ""} | ${ret} | ${vol} |`;
       });
+      const table = ["| Stock | 1 year | Volatility |", "|---|---|---|", ...lines].join("\n");
       return {
         intent: "reply",
-        message: [head, ...lines, "Past performance is history, not a forecast. A strong year is not a reason on its own."].join("\n"),
+        message: `${head}\n${table}\nPast performance is history, not a forecast. A strong year is not a reason on its own.`,
         suggestions: rows.slice(0, 2).map((r) => `Buy $25 of ${r.symbol}`),
       };
     }

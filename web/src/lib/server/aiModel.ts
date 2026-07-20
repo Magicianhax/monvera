@@ -10,7 +10,9 @@ import "server-only";
 // Live model list: GET https://compute.virtuals.io/v1/models (source of truth).
 //
 // Fallbacks, in order: Venice AI (same OpenAI-compatible shape), then the
-// direct Anthropic API — so allocations keep working if the credits lapse.
+// direct Anthropic API. resolveModelChain() exposes every CONFIGURED provider
+// in that order so callers can fail over at runtime (chat does); a provider
+// only participates when its API key env is set.
 
 import { createAnthropic } from "@ai-sdk/anthropic";
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
@@ -46,16 +48,14 @@ export function hasAiProvider(): boolean {
   );
 }
 
-/** Build the language model for an allocation call (Virtuals > Venice > Anthropic). */
-export function resolveAllocationModel(): LanguageModel {
-  const { provider, modelId } = active();
+function buildModel(provider: AiProvider): LanguageModel {
   if (provider === "virtuals") {
     const virtuals = createOpenAICompatible({
       name: "virtuals",
       baseURL: VIRTUALS_BASE_URL,
       apiKey: process.env.VIRTUALS_API_KEY,
     });
-    return virtuals(modelId);
+    return virtuals(VIRTUALS_MODEL);
   }
   if (provider === "venice") {
     const venice = createOpenAICompatible({
@@ -63,8 +63,25 @@ export function resolveAllocationModel(): LanguageModel {
       baseURL: VENICE_BASE_URL,
       apiKey: process.env.VENICE_API_KEY,
     });
-    return venice(modelId);
+    return venice(VENICE_MODEL);
   }
   const anthropic = createAnthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-  return anthropic(modelId);
+  return anthropic(ANTHROPIC_MODEL);
+}
+
+/** Build the language model for an allocation call (Virtuals > Venice > Anthropic). */
+export function resolveAllocationModel(): LanguageModel {
+  return buildModel(active().provider);
+}
+
+/** Every CONFIGURED provider's model, in precedence order — the real failover
+ *  chain. Callers try each in turn so a Virtuals outage degrades to Venice or
+ *  Anthropic instead of failing the user's turn. (One key set = chain of one.) */
+export function resolveModelChain(): { provider: AiProvider; model: LanguageModel }[] {
+  const chain: { provider: AiProvider; model: LanguageModel }[] = [];
+  if (process.env.VIRTUALS_API_KEY) chain.push({ provider: "virtuals", model: buildModel("virtuals") });
+  if (process.env.VENICE_API_KEY) chain.push({ provider: "venice", model: buildModel("venice") });
+  if (process.env.ANTHROPIC_API_KEY) chain.push({ provider: "anthropic", model: buildModel("anthropic") });
+  if (!chain.length) chain.push({ provider: "anthropic", model: buildModel("anthropic") });
+  return chain;
 }
