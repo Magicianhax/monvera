@@ -151,6 +151,11 @@ export function ChatAppMobile() {
         <button onClick={() => { chat.newSession(); nav.goChat(); }} style={{ display: "flex", alignItems: "center", gap: 11, height: 42, padding: "0 12px", borderRadius: 12, background: "var(--primary-soft)", color: "var(--primary)", marginBottom: 6 }}><PIcon name="ph-plus-circle" size={19} weight="bold" /><span style={{ fontSize: 14, fontWeight: 600 }}>New session</span></button>
         {/* the menu itself stays pinned and roomy; only History scrolls */}
         <div className="scr" style={{ flex: "none", maxHeight: "52%", overflowY: "auto", display: "flex", flexDirection: "column", gap: 2 }}>
+          {/* Groves is a full page, not a canvas — its own entry above the canvas items */}
+          <button onClick={() => { nav.openGroves(); }} style={{ display: "flex", alignItems: "center", gap: 13, height: 48, padding: "0 12px", borderRadius: 13, background: grovesView !== null ? "var(--primary-soft)" : "transparent", textAlign: "left", flex: "none" }}>
+            <span style={{ width: 26, display: "grid", placeItems: "center", flex: "none", color: grovesView !== null ? "var(--primary)" : "var(--ink-2)" }}><PIcon name="ph-tree" size={23} /></span>
+            <span style={{ fontSize: 15.5, fontWeight: 600, color: grovesView !== null ? "var(--primary)" : "var(--ink)" }}>Groves</span>
+          </button>
           {DRAWER_ITEMS.map(([id, lbl, icon]) => (
             <button key={id} onClick={() => nav.openCanvas(id)} style={{ display: "flex", alignItems: "center", gap: 13, height: 48, padding: "0 12px", borderRadius: 13, background: canvas === id ? "var(--primary-soft)" : "transparent", textAlign: "left", flex: "none" }}>
               <span style={{ width: 26, display: "grid", placeItems: "center", flex: "none", color: canvas === id ? "var(--primary)" : "var(--ink-2)" }}><PIcon name={icon} size={23} /></span>

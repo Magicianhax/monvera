@@ -160,6 +160,13 @@ export function ChatApp() {
               {navExpanded && <span style={{ fontSize: 12.5, fontWeight: 600, whiteSpace: "nowrap" }}>New session</span>}
             </button>
           )}
+          {/* Groves is a full page, not a canvas — its own entry above the canvas launchers */}
+          <button onClick={() => nav.openGroves()} title="Groves" style={navBtn(grovesView !== null)}>
+            <span style={{ width: 22, display: "grid", placeItems: "center", flex: "none" }}>
+              <PIcon name="ph-tree" size={19} />
+            </span>
+            {label("Groves")}
+          </button>
           {LAUNCHERS.map(([id, lbl, icon]) => (
             <button key={id} onClick={() => nav.openCanvas(id)} title={lbl} style={navBtn(canvas === id)}>
               <span style={{ width: 22, display: "grid", placeItems: "center", flex: "none", position: "relative" }}>
