@@ -1,0 +1,27 @@
+---
+title: "Get balance history"
+description: "Hourly balance snapshots for any address — the equity curve behind the app's Total balance chart."
+---
+
+`GET /api/balance-history?address=0x…` returns hourly balance snapshots for an address — cash, invested, and total in USD, oldest first. This is the data behind the app's Total balance chart: a real equity curve that captures deposits, sends, and trades, not just market movement.
+
+> `GET /api/balance-history` · public, no token required · 120 requests per 60 seconds per IP, cached 5 minutes at the edge. Base URL, response envelope, and error shapes: [conventions](/dev/conventions/).
+
+Snapshots are taken hourly for every address the app has seen, valued through the same code as [`/api/portfolio`](/dev/api/portfolio/), and kept for 90 days. Like the portfolio route, it is public because it reveals only what the chain already shows for an address.
+
+## Parameters
+
+| Param | Type | Description |
+| --- | --- | --- |
+| `address` | string | The wallet to read. Required, checksummed or lowercase. |
+| `hours` | number | Window to return, 2 to 2160 (90 days). Default 720 (30 days). |
+
+## Response
+
+`{ snapshots, asOf }`. Each snapshot: `takenAt` (unix seconds, on the hour), `cashUsd`, `investedUsd`, `totalUsd`. An address the app has never seen returns an empty list — snapshots begin accruing after first sign-in.
+
+## Example
+
+```bash
+curl -s "https://monvera.best/api/balance-history?address=0xc6d7709dd8ba53832bd578a88260f8b8e59fb4c7&hours=48" | jq '.snapshots | length'
+```

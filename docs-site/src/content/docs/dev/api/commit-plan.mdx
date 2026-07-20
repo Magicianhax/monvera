@@ -5,7 +5,7 @@ description: "POST /api/commit-plan returns the risk assessment Vera signs for a
 
 `POST /api/commit-plan` builds the `RiskInference` for a draft plan and returns it signed by Vera's agent key. This signature is the accountability record: Vera signs the risk assessment, and the client records it on-chain in the same transaction that buys the assets. The user separately signs the spend.
 
-> `POST /api/commit-plan` · requires a Privy bearer token · geo-restricted (`451`). Base URL, rate limits, and error shapes: [conventions](/dev/conventions/).
+> `POST /api/commit-plan` · requires a Privy bearer token. Base URL, rate limits, and error shapes: [conventions](/dev/conventions/).
 
 This route signs and returns — it does not broadcast and does not return a transaction hash. The client calls `VeraRecord.record(planId, recHash, assessedRisk, maxRisk, expiry, signature, user, agentId, usdSpent, legCount)` and batches that with the Arcus settlement calls into one gas-sponsored ERC-4337 userOp, relayed via [`POST /api/pimlico`](/dev/api/pimlico/). Because the record and the buys share one atomic transaction, the assessment cannot be edited after the fact.
 

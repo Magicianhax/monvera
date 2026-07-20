@@ -33,12 +33,11 @@ No route returns a private key, a seed phrase, or a session-signer secret in any
 | 400 | `{"error":"Invalid request."}` | A malformed or missing field. Some routes return a more specific message in the same shape. |
 | 401 | `{"error":"Please sign in to continue."}` | A gated route with no bearer token, or a bad or expired Privy token. |
 | 429 | `{"error":"Too many requests. Please slow down a moment."}` | The route's 60-second window is exceeded. Carries a `Retry-After` header in seconds. |
-| 451 | `{"error":"Monvera is not available in your region."}` | A gated API request from a restricted region. |
 | 500 | `{"error":"Something went wrong. Please try again."}` | An unexpected server error. Retry; if it persists, say so on X at [@monvera_best](https://x.com/monvera_best). |
 
 On `429`, read `Retry-After` and wait that many seconds. `/api/autopilot/run` also holds an in-flight lock and returns `429` with `Retry-After: 30` when a run is already executing, even under the request limit. On `400`, fix the body and resend — `/api/alerts` POST returns `400` once an account already holds 20 or more active alerts, independent of the rate limit.
 
-The `451` is enforced in middleware from the Cloudflare `CF-IPCountry` header, before any account exists. Only `/app`, `/api/quote`, `/api/allocate`, `/api/portfolio-review`, `/api/autopilot`, `/api/pimlico`, and `/api/vera` are geo-gated; page paths rewrite to `/restricted` with the same status, and public market, price, and screener reads are not gated at all. The regions and the reason are in [before you invest](/start/before-you-invest/).
+There is no geo-gating: Monvera is available worldwide, and no route returns a region-based `451`. (The former US/CA/UK/CH gate was removed in July 2026.)
 
 ## Rate limits, public routes (per IP)
 

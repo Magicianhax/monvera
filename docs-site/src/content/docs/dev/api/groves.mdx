@@ -1,0 +1,32 @@
+---
+title: "Get the Groves"
+description: "Every curated basket with live prices, on-chain stats, and a one-year backtest — the same data the Grove pages render."
+---
+
+`GET /api/groves` returns every Grove — composition, weights, exclusions, methodology, live component prices, on-chain stats, and a one-year backtest against SPY. `GET /api/groves/{id}` returns one Grove in the same shape. This is exactly what [monvera.best/groves](https://monvera.best/groves) renders.
+
+> `GET /api/groves` · `GET /api/groves/{id}` · public, no token required · 120 requests per 60 seconds per IP, cached 60s at the edge. Base URL, response envelope, and error shapes: [conventions](/dev/conventions/).
+
+## Parameters
+
+`{id}` is the Grove's lowercase id (`tayyib`, `titan`, `silic`, `rails`). Unknown ids return `404`.
+
+## Response
+
+`{ asOf, note, groves }` (the single-Grove route returns the Grove object directly). Each Grove:
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `id`, `ticker`, `name`, `category`, `thesis` | string | Identity and one-line thesis. |
+| `components` | array | Every holding: `symbol`, `weightBps` (sums to exactly 10000), `reason`, `name`, live `priceUsd` (or `null`). |
+| `excluded` | array | Names deliberately kept out, each with its `why` — including names dropped for missing a two-way venue route. |
+| `feeBps` | number | The exit fee in basis points (1000 = 10% of realized profit, the only fee). |
+| `minBuyUsd`, `recommendedUsd` | number | The minimum and comfortable buy sizes. |
+| `stats` | object | `deployed`, `users`, `managedUsd`, `feesUsd` — read from the Grove contract, honest zeros before deployment. |
+| `backtest` | object \| null | One-year walk vs buy-and-hold SPY. History, not a promise. |
+
+## Example
+
+```bash
+curl -s https://monvera.best/api/groves/titan | jq '{name, minBuyUsd, weights: [.components[] | {symbol, weightBps}]}'
+```

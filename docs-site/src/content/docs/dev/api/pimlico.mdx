@@ -5,7 +5,7 @@ description: "The token-gated ERC-4337 bundler and paymaster relay that sponsors
 
 `POST /api/pimlico` is the ERC-4337 bundler and paymaster relay that pays the gas for a Monvera invest. It forwards a whitelisted set of JSON-RPC methods to Pimlico with the server-held API key attached, so the browser never sees the key. This is why investing is free to the user: the paymaster covers the network cost.
 
-`POST /api/pimlico` · requires a Privy bearer token · geo-restricted (`451`) · 600 requests per 60 seconds per account. Base URL, rate limits, and error shapes: [conventions](/dev/conventions/).
+`POST /api/pimlico` · requires a Privy bearer token · 600 requests per 60 seconds per account. Base URL, rate limits, and error shapes: [conventions](/dev/conventions/).
 
 You usually do not call this directly: the smart-account client points its bundler and paymaster transport here, so the ERC-4337 stack calls it for you during an invest. Call it yourself only if you are building your own account-abstraction transport against Monvera.
 

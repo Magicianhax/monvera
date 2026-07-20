@@ -71,7 +71,7 @@ Nothing is signed or spent at this point. You can start from $1, but each leg ne
 
 ## Commit it
 
-`POST /api/commit-plan` executes the plan and records Vera's signed EIP-712 risk assessment on-chain in the same transaction that buys the stocks, so her track record cannot be edited afterwards. Gas is sponsored through ERC-4337 — the account never holds a gas token.
+`POST /api/commit-plan` executes the plan and records Vera's signed EIP-712 risk assessment on-chain in the same transaction that buys the stocks — one atomic record anyone can verify on the explorer. Gas is sponsored through ERC-4337 — the account never holds a gas token.
 
 ```bash
 curl -X POST "https://monvera.best/api/commit-plan" \

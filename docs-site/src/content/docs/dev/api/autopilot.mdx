@@ -5,7 +5,7 @@ description: "Set the bounds Autopilot invests inside, trigger a run, and read t
 
 Autopilot invests a set amount on a schedule without you signing each run, but only ever inside four bounds you set. `/api/autopilot` holds the config, `/api/autopilot/run` fires one run now, `/api/autopilot/runs` is the audit trail.
 
-`GET`/`POST`/`DELETE /api/autopilot` · `POST /api/autopilot/run` · `GET /api/autopilot/runs` — all require a Privy bearer token, all are geo-restricted (`451`). Base URL, rate limits, and error shapes: [conventions](/dev/conventions/).
+`GET`/`POST`/`DELETE /api/autopilot` · `POST /api/autopilot/run` · `GET /api/autopilot/runs` — all require a Privy bearer token. Base URL, rate limits, and error shapes: [conventions](/dev/conventions/).
 
 The four bounds are `amountUsd`, `cadence`, `riskCeilingBps`, and `maxPerPeriodUsd` (defined below); every run is checked against all four before anything is signed. `walletId` is your Privy embedded-wallet id — granting it lets Monvera's server sign each run's spend, and `DELETE` revokes it along with the config. Vera signs the RiskInference risk assessment; the delegated signer signs the spend.
 

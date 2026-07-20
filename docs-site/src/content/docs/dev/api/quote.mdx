@@ -5,7 +5,7 @@ description: "POST /api/quote returns a firm Arcus RFQ quote for one asset in US
 
 `POST /api/quote` returns a firm Arcus spot RFQ quote for buying or selling one asset in USDG, along with the Permit2 typed data the taker signs and the settlement call to submit.
 
-> `POST /api/quote` · requires a Privy bearer token · geo-restricted (`451`). Base URL, rate limits, and error shapes: [conventions](/dev/conventions/).
+> `POST /api/quote` · requires a Privy bearer token. Base URL, rate limits, and error shapes: [conventions](/dev/conventions/).
 
 Buy means USDG to the asset token; sell means the asset token to USDG. Quotes are short-lived — fetch one right before you settle, because the typed data in `toSign` carries its own deadline.
 

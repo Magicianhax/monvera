@@ -129,6 +129,7 @@ export default defineConfig({
             'use/your-plan',
             'use/your-portfolio',
             'use/find-and-trade',
+            { slug: 'use/groves', badge: { text: 'Soon', variant: 'tip' } },
             'use/money-in-and-out',
             'use/watchlist-and-alerts',
             'use/autopilot',
@@ -193,6 +194,8 @@ export default defineConfig({
                 'dev/api/themes',
                 'dev/api/strategies',
                 'dev/api/backtest',
+                'dev/api/tradability',
+                'dev/api/groves',
               ],
             },
             {
@@ -210,6 +213,7 @@ export default defineConfig({
               label: 'Your account',
               items: [
                 'dev/api/portfolio',
+                'dev/api/balance-history',
                 'dev/api/activity',
                 'dev/api/transactions',
                 { slug: 'dev/api/watchlist', badge: { text: 'Auth', variant: 'note' } },

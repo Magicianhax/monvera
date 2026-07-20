@@ -1,0 +1,50 @@
+---
+title: "Groves — curated baskets"
+description: "Curated baskets of real tokenized stocks, bought straight into your own wallet. $0 to enter and hold; the only fee is 10% of profit when you exit."
+---
+
+import { Aside } from '@astrojs/starlight/components';
+import Transcript from '../../../components/Transcript.astro';
+import Turn from '../../../components/Turn.astro';
+
+A Grove is a curated basket of real tokenized stocks that Vera buys straight into your own wallet — a strategy you own, not a fund you buy. Every composition, weight, exclusion, and rule is published in full, and the basket settles as ordinary tokens in your wallet: nothing wrapped, nothing pooled, nothing custodial.
+
+<Aside type="note">
+Groves are visible today and open for buying when their contract goes live — every card is marked **Opens soon** until then. The compositions, backtests, and this page are already the real thing.
+</Aside>
+
+## The shelf
+
+| Grove | Ticker | What it holds |
+| --- | --- | --- |
+| Tayyib Grove | $TAYYIB | 12 shariah-screened large caps (AAOIFI methodology, exclusions published) |
+| Titan Grove | $TITAN | The mega-cap seven plus a Nasdaq-100 anchor |
+| Silicon Grove | $SILIC | 11 names across the AI chip supply chain |
+| Rails Grove | $RAILS | 6 crypto-infrastructure equities |
+
+The full composition of each — every weight, every reason a name is in, every name kept out and why — is on [monvera.best/groves](https://monvera.best/groves), with raw JSON free at `/api/groves`.
+
+## Fees: one, at exit, on profit only
+
+Entering a Grove is free. Holding is free. Rebalancing is free. The only fee is **10% of realized profit when you exit**, measured against your own cost basis — leave with less than you put in and the fee is zero. There is no management fee quietly eating the position in the background.
+
+## How buying works
+
+<Transcript>
+  <Turn who="you">Buy $50 of the Titan Grove</Turn>
+  <Turn who="vera">Here's the plan — the Titan Grove's names at their published weights, $50 total. Nothing moves until you confirm.</Turn>
+</Transcript>
+
+Every Grove starts at **$20**. Trading venues need roughly $11 per stock to fill an order, so small amounts buy the largest holdings first and the basket completes as the amount grows — the shelf shows the figure from which every name is included. Each purchase is placed as ordinary orders into your own wallet, and each stock is yours to hold or sell individually afterwards, like anything else you own.
+
+<Aside type="tip">
+Every swap pays the venue's spread, and below about $50 that spread takes a visibly larger share. $100 or more is the comfortable size.
+</Aside>
+
+## Auto-manage
+
+When the Grove contract is live you will be able to switch on auto-manage: Vera checks the basket against its published weights every hour and rebalances only when it has genuinely drifted — every action landing on-chain, inside caps the contract enforces. Until then, rebalancing stays in your hands.
+
+## Honest numbers
+
+The shelf's investor counts and managed totals read straight from the Grove contract — they start at zero and are never faked. Each Grove shows a one-year backtest against the S&P 500 for the same window; [backtests are history, not promises](/safety/backtests-are-history-not-promises/).

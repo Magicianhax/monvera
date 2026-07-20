@@ -7,7 +7,7 @@ import { Aside, Steps } from '@astrojs/starlight/components';
 import Transcript from '../../../components/Transcript.astro';
 import Turn from '../../../components/Turn.astro';
 
-You do not need a plan to own one company. Ask Vera what is available, sort the list on real numbers, check a price, then buy or sell that one name on its own. Monvera lists 95 real tokenized stocks and funds — 86 companies and 9 funds — and every one of them can be traded by itself.
+You do not need a plan to own one company. Ask Vera what is available, sort the list on real numbers, check a price, then buy or sell that one name on its own. Monvera lists 95 real tokenized stocks and funds — 86 companies and 9 funds — and every unlocked name can be traded by itself.
 
 <Transcript>
   <Turn who="you">What clean energy names do you have?</Turn>
@@ -23,6 +23,10 @@ Ask for a theme — AI, clean energy, semiconductors, big tech, healthcare — a
 The nine funds each cover a whole area in a single holding: the S&P 500, the Nasdaq 100, US Treasuries, silver, semiconductors, S&P 500 Momentum, the tech sector, oil, and South Korea. A fund spreads your money across many companies at once, which is why Vera often puts one in a basket.
 
 A big move up is not a reason to buy and a big move down is not a reason to sell. Prices swing both ways.
+
+## Locked names ("Soon")
+
+Some names in the market list carry a small lock and the word **Soon**. That means the trading venues cannot currently trade the name in *both* directions — usually they could sell it to you but could not buy it back, which would leave you holding something with no exit. Monvera's rule is simple: **if you can't sell it, you can't buy it.** Locked names can't be bought or sold, Vera declines them in both directions, and they unlock automatically — usually within hours — when venue liquidity returns. An hourly sweep checks every name; the current list is public at `/api/tradability`. If you already hold a name that later locks, your position is untouched and simply becomes sellable again the moment liquidity is back.
 
 ## Rank the list on real figures
 

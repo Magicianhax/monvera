@@ -20,6 +20,8 @@ Ask "what do I hold?" and Vera reads your account back to you: every holding, wh
 
 Your holdings show as real companies with live prices: what you hold, what each position is worth now, and what it has done today. Your uninvested cash sits alongside them, because cash is part of the picture — a portfolio that is half cash behaves very differently from one that is fully invested.
 
+The **Total balance chart** is real history, not decoration. Your balance is recorded every hour, so the curve is your actual money over time — deposits, sends, and trades included — and it goes back up to 90 days. Until a new account has a few hours of history, the chart shows today's market movement of what you currently hold instead, scaled to your whole balance so a mostly-cash account draws a calm line rather than dramatizing a small position's wiggles. (Developers: the same data is public at [`/api/balance-history`](/dev/api/balance-history/).)
+
 "What moved today?" narrows it to the day's action across your own names rather than the whole market. "Show my activity" walks back through what you have bought and sold, and when.
 
 ## What "settling" means

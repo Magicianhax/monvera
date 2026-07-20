@@ -1,0 +1,24 @@
+---
+title: "Get the tradable universe"
+description: "Which assets have a live buy AND sell route right now — the two-way rule behind locked names."
+---
+
+`GET /api/tradability` returns the two-way tradable universe: the symbols with a live buy **and** sell route at the venues. Monvera only offers assets it can also exit — names missing either direction show in the app as locked (**Soon**), Vera declines them in both directions, and they unlock automatically when liquidity returns.
+
+> `GET /api/tradability` · public, no token required · 120 requests per 60 seconds per IP, cached 5 minutes at the edge. Base URL, response envelope, and error shapes: [conventions](/dev/conventions/).
+
+The data comes from an hourly venue sweep that probes a $15 buy of every asset and then selling that exact position back. A name locks only after **two consecutive** missed sweeps (venue books flap; one bad hour must not flap the UI) and unlocks the moment any sweep finds a route.
+
+## Response
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `ok` | string[] \| null | Two-way tradable symbols. `null` means no sweep has landed yet — treat as unknown and lock nothing. |
+| `dropped` | string[] | Currently locked symbols (two consecutive missed sweeps). |
+| `asOf` | string \| null | When the sweep ran. |
+
+## Example
+
+```bash
+curl -s https://monvera.best/api/tradability | jq '{tradable: (.ok | length), locked: .dropped}'
+```
