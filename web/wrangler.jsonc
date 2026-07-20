@@ -12,6 +12,11 @@
   "triggers": {
     "crons": ["0 * * * *", "*/15 * * * *", "0 13 * * 1"]
   },
+  // The app's home. monvera.best / www / assets are attached in the dashboard;
+  // this one is config-managed. Middleware serves the app at "/" here.
+  "routes": [
+    { "pattern": "app.monvera.best", "custom_domain": true }
+  ],
   "assets": {
     "directory": ".open-next/assets",
     "binding": "ASSETS"

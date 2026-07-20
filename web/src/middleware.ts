@@ -25,6 +25,12 @@ export const config = {
   matcher: ["/((?!_next/|.*\\..*).*)"],
 };
 
+// Flip to true ONLY after app.monvera.best is in Privy's allowed origins —
+// redirecting the apex /app there before that breaks every login. Until then
+// the subdomain quietly serves the app (rewrite below) for testing, and the
+// canonical URL stays monvera.best/app.
+const APEX_APP_REDIRECT = false;
+
 const GATED_PAGES = ["/app"];
 const GATED_APIS = ["/api/quote", "/api/allocate", "/api/portfolio-review", "/api/autopilot", "/api/pimlico", "/api/vera"];
 
@@ -85,7 +91,7 @@ export function middleware(req: NextRequest) {
       url.pathname = "/app";
       subdomainRewrite = url;
     }
-  } else if (host === "monvera.best" || host === "www.monvera.best") {
+  } else if (APEX_APP_REDIRECT && (host === "monvera.best" || host === "www.monvera.best")) {
     if (req.nextUrl.pathname === "/app" || req.nextUrl.pathname.startsWith("/app/")) {
       const url = req.nextUrl.clone();
       url.hostname = "app.monvera.best";
