@@ -111,7 +111,7 @@ function GroveShelfCard({ g, onOpen }: { g: GroveLive; onOpen: (id: string) => v
   const top4 = g.components.slice().sort((a, b) => b.weightBps - a.weightBps).slice(0, 4);
   const bt = g.backtest;
   return (
-    <button onClick={() => onOpen(g.id)} style={{ background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 20, padding: 0, overflow: "hidden", textAlign: "left", display: "flex", flexDirection: "column", aspectRatio: "1 / 1", minWidth: 0 }}>
+    <button onClick={() => onOpen(g.id)} style={{ background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 20, padding: 0, overflow: "hidden", textAlign: "left", display: "flex", flexDirection: "column", aspectRatio: "1 / 1", minWidth: 0, minHeight: 0, contain: "size" }}>
       {/* cover band — the grove's motif under its accent wash */}
       <div style={{ position: "relative", flex: "none", width: "100%", aspectRatio: "2 / 1", borderBottom: "1px solid var(--line-2)" }}>
         <GroveCover id={g.id} coverImage={g.coverImage} />
