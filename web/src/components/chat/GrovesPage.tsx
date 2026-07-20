@@ -130,7 +130,7 @@ function GroveShelfCard({ g, onOpen }: { g: GroveLive; onOpen: (id: string) => v
           <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--ink-3)", padding: "2px 8px", borderRadius: 999, border: "1px solid var(--line)", flex: "none" }}>{g.category}</span>
         </div>
         <div className="serif" style={{ flex: "none", fontSize: 20, fontWeight: 600, letterSpacing: "-.015em", color: "var(--ink)", lineHeight: 1.3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{g.name}</div>
-        <div style={{ fontSize: 12.5, color: "var(--ink-2)", lineHeight: 1.5, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{g.thesis}</div>
+        <div style={{ flex: "none", fontSize: 12.5, color: "var(--ink-2)", lineHeight: 1.5, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{g.thesis}</div>
         <div style={{ flex: "none", display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
           <span style={{ display: "inline-flex", flex: "none" }}>
             {top4.map((c, i) => (
@@ -443,7 +443,7 @@ export function GrovesPage({ groveId, autoManage, nav, onOpen, onBack, mobile = 
         </div>
       </div>
       <main className="scr stag" style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: mobile ? 16 : "22px 28px 48px" }}>
-        <div style={{ maxWidth: 880, margin: "0 auto" }}>
+        <div style={{ maxWidth: 1280, margin: "0 auto" }}>
           {groveId
             ? <GroveDetail key={groveId} id={groveId} autoManage={autoManage} nav={nav} />
             : <GroveShelf onOpen={onOpen} />}

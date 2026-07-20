@@ -69,6 +69,7 @@ export const RECOMMENDED_BUY_USD = 100;
 export const GROVES: GroveDef[] = [
   {
     id: "tayyib",
+    coverImage: "/groves/tayyib.png",
     ticker: "$TAYYIB",
     name: "Tayyib Grove",
     thesis: "AAOIFI shariah-screened large caps — screened, not certified.",
@@ -115,6 +116,7 @@ export const GROVES: GroveDef[] = [
   },
   {
     id: "titan",
+    coverImage: "/groves/titan.png",
     ticker: "$TITAN",
     name: "Titan Grove",
     thesis: "The seven US mega-cap platforms plus a Nasdaq-100 anchor.",
@@ -143,6 +145,7 @@ export const GROVES: GroveDef[] = [
   },
   {
     id: "silic",
+    coverImage: "/groves/silic.png",
     ticker: "$SILIC",
     name: "Silicon Grove",
     thesis: "The AI chip supply chain, from lithography to the server rack.",
@@ -179,6 +182,7 @@ export const GROVES: GroveDef[] = [
   },
   {
     id: "rails",
+    coverImage: "/groves/rails.png",
     ticker: "$RAILS",
     name: "Rails Grove",
     thesis: "Own the companies building crypto's rails, not the coins.",
