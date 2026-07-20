@@ -121,14 +121,37 @@ test("challengeEntryFor matches the live 402 accepts for every paid route", asyn
   }
 });
 
-test("the live challenge accepts carry outputSchema so OKX tooling learns params pre-payment", async () => {
+test("the PAYMENT-REQUIRED header is NEVER mutated (buyers echo accepts[0] verbatim)", async () => {
   const out = await verifyAndSettle(new Request("https://asp.example/v1/basket/halal", { method: "POST" }), env);
   if (out.kind !== "challenge") throw new Error("expected challenge");
   const decoded = decodeBase64Json(out.response.headers.get("PAYMENT-REQUIRED")!) as {
-    accepts: Array<{ decimals?: number; outputSchema?: { input?: { queryParams?: { required?: string[] } } } }>;
+    accepts: Array<Record<string, unknown>>;
   };
-  expect(decoded.accepts[0].decimals).toBe(6);
-  expect(decoded.accepts[0].outputSchema?.input?.queryParams?.required).toContain("amountUsd");
+  // No injected keys — the SDK deep-matches the buyer's echoed copy of this
+  // entry against its route table; extra keys broke real payments once.
+  expect(decoded.accepts[0].outputSchema).toBeUndefined();
+  expect(decoded.accepts[0].decimals).toBeUndefined();
+  // The informational schema lives in the BODY instead.
+  const body = (await out.response.json()) as { inputSchema?: { input?: { queryParams?: { required?: string[] } } }; signing: { envelope: string } };
+  expect(body.inputSchema?.input?.queryParams?.required).toContain("amountUsd");
+  expect(body.signing.envelope).toContain("VERBATIM");
+});
+
+test("a garbage PAYMENT-SIGNATURE never 500s — it returns an uncharged, instructive 4xx", async () => {
+  const out = await verifyAndSettle(
+    new Request("https://asp.example/v1/basket/halal", {
+      method: "POST",
+      headers: { "PAYMENT-SIGNATURE": "bm90LWEtcmVhbC1lbnZlbG9wZQ==" },
+    }),
+    env
+  );
+  // Whatever branch the SDK takes, the outcome must be a response, not a throw,
+  // and it must not claim payment happened.
+  expect(out.kind === "challenge" || out.kind === "settle-failed").toBe(true);
+  if (out.kind === "challenge" || out.kind === "settle-failed") {
+    expect(out.response.status).toBeGreaterThanOrEqual(400);
+    expect(out.response.status).toBeLessThan(500);
+  }
 });
 
 test("routes outside the paid table pass through unpaid", async () => {

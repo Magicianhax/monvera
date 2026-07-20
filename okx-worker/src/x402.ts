@@ -130,7 +130,11 @@ export function routesFor(payTo: string): Record<string, unknown> {
   return routes;
 }
 
-/** The full signing contract: everything a cold curl agent needs to pay. */
+/** The full signing contract: everything a cold curl agent needs to pay.
+ *  ENVELOPE SHAPE IS LOAD-BEARING: the server parses
+ *  {x402Version, accepted, payload, resource} — `accepted` must be the
+ *  accepts[0] entry EXACTLY as received from the PAYMENT-REQUIRED header
+ *  (verbatim, unmodified; extra or missing keys break requirement matching). */
 export function signingContract(amount: string, payTo: string): Record<string, unknown> {
   return {
     eip712Domain: { name: "USD₮0", version: "1", chainId: 196, verifyingContract: USDT0_XLAYER },
@@ -152,10 +156,20 @@ export function signingContract(amount: string, payTo: string): Record<string, u
       validBefore: `now (unix seconds) + ${CHALLENGE_TTL_SECONDS}`,
       nonce: "32 random bytes as 0x-hex — NEVER reuse a nonce",
     },
+    envelope:
+      "PAYMENT-SIGNATURE: base64(JSON { x402Version: 2, accepted: <accepts[0] copied VERBATIM from the PAYMENT-REQUIRED challenge — do not add, remove or reorder keys>, payload: { authorization: { from, to, value, validAfter, validBefore, nonce }, signature: '0x...' }, resource: <resource object from the challenge> })",
     template:
-      'PAYMENT-SIGNATURE: base64(JSON {"x402Version":2,"scheme":"exact","network":"eip155:196","payload":{"authorization":{"from":"0x...","to":"0x...","value":"' +
+      'PAYMENT-SIGNATURE: base64(JSON {"x402Version":2,"accepted":{"scheme":"exact","network":"eip155:196","amount":"' +
       amount +
-      '","validAfter":"0","validBefore":"<unix>","nonce":"0x<32 bytes>"},"signature":"0x..."}})',
+      '","asset":"' +
+      USDT0_XLAYER +
+      '","payTo":"' +
+      payTo +
+      '","maxTimeoutSeconds":300,"extra":{"name":"USD₮0","version":"1"}},"payload":{"authorization":{"from":"0x...","to":"' +
+      payTo +
+      '","value":"' +
+      amount +
+      '","validAfter":"0","validBefore":"<unix>","nonce":"0x<32 bytes>"},"signature":"0x..."},"resource":{"url":"<the URL you probed>"}})',
   };
 }
 
@@ -212,18 +226,14 @@ export function decodeBase64Json(b64: string): unknown {
   return JSON.parse(new TextDecoder().decode(bytes));
 }
 
-function encodeBase64Json(value: unknown): string {
-  const bytes = new TextEncoder().encode(JSON.stringify(value));
-  let bin = "";
-  for (const b of bytes) bin += String.fromCharCode(b);
-  return btoa(bin);
-}
-
-/** Enrich the SDK's bare 402 with the full agent-readable body — and inject
- *  decimals + outputSchema.input.queryParams into the challenge's accepts so
- *  OKX buyer tooling (which reads outputSchema) knows what params to collect
- *  BEFORE paying. Purely additive: every field the wallet signs over (amount,
- *  payTo, asset, network, extra) is untouched. */
+/** Enrich the SDK's bare 402 with the full agent-readable body.
+ *
+ *  HARD RULE learned from a real buyer failure: the PAYMENT-REQUIRED header is
+ *  NEVER modified. Buyer clients copy accepts[0] verbatim into their signed
+ *  envelope and the SDK deep-matches it against the route table — any injected
+ *  key (even informational) breaks "No matching payment requirements".
+ *  All enrichment (params schema, signing contract, prerequisites) lives in
+ *  the BODY only, which is informational and never round-tripped. */
 function enrichChallenge(instructions: ResponseInstructions, path: string, env: Env, missing: string[]): Response {
   const headers: Record<string, string> = { ...instructions.headers, "content-type": "application/json" };
   const challengeB64 = instructions.headers["PAYMENT-REQUIRED"] ?? instructions.headers["payment-required"];
@@ -231,17 +241,6 @@ function enrichChallenge(instructions: ResponseInstructions, path: string, env: 
   let decoded: unknown = null;
   try {
     decoded = challengeB64 ? decodeBase64Json(challengeB64) : null;
-    const challenge = decoded as { accepts?: Array<Record<string, unknown>> } | null;
-    if (challenge?.accepts && entry) {
-      challenge.accepts = challenge.accepts.map((a) => ({
-        ...a,
-        decimals: entry.decimals,
-        outputSchema: entry.outputSchema,
-      }));
-      const reencoded = encodeBase64Json(challenge);
-      if ("PAYMENT-REQUIRED" in headers) headers["PAYMENT-REQUIRED"] = reencoded;
-      if ("payment-required" in headers) headers["payment-required"] = reencoded;
-    }
   } catch {
     decoded = null;
   }
@@ -259,6 +258,8 @@ function enrichChallenge(instructions: ResponseInstructions, path: string, env: 
       `4. Binding rule: the payment binds route path + amount + asset + payTo — NOT the query string. Probing bare and retrying with ?params appended is safe. Challenge expires in ~${CHALLENGE_TTL_SECONDS}s; a late signature needs a fresh probe and a NEW nonce.`,
     ],
     params: spec ? { missing, example: spec.queryExample } : undefined,
+    // Informational copy of the param schema (the header stays untouched).
+    inputSchema: entry?.outputSchema,
     prerequisites: PREREQUISITES,
     links: { llms: LLMS_URL, openapi: `${BASE_URL}/openapi.json`, wellKnown: `${BASE_URL}/.well-known/x402.json`, docs: DOCS_URL },
   };
@@ -297,7 +298,30 @@ export async function verifyAndSettle(request: Request, env: Env, missingParams:
   const server = await getServer(env);
   const context = { adapter: adapterFor(request, url), path: url.pathname, method: "POST" };
 
-  const result = await server.processHTTPRequest(context);
+  // A malformed payment envelope must NEVER 500: classify it as the buyer's
+  // input, tell them the exact accepted shape, and confirm nothing was charged.
+  let result: ProcessResult;
+  try {
+    result = await server.processHTTPRequest(context);
+  } catch (err) {
+    console.error("payment envelope processing failed", err);
+    return {
+      kind: "settle-failed",
+      nonceUsed: false,
+      response: new Response(
+        JSON.stringify({
+          error:
+            "Could not parse or match your PAYMENT-SIGNATURE envelope. Nothing was charged; your authorization was not consumed.",
+          code: "INVALID_PAYMENT",
+          charged: false,
+          retryable: true,
+          hint: "The envelope must be base64(JSON { x402Version: 2, accepted: <accepts[0] copied VERBATIM from the PAYMENT-REQUIRED challenge>, payload: { authorization, signature }, resource }). Re-probe this URL for the challenge and its signing block, then sign again.",
+          docs: LLMS_URL,
+        }),
+        { status: 400, headers: { "content-type": "application/json" } }
+      ),
+    };
+  }
 
   if (result.type === "no-payment-required") {
     return { kind: "paid", payer: "unknown", paymentId: "", responseHeaders: {} };
@@ -309,7 +333,27 @@ export async function verifyAndSettle(request: Request, env: Env, missingParams:
     return { kind: "settle-failed", response: toResponse(result.response), nonceUsed: false };
   }
   if (result.type === "payment-verified") {
-    const settle = await server.processSettlement(result.paymentPayload, result.paymentRequirements, result.declaredExtensions);
+    let settle: Awaited<ReturnType<typeof server.processSettlement>>;
+    try {
+      settle = await server.processSettlement(result.paymentPayload, result.paymentRequirements, result.declaredExtensions);
+    } catch (err) {
+      console.error("settlement threw", err);
+      return {
+        kind: "settle-failed",
+        nonceUsed: false,
+        response: new Response(
+          JSON.stringify({
+            error: "Settlement processing failed before completion. Nothing was delivered.",
+            code: "SETTLE_ERROR",
+            charged: false,
+            retryable: true,
+            hint: "Re-probe this URL for a fresh challenge and sign again with a NEW nonce. If your wallet shows a completed transfer anyway, retry this exact request with the SAME PAYMENT-SIGNATURE — redelivery is free.",
+            docs: LLMS_URL,
+          }),
+          { status: 402, headers: { "content-type": "application/json" } }
+        ),
+      };
+    }
     if (!settle.success) {
       const reason = `${(settle as { errorReason?: string }).errorReason ?? ""} ${(settle as { errorMessage?: string }).errorMessage ?? ""}`.toLowerCase();
       const nonceUsed = /nonce|already|replay|used/.test(reason);

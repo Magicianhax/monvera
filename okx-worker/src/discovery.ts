@@ -201,10 +201,15 @@ Paid (x402, price per call in USDT0):
             validAfter: 0 · validBefore: now + maxTimeoutSeconds (${CHALLENGE_TTL_SECONDS})
             nonce: 32 random bytes (NEVER reuse a nonce)
 4. RETRY the same URL with header
-   PAYMENT-SIGNATURE: base64(JSON { "x402Version": 2, "scheme": "exact",
-     "network": "${XLAYER_NETWORK}", "payload": { "authorization": { from, to, value,
-     validAfter, validBefore, nonce }, "signature": "0x..." } })
-   The 402 body's signing.template echoes this exact shape.
+   PAYMENT-SIGNATURE: base64(JSON { "x402Version": 2,
+     "accepted": <accepts[0] copied VERBATIM from the PAYMENT-REQUIRED challenge —
+                  do not add, remove or reorder keys>,
+     "payload": { "authorization": { from, to, value, validAfter, validBefore, nonce },
+                  "signature": "0x..." },
+     "resource": <the challenge's resource object> })
+   The 402 body's signing.template shows this filled in. The "accepted" copy is
+   matched byte-for-byte against the server's requirements — a modified copy fails
+   with "No matching payment requirements".
 5. The product returns in that response; the settlement receipt is in the
    PAYMENT-RESPONSE header and paymentId appears in the JSON body.
 
