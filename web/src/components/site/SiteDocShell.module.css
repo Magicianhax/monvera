@@ -1,149 +1,75 @@
-/* Chrome for the standalone marketing documents (/roadmap, /agent, /strategies).
-   Same tokens, type, and restraint as the landing. Theme: Ledger — flat, 1px
-   hairlines, no elevation, no glass. */
+/* Chrome for the standalone marketing documents (/agent, /strategies,
+   /roadmap, /buyback) — the same "Deep Emerald Trading Floor" room as the
+   landing. The V4 root supplies the official tokens; here the `.site` scope's
+   --s-* variables are remapped onto them so every document's existing module
+   styles land on the same canvas without edits. */
 
-.root {
-  --edge: clamp(20px, 5vw, 40px);
-  --docw: 780px;
-  min-height: 100vh;
-  background: var(--s-paper);
-  color: var(--s-ink);
-  font-family: var(--s-ui);
-  -webkit-font-smoothing: antialiased;
-}
+.doc {
+  /* pin the .site token set to the official dark room */
+  --s-paper: #0c0f12;
+  --s-paper-2: #12161a;
+  --s-surface: #1f2427;
+  --s-ink: #eef2f0;
+  --s-ink-2: #aeb6b3;
+  --s-ink-3: #8a938f;
+  --s-line: #303840;
+  --s-primary: #43ba85;
+  --s-primary-d: #57c99b;
+  --s-primary-soft: #1e2c25;
+  --s-pos: #43ba85;
+  --s-neg: #ef6a51;
+  --s-hero-grad: linear-gradient(145deg, #57c99b 0%, #43ba85 55%, #37a473 100%);
+  --s-glass: rgba(38, 45, 49, 0.52);
+  --s-glass-strong: rgba(40, 47, 51, 0.74);
+  --s-glass-line: rgba(255, 255, 255, 0.12);
+  --s-glass-hi: inset 0 1px 0 rgba(255, 255, 255, 0.14);
+  --s-glass-blur: saturate(180%) blur(22px);
+  --s-glass-shadow: 0 10px 34px rgba(0, 0, 0, 0.5), 0 2px 10px rgba(0, 0, 0, 0.4);
+  --s-shadow: 0 2px 10px rgba(0, 0, 0, 0.42), 0 18px 48px rgba(0, 0, 0, 0.52);
+  --s-shadow-lg: 0 6px 18px rgba(0, 0, 0, 0.5), 0 36px 78px rgba(0, 0, 0, 0.66);
 
-.bar {
-  position: sticky;
-  top: 0;
-  z-index: 20;
-  background: color-mix(in srgb, var(--s-paper) 88%, transparent);
-  backdrop-filter: saturate(1.2) blur(8px);
-  border-bottom: 1px solid var(--s-line);
-}
-.barInner {
-  max-width: 1180px;
-  margin: 0 auto;
-  padding: 12px var(--edge);
+  min-height: 100dvh;
   display: flex;
-  align-items: center;
-  gap: 16px;
-}
-.brand {
-  display: inline-flex;
-  align-items: center;
-  gap: 9px;
-  font-family: var(--s-display);
-  font-size: 19px;
-  font-weight: 600;
-  letter-spacing: -0.02em;
-  color: var(--s-ink);
-}
-.spacer {
-  flex: 1;
-}
-.barLink {
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--s-ink-2);
-  padding: 6px 2px;
-  border-radius: 4px;
-}
-.barLink:hover {
-  color: var(--s-ink);
-}
-.barLink:focus-visible {
-  outline: 2px solid var(--s-primary);
-  outline-offset: 3px;
-}
-.iconBtn {
-  display: grid;
-  place-items: center;
-  width: 34px;
-  height: 34px;
-  border-radius: 6px;
-  border: 1px solid var(--s-line);
-  background: var(--s-surface);
-  color: var(--s-ink-2);
-  cursor: pointer;
-}
-.iconBtn:hover {
-  color: var(--s-ink);
-}
-.cta {
-  display: inline-flex;
-  align-items: center;
-  height: 34px;
-  padding: 0 14px;
-  border-radius: 6px;
-  background: var(--s-primary-d);
-  color: #fff;
-  font-size: 14px;
-  font-weight: 600;
-  white-space: nowrap;
-}
-.cta:hover {
-  background: var(--s-primary);
+  flex-direction: column;
+  /* the emerald room, calmer than the hero — documents need quiet air */
+  background:
+    radial-gradient(52% 38% at 12% 0%, rgba(108, 192, 156, 0.14), transparent 60%),
+    radial-gradient(46% 34% at 94% 6%, rgba(236, 171, 126, 0.09), transparent 60%),
+    radial-gradient(125% 90% at 50% -10%, #20262a 0%, #12161a 55%, #0c0f12 100%);
+  background-attachment: fixed;
 }
 
 .main {
-  max-width: var(--docw);
+  width: 100%;
+  max-width: 820px;
   margin: 0 auto;
-  padding: clamp(40px, 7vw, 72px) var(--edge) clamp(64px, 9vw, 104px);
+  padding: clamp(128px, 16vh, 172px) 24px clamp(72px, 10vw, 120px);
+  flex: 1;
 }
 .wide {
-  max-width: 1040px;
+  max-width: 1080px;
 }
 
-.eyebrow {
-  margin: 0;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--s-primary-d);
-  letter-spacing: 0.01em;
+.head {
+  margin-bottom: clamp(36px, 5vw, 56px);
 }
 .h1 {
-  font-family: var(--s-display);
-  font-weight: 500;
-  letter-spacing: -0.03em;
-  line-height: 1.04;
-  font-size: clamp(34px, 5.4vw, 54px);
-  margin: 10px 0 16px;
-  text-wrap: balance;
+  font-size: clamp(2.5rem, 6vw, 4.2rem);
   color: var(--s-ink);
+  margin: 14px 0 18px;
 }
 .lead {
   margin: 0;
   font-size: clamp(16px, 1.6vw, 18px);
-  line-height: 1.6;
+  line-height: 1.65;
   color: var(--s-ink-2);
-  max-width: 66ch;
+  max-width: 62ch;
   text-wrap: pretty;
 }
 
-.foot {
-  border-top: 1px solid var(--s-line);
-  margin-top: clamp(56px, 8vw, 88px);
-  padding-top: 22px;
-  font-size: 13px;
-  line-height: 1.65;
-  color: var(--s-ink-3);
-}
-.foot a {
-  color: var(--s-primary-d);
-  font-weight: 600;
-}
-.foot a:hover {
-  text-decoration: underline;
-}
-.footLinks {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px 18px;
-  margin-bottom: 12px;
-}
-
-@media (max-width: 620px) {
-  .barLink {
-    display: none;
+@media (max-width: 760px) {
+  .main {
+    padding-inline: 18px;
+    padding-top: 112px;
   }
 }
