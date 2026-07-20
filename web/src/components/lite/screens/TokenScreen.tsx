@@ -1,6 +1,6 @@
 "use client";
 
-// $MONVERA — the in-app token page. Live price + DexScreener chart, the real
+// $MONVERA — the in-app token page. Live price + GeckoTerminal chart, the real
 // stats (mkt cap / liquidity / 24h volume), the 100k holder gate toward Scan to
 // Buy, and gasless buy / drip-bootstrapped sell over the Uniswap v2 route (see
 // useMonveraSwap). Below the fold: the six content tabs (synced from the
@@ -179,7 +179,7 @@ export function TokenScreen({
       {/* links */}
       <div style={{ display: "flex", gap: 10, padding: "22px 22px 0" }}>
         <LinkPill href={MONVERA_LINKS.virtuals} label="Virtuals" />
-        <LinkPill href={MONVERA_LINKS.dexscreener} label="DexScreener" />
+        <LinkPill href={MONVERA_LINKS.geckoterminal} label="GeckoTerminal" />
         <LinkPill href={MONVERA_LINKS.blockscoutToken} label="Blockscout" />
       </div>
 

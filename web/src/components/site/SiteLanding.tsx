@@ -25,9 +25,9 @@ import { MonveraIcon } from "@/components/design";
 const TOKEN_CA = "0x7541872e32Bb529d7FF11D6C59832269ce33a6FF";
 const TOKEN_BUY_URL = "https://app.virtuals.io/virtuals/105667";
 const TOKEN_EXPLORER_URL = `https://robinhoodchain.blockscout.com/token/${TOKEN_CA}`;
-// DexScreener resolves a token address to its most-liquid pair, so point at the
+// GeckoTerminal resolves a token address to its most-liquid pair, so point at the
 // real $MONVERA contract (not a stale/wrong pool address) for the live chart.
-const TOKEN_DEXSCREENER_URL = `https://dexscreener.com/robinhood/${TOKEN_CA}`;
+const TOKEN_CHART_URL = `https://www.geckoterminal.com/robinhood/pools/0x502Be3da0Ad1c83C79A9e64Ac5A05eEc39A44c78`;
 import { DemoMount } from "@/components/demo/DemoMount";
 import type { DemoPlay } from "@/components/demo/DemoProvider";
 import { ROADMAP } from "@/lib/roadmap";
@@ -459,7 +459,7 @@ export function SiteLanding({
                 <a className={`${s.btn} ${s.btnLg} ${s.btnOnDark}`} href={TOKEN_BUY_URL} target="_blank" rel="noreferrer">
                   Buy on Virtuals <ArrowUpRight size={18} strokeWidth={2.2} />
                 </a>
-                <a className={`${s.btn} ${s.btnLg} ${s.btnGhostOnDark}`} href={TOKEN_DEXSCREENER_URL} target="_blank" rel="noreferrer">
+                <a className={`${s.btn} ${s.btnLg} ${s.btnGhostOnDark}`} href={TOKEN_CHART_URL} target="_blank" rel="noreferrer">
                   Live chart <ArrowUpRight size={18} strokeWidth={2.2} />
                 </a>
               </div>

@@ -21,7 +21,7 @@ export const metadata: Metadata = pageMeta({
 const EXPLORER = "https://robinhoodchain.blockscout.com";
 const POOL = "0x502Be3da0Ad1c83C79A9e64Ac5A05eEc39A44c78";
 const MONVERA_CA = "0x7541872e32Bb529d7FF11D6C59832269ce33a6FF";
-const DEXSCREENER_EMBED = `https://dexscreener.com/robinhood/${POOL}?embed=1&theme=dark&info=0&trades=0`;
+const CHART_EMBED = `https://www.geckoterminal.com/robinhood/pools/${POOL}?embed=1&info=0&swaps=0&light_chart=0`;
 
 const usd = (n: number, dp = 2) => `$${n.toLocaleString("en-US", { minimumFractionDigits: dp, maximumFractionDigits: dp })}`;
 const num = (n: number) => n.toLocaleString("en-US", { maximumFractionDigits: 0 });
@@ -127,7 +127,7 @@ export default async function BuybackPage() {
       {/* market */}
       <h2 className={s.sectionHead}>$MONVERA market</h2>
       <div className={s.chart}>
-        <iframe title="DexScreener $MONVERA chart" src={DEXSCREENER_EMBED} />
+        <iframe title="GeckoTerminal $MONVERA chart" src={CHART_EMBED} />
       </div>
       <p className={s.chartNote}>Live $MONVERA / VIRTUAL market on Robinhood Chain. Each buyback above is executed against this pool.</p>
 

@@ -21,6 +21,7 @@ import { STOCKS, ETFS } from "@/lib/tokens";
 import { verifyRequest } from "@/lib/server/privyAuth";
 import { rateLimit, clientIp } from "@/lib/server/rateLimit";
 import { unauthorized, tooManyRequests, jsonError } from "@/lib/server/respond";
+import { lockedSet } from "@/lib/server/tradability";
 
 export const dynamic = "force-dynamic";
 
@@ -382,9 +383,13 @@ export async function POST(req: NextRequest) {
   try {
     const text = await callVision(provider, image);
     const parsed = extractJson(text) as Record<string, unknown>;
+    // Drop any company the venues can't currently trade BOTH ways. Scan used to
+    // offer names that then failed at invest time — a scan result the user
+    // cannot act on is worse than a shorter, honest one.
+    const locked = await lockedSet().catch(() => new Set<string>());
     const result: ScanResult = {
       recognized: parseRecognized(parsed.recognized),
-      connections: parseConnections(parsed.connections),
+      connections: parseConnections(parsed.connections).filter((c) => !locked.has(c.symbol)),
     };
     return Response.json(result);
   } catch (err) {

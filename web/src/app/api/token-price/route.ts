@@ -1,4 +1,4 @@
-// GET /api/token-price — live $MONVERA stats proxied from DexScreener (main
+// GET /api/token-price — live $MONVERA stats from the GeckoTerminal pool (main
 // MONVERA/VIRTUAL v2 pool). Cached ~60s module-side and at the edge; on upstream
 // failure the last good value is served stale so the Home pill never flashes 0.
 // Public (pre-login pill on Home) but rate-limited per IP.
@@ -9,7 +9,12 @@ import { tooManyRequests, serverError } from "@/lib/server/respond";
 
 export const revalidate = 0;
 
-const PAIR_URL = `https://api.dexscreener.com/latest/dex/pairs/robinhood/${MONVERA_PAIR}`;
+// GeckoTerminal's pool API, keyed through CoinGecko when a key is set — the
+// unkeyed host rate-limits per IP and Workers share egress IPs. Same source as
+// the token chart and lib/server/monveraPrice, so every $MONVERA number the app
+// shows comes from one place and they cannot disagree.
+const CG_URL = `https://api.coingecko.com/api/v3/onchain/networks/robinhood/pools/${MONVERA_PAIR}`;
+const GT_URL = `https://api.geckoterminal.com/api/v2/networks/robinhood/pools/${MONVERA_PAIR}`;
 
 interface TokenPrice {
   priceUsd: number;
@@ -34,25 +39,35 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const res = await fetch(PAIR_URL, { signal: AbortSignal.timeout(8_000) });
-    if (!res.ok) throw new Error(`dexscreener ${res.status}`);
+    const key = process.env.COINGECKO_API_KEY;
+    const res = await fetch(key ? CG_URL : GT_URL, {
+      headers: { accept: "application/json", ...(key ? { "x-cg-demo-api-key": key } : {}) },
+      signal: AbortSignal.timeout(8_000),
+    });
+    if (!res.ok) throw new Error(`${key ? "coingecko" : "geckoterminal"} ${res.status}`);
     const json = (await res.json()) as {
-      pair?: {
-        priceUsd?: string;
-        priceChange?: { h24?: number };
-        marketCap?: number;
-        liquidity?: { usd?: number };
-        volume?: { h24?: number };
-      } | null;
+      data?: {
+        attributes?: {
+          base_token_price_usd?: string;
+          price_change_percentage?: { h24?: string | number };
+          market_cap_usd?: string | null;
+          fdv_usd?: string | null;
+          reserve_in_usd?: string | null;
+          volume_usd?: { h24?: string | number };
+        };
+      };
     };
-    const p = json.pair;
-    if (!p?.priceUsd) throw new Error("dexscreener: no pair data");
+    const a = json.data?.attributes;
+    const priceUsd = Number(a?.base_token_price_usd);
+    if (!Number.isFinite(priceUsd) || priceUsd <= 0) throw new Error("pool: no usable price");
     const body: TokenPrice = {
-      priceUsd: Number(p.priceUsd),
-      change24h: p.priceChange?.h24 ?? 0,
-      marketCap: p.marketCap ?? 0,
-      liquidityUsd: p.liquidity?.usd ?? 0,
-      volume24h: p.volume?.h24 ?? 0,
+      priceUsd,
+      change24h: Number(a?.price_change_percentage?.h24 ?? 0) || 0,
+      // market_cap_usd is null for tokens without a circulating-supply source;
+      // FDV is the honest stand-in rather than showing zero.
+      marketCap: Number(a?.market_cap_usd ?? a?.fdv_usd ?? 0) || 0,
+      liquidityUsd: Number(a?.reserve_in_usd ?? 0) || 0,
+      volume24h: Number(a?.volume_usd?.h24 ?? 0) || 0,
       asOf: new Date().toISOString(),
     };
     cache = { at: now, body };

@@ -10,14 +10,21 @@ import { ALL_ASSETS } from "@/lib/tokens";
 import { displayFor } from "@/lib/displayAssets";
 import { resolveAllocationModel } from "./aiModel";
 import { universeStatsBlock } from "./quant";
+import { lockedSet } from "./tradability";
 import { liquidSymbols } from "./arcus";
 
 // Only assets that are actually buyable in one tap (exclude `coming` tiers).
 const BUYABLE = ALL_ASSETS.filter((a) => !displayFor(a.symbol).coming);
 const ALLOWED_SYMBOLS = new Set(BUYABLE.map((a) => a.symbol));
 
-function systemPrompt(statsBlock: string | null): string {
-  const universeStr = BUYABLE.map((a) => `${a.symbol} — ${a.name} [${a.tier}]`).join("; ");
+function systemPrompt(statsBlock: string | null, locked: Set<string>): string {
+  // Locked names are removed from the universe the model can even SEE. The
+  // downstream filterTradable gate would drop them anyway, but a plan that
+  // silently loses a leg after the user reads it is a bad experience — better
+  // that the name never appears.
+  const universeStr = BUYABLE.filter((a) => !locked.has(a.symbol))
+    .map((a) => `${a.symbol} — ${a.name} [${a.tier}]`)
+    .join("; ");
   return [
     "You are Vera, Monvera's AI broker on Robinhood Chain.",
     "You turn a person's plain-language goal into a concrete portfolio of REAL tokenized assets they can buy in one tap.",
@@ -88,14 +95,19 @@ export async function buildAllocation(
 ): Promise<Allocation> {
   // Real market stats for the whole universe (cached 6h). Best-effort: a Yahoo
   // outage degrades Vera to judgment-only, it never blocks the plan.
-  const statsBlock = await universeStatsBlock(BUYABLE.map((a) => a.symbol)).catch(() => null);
+  // Names with no two-way venue route are excluded from the prompt universe up
+  // front (see systemPrompt) so the model cannot pick one.
+  const locked = await lockedSet().catch(() => new Set<string>());
+  const statsBlock = await universeStatsBlock(
+    BUYABLE.filter((a) => !locked.has(a.symbol)).map((a) => a.symbol),
+  ).catch(() => null);
 
   let object: Allocation;
   try {
     ({ object } = await generateObject({
       model: resolveAllocationModel(),
       schema: AllocationSchema,
-      system: systemPrompt(statsBlock),
+      system: systemPrompt(statsBlock, locked),
       prompt: [
         `Goal: ${goal}`,
         `Amount to invest: $${amountUsd}`,

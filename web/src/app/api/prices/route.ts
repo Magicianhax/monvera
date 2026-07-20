@@ -28,7 +28,10 @@ const publicClient = createPublicClient({
     contracts: { multicall3: { address: MULTICALL3 } },
   },
   batch: { multicall: { wait: 16 } },
-  transport: http(RPC_URL),
+  // Explicit ceiling: viem's default retries can stack a slow RPC into a
+  // multi-second hang, and this route sits on the app's critical path (every
+  // screen prices from it). Measured 5.8s TTFB in production without it.
+  transport: http(RPC_URL, { timeout: 4_000, retryCount: 1, retryDelay: 200 }),
 });
 
 export async function GET(req: NextRequest) {

@@ -13,7 +13,7 @@ export const DOCS_URL = "https://docs.monvera.best";
 export const X_URL = "https://x.com/monvera_best";
 export const TOKEN_CA = "0x7541872e32Bb529d7FF11D6C59832269ce33a6FF";
 export const VIRTUALS_URL = "https://app.virtuals.io/virtuals/105667";
-export const DEX_URL = "https://dexscreener.com/robinhood/0x721d6F589364ea0361c497A6494Ccb3B30ec5635";
+export const DEX_URL = "https://www.geckoterminal.com/robinhood/pools/0x502Be3da0Ad1c83C79A9e64Ac5A05eEc39A44c78";
 export const TOKEN_EXPLORER_URL = `https://robinhoodchain.blockscout.com/token/${TOKEN_CA}`;
 export const VERA_CONTRACT_URL =
   "https://robinhoodchain.blockscout.com/address/0x7ff1a5ee19330c165146488a7ad8af6cb41da1df";
@@ -47,7 +47,7 @@ const FOOT_RESOURCES = [
 ];
 const FOOT_TOKEN = [
   { label: "$MONVERA on Virtuals", href: VIRTUALS_URL, external: true },
-  { label: "Chart on Dexscreener", href: DEX_URL, external: true },
+  { label: "Chart on GeckoTerminal", href: DEX_URL, external: true },
   { label: "Token on Blockscout", href: TOKEN_EXPLORER_URL, external: true },
 ];
 

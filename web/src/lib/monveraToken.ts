@@ -52,11 +52,14 @@ export function applySlippage(amount: bigint, bps = 300): bigint {
   return (amount * (BigInt(10_000) - BigInt(bps))) / BigInt(10_000);
 }
 
+// GeckoTerminal, not DexScreener: it is the same source the token chart already
+// reads (CoinGecko's on-chain API), so the linked page and our own numbers can
+// never disagree — and it needs no paid verification to show the pair properly.
 export const MONVERA_LINKS = {
   virtuals: "https://app.virtuals.io/virtuals/105667",
-  dexscreener: "https://dexscreener.com/robinhood/0x502Be3da0Ad1c83C79A9e64Ac5A05eEc39A44c78",
+  geckoterminal: "https://www.geckoterminal.com/robinhood/pools/0x502Be3da0Ad1c83C79A9e64Ac5A05eEc39A44c78",
   chartEmbed:
-    "https://dexscreener.com/robinhood/0x502Be3da0Ad1c83C79A9e64Ac5A05eEc39A44c78?embed=1&theme=dark&trades=0&info=0",
+    "https://www.geckoterminal.com/robinhood/pools/0x502Be3da0Ad1c83C79A9e64Ac5A05eEc39A44c78?embed=1&info=0&swaps=0&light_chart=0",
   blockscoutToken:
     "https://robinhoodchain.blockscout.com/token/0x7541872e32Bb529d7FF11D6C59832269ce33a6FF",
 } as const;

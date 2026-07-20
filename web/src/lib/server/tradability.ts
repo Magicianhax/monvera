@@ -42,8 +42,41 @@ async function probeVenues(sellToken: Address, buyToken: Address, sellRaw: bigin
   return out;
 }
 
+// ── the locked list is AUTHORITATIVE ────────────────────────────────────────
+// The hourly sweep (cron -> KV, with 2-miss hysteresis) is the same source the
+// market UI and order ticket use to lock a name. Plan building used to consult
+// only live probes, so a name the UI showed as locked could still land in a
+// plan — SOXX did exactly that, and its leg died at invest time. Whatever the
+// sweep locked stays locked here; a live probe can never override it.
+let lockedCache: { at: number; set: Set<string> } | null = null;
+const LOCKED_TTL_MS = 60_000;
+
+/** The locked set, for callers that need it before probing (e.g. the plan
+ *  builder trims its prompt universe with it). */
+export async function lockedSet(): Promise<Set<string>> {
+  return lockedSymbols();
+}
+
+async function lockedSymbols(): Promise<Set<string>> {
+  if (lockedCache && Date.now() - lockedCache.at < LOCKED_TTL_MS) return lockedCache.set;
+  let set = new Set<string>();
+  try {
+    const { getCloudflareContext } = await import("@opennextjs/cloudflare");
+    const env = getCloudflareContext().env as { KV?: { get(k: string): Promise<string | null> } };
+    const raw = await env.KV?.get(TRADABILITY_KV_KEY);
+    if (raw) set = new Set((JSON.parse(raw) as { dropped?: string[] }).dropped ?? []);
+  } catch {
+    // No KV (local dev) or a bad read: fall through to live probes only. The
+    // sweep is a safety net over probing, never the sole gate.
+  }
+  lockedCache = { at: Date.now(), set };
+  return set;
+}
+
 /** True when some venue can fill a $15 buy of `symbol` AND sell it back. */
 export async function isTradable(symbol: string): Promise<boolean> {
+  if ((await lockedSymbols()).has(symbol.toUpperCase())) return false;
+
   const hit = cache.get(symbol);
   if (hit && Date.now() - hit.at < TTL_MS) return hit.ok;
 
@@ -122,7 +155,16 @@ export async function indicativeQuote(symbol: string, side: "buy" | "sell", usdA
 
 /** Partition symbols into live-tradable vs dead, probing all in parallel. */
 export async function filterTradable(symbols: string[]): Promise<{ ok: string[]; dropped: string[] }> {
-  const results = await Promise.all(symbols.map(async (s) => ({ s, ok: await isTradable(s).catch(() => true) })));
+  const locked = await lockedSymbols();
+  const results = await Promise.all(
+    symbols.map(async (s) => ({
+      s,
+      // A locked name is never kept. Otherwise fail OPEN on a probe error: a
+      // flaky venue must not empty someone's plan — but it must not resurrect
+      // a name the sweep already locked either.
+      ok: locked.has(s.toUpperCase()) ? false : await isTradable(s).catch(() => true),
+    })),
+  );
   return {
     ok: results.filter((r) => r.ok).map((r) => r.s),
     dropped: results.filter((r) => !r.ok).map((r) => r.s),

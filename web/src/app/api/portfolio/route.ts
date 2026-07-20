@@ -169,7 +169,7 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    // $MONVERA — priced off its DEX pool (DexScreener, cached), 1D move from
+    // $MONVERA — priced off its DEX pool (GeckoTerminal, cached), 1D move from
     // the same source. No spark series exists for it; the row shows without one.
     const monveraRead = results[results.length - 1];
     const monveraRaw = monveraRead.status === "success" ? (monveraRead.result as bigint) : BigInt(0);

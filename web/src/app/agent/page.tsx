@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { pageMeta } from "@/lib/seo";
 import { ArrowUpRight } from "lucide-react";
 import { getVeraRecordServer, getReputationServer } from "@/lib/server/executorLogs";
+import { withTimeout } from "@/lib/server/withTimeout";
 import { VERA } from "@/lib/veraData";
 import { asset } from "@/lib/assets";
 import { addressUrl, txUrl, shortAddress, usd, riskLabel } from "@/lib/format";
@@ -42,10 +43,15 @@ function Stat({ label, value, accent }: { label: string; value: string; accent?:
   );
 }
 
+// A hung chain scan must not blank this page (same failure the landing hit).
+// Honest zeros render the existing empty state, which already says "no plans
+// recorded yet" rather than inventing numbers.
+const EMPTY_RECORD = { totalRecommendations: 0, totalExecutedUsd: 0, executedCount: 0, recentRecommendations: [] };
+
 export default async function AgentPage() {
   const [record, reputation] = await Promise.all([
-    getVeraRecordServer(),
-    getReputationServer().catch(() => null),
+    withTimeout(getVeraRecordServer().catch(() => EMPTY_RECORD), 3000, EMPTY_RECORD, "agent:veraRecord"),
+    withTimeout(getReputationServer().catch(() => null), 3000, null, "agent:reputation"),
   ]);
 
   const totalRecs = record.totalRecommendations;

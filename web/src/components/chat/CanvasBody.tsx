@@ -904,7 +904,7 @@ function TokenPanel({ nav }: { nav: ChatNav }) {
         <span style={{ flex: "none", fontWeight: 700, fontFamily: "var(--font-ui)" }}>{caCopied ? "Copied" : "Copy CA"}</span>
       </button>
       <div style={{ marginTop: 8, display: "flex", gap: 7 }}>
-        {([["Virtuals", MONVERA_LINKS.virtuals], ["DexScreener", MONVERA_LINKS.dexscreener], ["Blockscout", MONVERA_LINKS.blockscoutToken]] as const).map(([lbl, href]) => (
+        {([["Virtuals", MONVERA_LINKS.virtuals], ["GeckoTerminal", MONVERA_LINKS.geckoterminal], ["Blockscout", MONVERA_LINKS.blockscoutToken]] as const).map(([lbl, href]) => (
           <a key={lbl} href={href} target="_blank" rel="noreferrer" style={{ flex: 1, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 5, height: 36, borderRadius: 999, border: "1px solid var(--line)", fontSize: 11.5, fontWeight: 650, color: "var(--ink-2)", textDecoration: "none" }}>
             {lbl} <PIcon name="ph-arrow-square-out" size={11} weight="bold" />
           </a>

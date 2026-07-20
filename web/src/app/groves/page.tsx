@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { pageMeta } from "@/lib/seo";
 import Link from "next/link";
 import { getGroves } from "@/lib/server/groveService";
+import { withTimeout } from "@/lib/server/withTimeout";
 import { fullDiversificationUsd } from "@/lib/groves";
 import { TokenLogo } from "@/components/lite/TokenLogo";
 import { GroveCover } from "@/components/GroveCover";
@@ -25,7 +26,29 @@ export const metadata: Metadata = pageMeta({
 });
 
 export default async function GrovesPage() {
-  const data = await getGroves();
+  // Ceiling on the live layer: prices + backtests hit the network, and a hang
+  // here blanked the page. On timeout the registry still renders (compositions,
+  // weights, fees are static) — only live prices/backtests are missing.
+  const data = await withTimeout(getGroves(), 4000, null, "groves:list");
+  if (!data) {
+    return (
+      <div className={`site ${v4.root} ${s.shell}`} data-mode="dark">
+        <SiteNavV4 />
+        <main className={s.main}>
+          <header className={s.hero}>
+            <p className={v4.eyebrow}>Monvera Groves</p>
+            <h1 className={`${v4.display} ${s.h1}`}>Taking a moment</h1>
+            <p className={s.lead}>
+              Live prices are slow to answer right now. Refresh in a moment — every
+              composition and rule is also available as raw JSON at{" "}
+              <Link href="/api/groves">/api/groves</Link>.
+            </p>
+          </header>
+        </main>
+        <SiteFooterV4 />
+      </div>
+    );
+  }
   const agg = data.groves.reduce(
     (s2, g) => ({
       users: s2.users + g.stats.users,

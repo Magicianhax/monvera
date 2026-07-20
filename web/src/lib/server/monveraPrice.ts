@@ -1,10 +1,15 @@
-// $MONVERA spot price, server-side — DexScreener's main MONVERA/VIRTUAL pool
-// (the only one with real depth; see lib/monveraToken.ts). Cached ~60s per
-// isolate and stale-served on upstream failure, so a DexScreener blip never
-// breaks a caller (the portfolio just shows the last good value).
+// $MONVERA spot price, server-side — read from the MONVERA/VIRTUAL pool (the
+// only one with real depth; see lib/monveraToken.ts) via GeckoTerminal's pool
+// API. Keyed through CoinGecko when COINGECKO_API_KEY is set, because the free
+// GeckoTerminal host rate-limits per IP and Cloudflare Workers share egress
+// IPs — from a Worker the unkeyed endpoint 429s almost every time (this is the
+// same lesson the token chart learned). Cached ~60s per isolate and
+// stale-served on failure, so a blip never breaks a caller: the portfolio just
+// shows the last good value.
 import { MONVERA_PAIR } from "@/lib/monveraToken";
 
-const PAIR_URL = `https://api.dexscreener.com/latest/dex/pairs/robinhood/${MONVERA_PAIR}`;
+const CG_URL = `https://api.coingecko.com/api/v3/onchain/networks/robinhood/pools/${MONVERA_PAIR}`;
+const GT_URL = `https://api.geckoterminal.com/api/v2/networks/robinhood/pools/${MONVERA_PAIR}`;
 
 export interface MonveraSpot {
   priceUsd: number;
@@ -17,16 +22,30 @@ let cache: { at: number; spot: MonveraSpot } | null = null;
 export async function getMonveraSpot(): Promise<MonveraSpot | null> {
   const now = Date.now();
   if (cache && now - cache.at < 60_000) return cache.spot;
+  const key = process.env.COINGECKO_API_KEY;
   try {
-    const res = await fetch(PAIR_URL, { signal: AbortSignal.timeout(6_000) });
-    if (!res.ok) throw new Error(`dexscreener ${res.status}`);
+    const res = await fetch(key ? CG_URL : GT_URL, {
+      headers: {
+        accept: "application/json",
+        ...(key ? { "x-cg-demo-api-key": key } : {}),
+      },
+      signal: AbortSignal.timeout(6_000),
+    });
+    if (!res.ok) throw new Error(`${key ? "coingecko" : "geckoterminal"} ${res.status}`);
     const json = (await res.json()) as {
-      pair?: { priceUsd?: string; priceChange?: { h24?: number } } | null;
+      data?: {
+        attributes?: {
+          base_token_price_usd?: string;
+          price_change_percentage?: { h24?: string | number };
+        };
+      };
     };
-    if (!json.pair?.priceUsd) throw new Error("dexscreener: no pair data");
+    const attrs = json.data?.attributes;
+    const priceUsd = Number(attrs?.base_token_price_usd);
+    if (!Number.isFinite(priceUsd) || priceUsd <= 0) throw new Error("pool: no usable price");
     cache = {
       at: now,
-      spot: { priceUsd: Number(json.pair.priceUsd), change24h: json.pair.priceChange?.h24 ?? 0 },
+      spot: { priceUsd, change24h: Number(attrs?.price_change_percentage?.h24 ?? 0) || 0 },
     };
     return cache.spot;
   } catch {

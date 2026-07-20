@@ -15,7 +15,7 @@ import { backtestBasket } from "@/lib/server/quant";
 import { reviewPortfolio } from "@/lib/server/portfolioReview";
 import { getDaySummary } from "@/lib/server/marketData";
 import { veraKnowledgeBlock } from "@/lib/server/veraKnowledge";
-import { isTradable, filterTradable, liquidSuggestions, indicativeQuote } from "@/lib/server/tradability";
+import { isTradable, filterTradable, liquidSuggestions, indicativeQuote, lockedSet } from "@/lib/server/tradability";
 import { createAlert, listAlerts, deleteAlert, listNotifications, unreadCount, markAllRead } from "@/lib/server/notifyStore";
 import { getVeraRecordServer, getUserActivityServer, getReputationServer } from "@/lib/server/executorLogs";
 import { getAutopilot, upsertAutopilot, listRuns } from "@/lib/server/autopilotStore";
@@ -320,18 +320,25 @@ function contextBlock(ctx: VeraContext): string {
 }
 
 async function systemPrompt(ctx: VeraContext): Promise<string> {
-  const [knowledge, pulse, prices, account] = await Promise.all([
+  const [knowledge, pulse, prices, account, locked] = await Promise.all([
     veraKnowledgeBlock(),
     marketPulse(),
     pricesBlock(),
     accountBlock(ctx).catch(() => ""),
+    lockedSet().catch(() => new Set<string>()),
   ]);
+  // The live locked list, so "which assets are locked?" gets a real answer
+  // instead of "I can't hand you that from here" — the app knows exactly.
+  const lockedLine = locked.size
+    ? `LOCKED RIGHT NOW (${locked.size} names — no two-way venue route; I neither buy nor sell these, and they unlock automatically): ${[...locked].sort().join(", ")}. Everything else in the universe is tradable. When asked which are locked, list them from THIS line.`
+    : "LOCKED RIGHT NOW: none — every listed asset has a live two-way route.";
   return [
     "You are Vera, Monvera's AI broker. Warm, plain-spoken, honest; never hype, never invent numbers. You only know the numbers given below — if you don't have a figure, say so.",
     "",
     knowledge,
     "",
     "TRADABLE UNIVERSE (the only stock symbols that exist here): " + [...SYMBOLS].join(", ") + ". MONVERA is the project token (its own ticket, not a stock).",
+    lockedLine,
     pulse,
     prices,
     "",
@@ -377,7 +384,7 @@ async function systemPrompt(ctx: VeraContext): Promise<string> {
     '- Asks whether a stock is BUYABLE / has liquidity right now → {"intent":"liquidity","symbol":...}.',
     '- Asks for RANKINGS of the universe ("biggest gainers", "steadiest names", "most volatile") → {"intent":"screener","metric":"gainers"|"losers"|"steady"|"volatile"}.',
     '- Asks what an amount WOULD GET them ("what would $50 of Apple get me?") → {"intent":"quote","symbol":...,"side":...,"amountUsd":...}. A bare price question with no amount ("what\'s AAPL trading at?") → {"intent":"reply"} from LIVE PRICES.',
-    '- Asks to change THEME (dark/light) or the app COLOR → {"intent":"preference","setting":"theme"|"palette","value":...}. You cannot change anything else in settings — for key export or sign-out, open settings instead and NEVER handle the key.',
+    '- Asks to change THEME (dark/light) or the app COLOR → {"intent":"preference","setting":"theme"|"palette","value":...}. Palettes: emerald|sapphire|violet|amber|rose|slate. Merely ASKING which colors/themes exist → {"intent":"reply"} naming the mode pair AND all six palettes — never claim light/dark are the only choices. You cannot change anything else in settings — for key export or sign-out, open settings instead and NEVER handle the key.',
     '- Anything else (greetings, thanks, chit-chat, unclear) → {"intent":"reply"} in Vera\'s voice, briefly.',
     'TIE-BREAKS: 1) Step order wins — navigation beats analysis, action beats question, data intents beat "reply". 2) Still ambiguous → the LIGHTER intent (never build_plan/review_portfolio/rebalance — those cost a second slow pass; the deep dive is one ask away). 3) Intents and targets are closed lists — never invent one; nothing fits → "reply". 4) One intent per turn: for "do X and Y" pick what they need FIRST, cover the rest in "message". 5) Follow-ups inherit context ("and Nvidia?" → same intent, new symbol; "yes/do it" → what you just offered); read RECENT CONVERSATION before falling back to "reply". 6) Never infer an amountUsd they didn\'t state — omit it; the app asks.',
     'When your reply asks the user a question, ALSO include "suggestions": 2-4 short tappable example answers (each under ~40 chars) they can pick and edit.',

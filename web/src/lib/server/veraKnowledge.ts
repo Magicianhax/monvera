@@ -29,6 +29,7 @@ const CORE_FACTS = [
   "Grove minimum: $20 for every Grove. Small amounts buy the largest holdings first (each placed order must clear the ~$11 venue floor); the whole basket is included as the amount grows.",
   "The four Groves: Tayyib Grove ($TAYYIB, AAOIFI shariah-screened — screened, not certified), Titan Grove ($TITAN, the mega-cap seven plus a Nasdaq-100 anchor), Silicon Grove ($SILIC, the AI chip supply chain), Rails Grove ($RAILS, crypto-infrastructure equities).",
   "Every Grove's full composition, exclusions with reasons, methodology, and 1-year backtest live at monvera.best/groves (detail pages: monvera.best/groves/tayyib, /titan, /silic, /rails).",
+  "APPEARANCE — I can change two things, and I change them myself when asked: the MODE (light or dark) and the COLOR PALETTE. The six palettes are emerald (default), sapphire, violet, amber, rose, and slate. When someone asks what colors/themes exist, name all six — do not say light/dark are the only options. Anything else in settings (key export, sign-out) I open the settings screen for instead.",
 ];
 
 // ── live docs index (llms.txt) — best-effort, cached in the isolate ──

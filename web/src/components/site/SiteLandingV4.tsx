@@ -404,7 +404,7 @@ export function SiteLandingV4({
                 Virtuals <External />
               </a>
               <a className={s.tokenLink} href={DEX_URL} target="_blank" rel="noopener noreferrer">
-                Dexscreener <External />
+                GeckoTerminal <External />
               </a>
               <a className={s.tokenLink} href={TOKEN_EXPLORER_URL} target="_blank" rel="noopener noreferrer">
                 Blockscout <External />
