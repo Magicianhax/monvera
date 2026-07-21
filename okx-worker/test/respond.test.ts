@@ -3,7 +3,7 @@ import { json, errorJson } from "../src/respond";
 test("json sets content-type and status", async () => {
   const r = json({ ok: true }, { status: 201 });
   expect(r.status).toBe(201);
-  expect(r.headers.get("content-type")).toBe("application/json");
+  expect(r.headers.get("content-type")).toBe("application/json; charset=utf-8");
   expect(await r.json()).toEqual({ ok: true });
 });
 

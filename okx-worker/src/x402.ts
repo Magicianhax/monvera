@@ -12,7 +12,7 @@ import { OKXFacilitatorClient } from "@okxweb3/app-x402-core/facilitator";
 import { ExactEvmScheme } from "@okxweb3/x402-evm/exact/server";
 import type { Env } from "./env";
 import { PARAM_SPECS } from "./precheck";
-import { BASE_URL, DOCS_URL, LLMS_URL, PREREQUISITES } from "./respond";
+import { BASE_URL, DOCS_URL, LLMS_URL, PREREQUISITES, jsonHeaders } from "./respond";
 
 export const XLAYER_NETWORK = "eip155:196" as const;
 export const USDT0_XLAYER = "0x779ded0c9e1022225f8e0630b35a9b54be713736";
@@ -235,7 +235,7 @@ export function decodeBase64Json(b64: string): unknown {
  *  All enrichment (params schema, signing contract, prerequisites) lives in
  *  the BODY only, which is informational and never round-tripped. */
 function enrichChallenge(instructions: ResponseInstructions, path: string, env: Env, missing: string[]): Response {
-  const headers: Record<string, string> = { ...instructions.headers, "content-type": "application/json" };
+  const headers = jsonHeaders(instructions.headers);
   const challengeB64 = instructions.headers["PAYMENT-REQUIRED"] ?? instructions.headers["payment-required"];
   const entry = challengeEntryFor(path, env.PAY_TO_ADDRESS);
   let decoded: unknown = null;
@@ -268,10 +268,12 @@ function enrichChallenge(instructions: ResponseInstructions, path: string, env: 
 
 function toResponse(instructions: ResponseInstructions): Response {
   const { status, headers, body, isHtml } = instructions;
-  return new Response(isHtml ? String(body ?? "") : JSON.stringify(body ?? {}), {
-    status,
-    headers: { ...headers, "content-type": isHtml ? "text/html" : "application/json" },
-  });
+  if (isHtml) {
+    const htmlHeaders = new Headers(headers);
+    htmlHeaders.set("content-type", "text/html; charset=utf-8");
+    return new Response(String(body ?? ""), { status, headers: htmlHeaders });
+  }
+  return new Response(JSON.stringify(body ?? {}), { status, headers: jsonHeaders(headers) });
 }
 
 function payerFrom(payload: Record<string, unknown>): string {
@@ -318,7 +320,7 @@ export async function verifyAndSettle(request: Request, env: Env, missingParams:
           hint: "The envelope must be base64(JSON { x402Version: 2, accepted: <accepts[0] copied VERBATIM from the PAYMENT-REQUIRED challenge>, payload: { authorization, signature }, resource }). Re-probe this URL for the challenge and its signing block, then sign again.",
           docs: LLMS_URL,
         }),
-        { status: 400, headers: { "content-type": "application/json" } }
+        { status: 400, headers: jsonHeaders() }
       ),
     };
   }
@@ -350,7 +352,7 @@ export async function verifyAndSettle(request: Request, env: Env, missingParams:
             hint: "Re-probe this URL for a fresh challenge and sign again with a NEW nonce. If your wallet shows a completed transfer anyway, retry this exact request with the SAME PAYMENT-SIGNATURE — redelivery is free.",
             docs: LLMS_URL,
           }),
-          { status: 402, headers: { "content-type": "application/json" } }
+          { status: 402, headers: jsonHeaders() }
         ),
       };
     }
@@ -371,7 +373,7 @@ export async function verifyAndSettle(request: Request, env: Env, missingParams:
               hint: "Re-probe this URL without PAYMENT-SIGNATURE for a fresh PAYMENT-REQUIRED challenge and sign again with a NEW nonce.",
               docs: LLMS_URL,
             }),
-            { status: 402, headers: { "content-type": "application/json" } }
+            { status: 402, headers: jsonHeaders() }
           ),
         };
       }
@@ -392,7 +394,7 @@ export async function verifyAndSettle(request: Request, env: Env, missingParams:
         nonceUsed: false,
         response: new Response(JSON.stringify({ error: settled.error ?? "settlement failed", charged: false }), {
           status: 402,
-          headers: { "content-type": "application/json", ...(settled.headers ?? {}) },
+          headers: jsonHeaders(settled.headers ?? {}),
         }),
       };
     }

@@ -38,11 +38,23 @@ export function withCors(response: Response): Response {
   return out;
 }
 
+export const JSON_CONTENT_TYPE = "application/json; charset=utf-8";
+
+/**
+ * Headers with exactly one content-type. Callers merge SDK-supplied headers that
+ * may spell it `Content-Type`; plain-object spread keeps both casings (JS keys are
+ * case-sensitive) and Headers then serialises them as a comma list. `.set()` is
+ * case-insensitive, so it collapses the duplicate. The explicit charset keeps
+ * non-ASCII copy (— · ₮) from being decoded as latin-1 by lenient clients.
+ */
+export function jsonHeaders(extra: HeadersInit = {}): Headers {
+  const headers = new Headers(extra);
+  headers.set("content-type", JSON_CONTENT_TYPE);
+  return headers;
+}
+
 export function json(data: unknown, init: ResponseInit = {}): Response {
-  return new Response(JSON.stringify(data), {
-    ...init,
-    headers: { "content-type": "application/json", ...(init.headers ?? {}) },
-  });
+  return new Response(JSON.stringify(data), { ...init, headers: jsonHeaders(init.headers) });
 }
 
 export interface ErrorExtras {

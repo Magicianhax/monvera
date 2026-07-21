@@ -49,6 +49,20 @@ test("valid paid request without payment gets 402 + challenge header", async () 
   );
   expect(r.status).toBe(402);
   expect(r.headers.get("PAYMENT-REQUIRED")).toBeTruthy();
+  // exactly one content-type, with a charset: a duplicated header (the SDK spells
+  // it `Content-Type`, we spelled it `content-type`) serialises as a comma list
+  // and makes lenient clients decode non-ASCII copy as latin-1.
+  expect(r.headers.get("content-type")).toBe("application/json; charset=utf-8");
+});
+
+test("free and paid responses carry exactly one utf-8 content-type", async () => {
+  mockFetch((url) => (url.includes("/pay/x402/supported") ? supportedResponse() : null));
+  const catalog = await route(new Request("https://asp.example/"), env, ctx);
+  const gated = await route(new Request("https://asp.example/v1/research", { method: "POST" }), env, ctx);
+  const missing = await route(new Request("https://asp.example/nope"), env, ctx);
+  for (const r of [catalog, gated, missing]) {
+    expect(r.headers.get("content-type")).toBe("application/json; charset=utf-8");
+  }
 });
 
 test("signed malformed request is rejected BEFORE the payment gate (no charge)", async () => {

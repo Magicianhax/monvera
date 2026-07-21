@@ -9,7 +9,7 @@
 // re-retrieval right). Failure bodies are NEVER cached.
 import type { Env } from "./env";
 import { verifyAndSettle, type SettleOutcome } from "./x402";
-import { errorJson, DOCS_URL } from "./respond";
+import { errorJson, DOCS_URL, jsonHeaders } from "./respond";
 
 const LEDGER_TTL_S = 24 * 60 * 60;
 
@@ -82,7 +82,7 @@ export async function gatePayment(
       kind: "replay",
       cached: new Response(entry.body, {
         status: 200,
-        headers: { "content-type": "application/json", "X-Idempotent-Replay": "true", ...(entry.responseHeaders ?? {}) },
+        headers: jsonHeaders({ "X-Idempotent-Replay": "true", ...(entry.responseHeaders ?? {}) }),
       }),
     };
   }
@@ -105,7 +105,7 @@ export async function gatePayment(
           kind: "replay",
           cached: new Response(retry.body, {
             status: 200,
-            headers: { "content-type": "application/json", "X-Idempotent-Replay": "true", ...(retry.responseHeaders ?? {}) },
+            headers: jsonHeaders({ "X-Idempotent-Replay": "true", ...(retry.responseHeaders ?? {}) }),
           }),
         };
       }
