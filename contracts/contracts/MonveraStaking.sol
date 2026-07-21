@@ -42,10 +42,22 @@ contract MonveraStaking is ReentrancyGuard {
     /// @notice Sum of all pending (cooling-down) balances.
     uint256 public totalPending;
 
+    /// @dev Global stake-time accumulator: Σ(totalStaked × seconds), in
+    /// token-seconds (18dp × s). With supply ≤ 1e27 raw units this cannot
+    /// overflow uint256 within any plausible lifetime.
+    uint256 private _totalWeight;
+    uint64 private _totalWeightAt;
+
     struct Account {
         uint256 staked;
         uint256 pending;
         uint64 unlockAt;
+        /// @dev Per-user stake-time accumulator (token-seconds) + checkpoint.
+        /// Season rewards divide a user's accrued token-time over everyone's:
+        /// this is the ENTIRE reward formula, computed by the chain itself.
+        /// Pending (cooling-down) amounts deliberately accrue nothing.
+        uint256 weight;
+        uint64 weightAt;
     }
 
     mapping(address => Account) private _accounts;
@@ -72,6 +84,18 @@ contract MonveraStaking is ReentrancyGuard {
         cooldown = cooldown_;
     }
 
+    // ---------------------------------------------------------------- accrual
+
+    /// @dev Roll both accumulators forward to now. Every staked-balance change
+    /// MUST be preceded by this, so weights integrate the balance that was
+    /// actually held over each interval.
+    function _accrue(Account storage a) internal {
+        if (a.weightAt != 0) a.weight += a.staked * (block.timestamp - a.weightAt);
+        a.weightAt = uint64(block.timestamp);
+        if (_totalWeightAt != 0) _totalWeight += totalStaked * (block.timestamp - _totalWeightAt);
+        _totalWeightAt = uint64(block.timestamp);
+    }
+
     // ---------------------------------------------------------------- actions
 
     /// @notice Stake `amount` of $MONVERA. Credited by measured delta.
@@ -82,6 +106,7 @@ contract MonveraStaking is ReentrancyGuard {
         uint256 credited = token.balanceOf(address(this)) - before;
         if (credited == 0) revert ZeroAmount();
         Account storage a = _accounts[msg.sender];
+        _accrue(a);
         a.staked += credited;
         totalStaked += credited;
         emit Staked(msg.sender, credited, a.staked);
@@ -93,6 +118,7 @@ contract MonveraStaking is ReentrancyGuard {
         if (amount == 0) revert ZeroAmount();
         Account storage a = _accounts[msg.sender];
         if (a.staked < amount) revert InsufficientStaked(amount, a.staked);
+        _accrue(a);
         a.staked -= amount;
         a.pending += amount;
         a.unlockAt = uint64(block.timestamp + cooldown);
@@ -102,11 +128,12 @@ contract MonveraStaking is ReentrancyGuard {
     }
 
     /// @notice Put the whole pending amount back into the stake (changed your
-    /// mind). Clears the timer.
+    /// mind). Clears the timer. The cooled-down interval earned no weight.
     function cancelUnstake() external nonReentrant {
         Account storage a = _accounts[msg.sender];
         uint256 amount = a.pending;
         if (amount == 0) revert NothingPending();
+        _accrue(a);
         a.pending = 0;
         a.unlockAt = 0;
         a.staked += amount;
@@ -140,5 +167,22 @@ contract MonveraStaking is ReentrancyGuard {
     function pendingOf(address user) external view returns (uint256 amount, uint64 unlockAt) {
         Account storage a = _accounts[user];
         return (a.pending, a.unlockAt);
+    }
+
+    /// @notice A user's accrued stake-time in token-seconds, live to this
+    /// block. Season rewards = pool × (weight delta over the season) /
+    /// (total weight delta over the season) — the whole formula is this view.
+    function weightOf(address user) external view returns (uint256) {
+        Account storage a = _accounts[user];
+        uint256 w = a.weight;
+        if (a.weightAt != 0) w += a.staked * (block.timestamp - a.weightAt);
+        return w;
+    }
+
+    /// @notice Everyone's accrued stake-time in token-seconds, live.
+    function totalWeight() external view returns (uint256) {
+        uint256 w = _totalWeight;
+        if (_totalWeightAt != 0) w += totalStaked * (block.timestamp - _totalWeightAt);
+        return w;
     }
 }

@@ -32,6 +32,11 @@ const config: HardhatUserConfig = {
       chainId: 4663,
       accounts: PRIVATE_KEY ? [PRIVATE_KEY] : [],
     },
+    robinhoodTestnet: {
+      url: process.env.ROBINHOOD_TESTNET_RPC_URL ?? "https://rpc.testnet.chain.robinhood.com",
+      chainId: 46630,
+      accounts: PRIVATE_KEY ? [PRIVATE_KEY] : [],
+    },
     xlayer: {
       url: process.env.XLAYER_RPC_URL ?? "https://rpc.xlayer.tech",
       chainId: 196,
@@ -55,6 +60,14 @@ const config: HardhatUserConfig = {
         urls: {
           apiURL: "https://robinhoodchain.blockscout.com/api",
           browserURL: "https://robinhoodchain.blockscout.com",
+        },
+      },
+      {
+        network: "robinhoodTestnet",
+        chainId: 46630,
+        urls: {
+          apiURL: "https://robinhoodchain-testnet.blockscout.com/api",
+          browserURL: "https://robinhoodchain-testnet.blockscout.com",
         },
       },
     ],
