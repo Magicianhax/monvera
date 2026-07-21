@@ -35,6 +35,7 @@ import { ALL_ASSETS } from "@/lib/tokens";
 import { displayFor } from "@/lib/displayAssets";
 import { GROVES, groveLegsFor, fullDiversificationUsd, type GroveDef } from "@/lib/groves";
 import { getGroves } from "@/lib/server/groveService";
+import { withTimeout } from "@/lib/server/withTimeout";
 
 const BUYABLE = ALL_ASSETS.filter((a) => !displayFor(a.symbol).coming);
 
@@ -256,7 +257,9 @@ const priceClient = createPublicClient({
     contracts: { multicall3: { address: MULTICALL3 } },
   },
   batch: { multicall: { wait: 16 } },
-  transport: http(SERVER_RPC_URL),
+  // Same bounded transport as /api/prices: a slow RPC degrades the prompt's
+  // price block instead of holding the user's chat turn hostage.
+  transport: http(SERVER_RPC_URL, { timeout: 4_000, retryCount: 1, retryDelay: 200 }),
 });
 
 /** Live spot prices for the whole universe + $MONVERA — so Vera can quote real numbers. */
@@ -320,12 +323,15 @@ function contextBlock(ctx: VeraContext): string {
 }
 
 async function systemPrompt(ctx: VeraContext): Promise<string> {
+  // Every block is best-effort AND deadlined: a try/catch stops a rejection,
+  // but a promise that never settles (hung RPC, stalled fetch) would stall the
+  // WHOLE turn past the client's patience — the "Almost there..." forever bug.
   const [knowledge, pulse, prices, account, locked] = await Promise.all([
-    veraKnowledgeBlock(),
-    marketPulse(),
-    pricesBlock(),
-    accountBlock(ctx).catch(() => ""),
-    lockedSet().catch(() => new Set<string>()),
+    withTimeout(veraKnowledgeBlock(), 5_000, "PRODUCT FACTS unavailable right now.", "vera.knowledge"),
+    withTimeout(marketPulse(), 5_000, "Live day moves are unavailable right now — say so if asked about today's market.", "vera.pulse"),
+    withTimeout(pricesBlock(), 7_000, "Live prices are unavailable right now — say so if asked for a price.", "vera.prices"),
+    withTimeout(accountBlock(ctx).catch(() => ""), 5_000, "", "vera.account"),
+    withTimeout(lockedSet().catch(() => new Set<string>()), 4_000, new Set<string>(), "vera.locked"),
   ]);
   // The live locked list, so "which assets are locked?" gets a real answer
   // instead of "I can't hand you that from here" — the app knows exactly.

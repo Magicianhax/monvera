@@ -477,9 +477,16 @@ function HoldingPanel({ symbol, nav }: { symbol: string; nav: ChatNav }) {
           </div>
         )}
       </div>
-      <button onClick={() => nav.askVera(`Add ${d.name} to a diversified plan`)} style={{ display: "flex", width: "100%", alignItems: "center", justifyContent: "center", gap: 8, height: 44, marginTop: 9, borderRadius: 14, fontSize: 13.5, fontWeight: 600, color: "var(--ink-2)", background: "none", border: "1px dashed var(--line)" }}>
-        <PIcon name="ph-sparkle" size={15} weight="fill" style={{ color: "var(--primary)" }} /> Ask Vera to add this to a plan
-      </button>
+      {/* Two ways to hand this name to Vera: buy it directly (she asks how
+          much, sized from real cash) or fold it into a diversified plan. */}
+      <div style={{ display: "flex", gap: 8, marginTop: 9 }}>
+        <button onClick={() => nav.askVera(`Buy ${d.name}`)} style={{ display: "flex", flex: 1, alignItems: "center", justifyContent: "center", gap: 8, height: 44, borderRadius: 14, fontSize: 13.5, fontWeight: 600, color: "var(--ink-2)", background: "none", border: "1px dashed var(--line)" }}>
+          <PIcon name="ph-sparkle" size={15} weight="fill" style={{ color: "var(--primary)" }} /> Ask Vera to buy this
+        </button>
+        <button onClick={() => nav.askVera(`Add ${d.name} to a diversified plan`)} style={{ display: "flex", flex: 1, alignItems: "center", justifyContent: "center", gap: 8, height: 44, borderRadius: 14, fontSize: 13.5, fontWeight: 600, color: "var(--ink-2)", background: "none", border: "1px dashed var(--line)" }}>
+          <PIcon name="ph-sparkle" size={15} weight="fill" style={{ color: "var(--primary)" }} /> Add to a plan
+        </button>
+      </div>
     </div>
   );
 }

@@ -455,7 +455,7 @@ export function GrovesPage({ groveId, autoManage, nav, onOpen, onBack, mobile = 
 }) {
   const def = groveId ? groveById(groveId) : undefined;
   const title = def ? def.name : "Groves";
-  const sub = def ? `${def.ticker} · ${def.category}` : "Curated baskets · 10% of profit at exit, the only fee";
+  const sub = def ? `${def.ticker} · ${def.category}` : "Curated baskets, straight into your wallet";
   return (
     <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
       <div style={{ flex: "none", display: "flex", alignItems: "center", gap: 12, padding: mobile ? "14px 16px" : "16px 24px", borderBottom: "1px solid var(--line)" }}>

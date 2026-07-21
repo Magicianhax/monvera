@@ -474,6 +474,10 @@ ${seller.error.slice(0, 160)}`, payload: { suggestions: ["Try again"] } }).catch
       const res = await fetch("/api/vera", {
         method: "POST",
         headers: { "content-type": "application/json", ...(await authHeader()) },
+        // A turn that never settles (hung upstream, dead worker) would leave the
+        // thinking pill spinning and the input locked FOREVER — seen in prod.
+        // The server's own inference deadline is 32s; give it headroom, then bail.
+        signal: AbortSignal.timeout(45_000),
         body: JSON.stringify({
           text,
           cashUsd: portfolio?.cashUsd,
@@ -550,7 +554,13 @@ ${seller.error.slice(0, 160)}`, payload: { suggestions: ["Try again"] } }).catch
     } catch (e) {
       stopThinking();
       const threadId = activeId ?? threadRef.current;
-      if (threadId) post({ threadId, role: "vera", content: "Something went wrong on my side just now. Give it another try in a moment." });
+      const timedOut = e instanceof Error && (e.name === "TimeoutError" || e.name === "AbortError");
+      if (threadId) post({
+        threadId, role: "vera",
+        content: timedOut
+          ? "That took longer than it should have, so I stopped waiting. Send it again — I'm still here."
+          : "Something went wrong on my side just now. Give it another try in a moment.",
+      });
       console.error("[chat] submit failed:", e instanceof Error ? e.message : e);
     }
   };
@@ -1327,8 +1337,11 @@ function PlanCard({ plan, live, canInvest, onInvest, onNudge, nav }: {
           <button onClick={onInvest} disabled={!canInvest} title={canInvest ? undefined : "Add cash to invest this plan"} style={{ flex: 1, minWidth: 150, height: 48, borderRadius: 14, fontSize: 15, fontWeight: 600, color: "var(--primary-ink)", background: "var(--primary)", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 7, opacity: canInvest ? 1 : 0.5, cursor: canInvest ? "pointer" : "default" }}>
             <PIcon name="ph-check-circle" size={17} weight="fill" /> Invest {amountStr}
           </button>
-          {/* naked hairline pills — no glass-inside-glass */}
-          {NUDGES.map(([tone, label]) => (
+          {/* naked hairline pills — no glass-inside-glass. A single-stock order
+              is the user's direct pick: "Safer/Bolder/Simpler" would re-run the
+              allocator and diversify away exactly what they asked for, so the
+              tone chips only appear on real multi-leg plans. */}
+          {plan.allocations.length > 1 && NUDGES.map(([tone, label]) => (
             <button key={tone} onClick={() => onNudge(tone)} style={{ height: 48, padding: "0 15px", border: "1px solid var(--line)", borderRadius: 14, fontSize: 13.5, fontWeight: 600, background: "transparent", color: "var(--ink-2)" }}>{label}</button>
           ))}
         </div>

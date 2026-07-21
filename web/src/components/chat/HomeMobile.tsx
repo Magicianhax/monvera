@@ -88,7 +88,7 @@ export function HomeMobile({ nav }: { nav: ChatNav }) {
       {/* groves banner — full pages INSIDE the app, not a canvas */}
       <button onClick={() => nav.openGroves()} style={{ display: "flex", alignItems: "center", gap: 11, width: "100%", padding: "11px 14px", border: "1px solid var(--line)", borderRadius: 18, background: "var(--panel)", textAlign: "left", marginTop: 10 }}>
         <span style={{ width: 32, height: 32, borderRadius: 9, flex: "none", display: "grid", placeItems: "center", background: "var(--primary-soft)", color: "var(--primary)" }}><PIcon name="ph-tree" size={17} /></span>
-        <span style={{ flex: 1, minWidth: 0 }}><span style={{ display: "block", fontSize: 13, fontWeight: 700, color: "var(--ink)" }}>Groves</span><span style={{ display: "block", fontSize: 11, color: "var(--ink-2)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>Curated baskets — 10% only on profit</span></span>
+        <span style={{ flex: 1, minWidth: 0 }}><span style={{ display: "block", fontSize: 13, fontWeight: 700, color: "var(--ink)" }}>Groves</span><span style={{ display: "block", fontSize: 11, color: "var(--ink-2)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>Curated stock baskets</span></span>
         <PIcon name="ph-caret-right" size={14} />
       </button>
 
