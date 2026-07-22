@@ -7,7 +7,7 @@ description: "POST /api/allocate turns a plain-language goal and an amount into 
 
 > `POST /api/allocate` · requires a Privy bearer token. Base URL, rate limits, and error shapes: [conventions](/dev/conventions/).
 
-Nothing is signed and nothing is spent here. Vera reasons over the buyable universe and twelve months of real price history, filters her picks to assets with live Arcus liquidity, and normalizes weights to sum to 100. A walk-forward backtest against SPY is attached when history allows. Sign the plan afterward with [`POST /api/commit-plan`](/dev/api/commit-plan/).
+Nothing is signed and nothing is spent here. Vera reasons over the buyable universe and twelve months of real price history, filters her picks to assets with a live two-way route at the venues, and normalizes weights to sum to 100. A walk-forward backtest against SPY is attached when history allows. Sign the plan afterward with [`POST /api/commit-plan`](/dev/api/commit-plan/).
 
 ## Parameters
 

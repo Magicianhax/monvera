@@ -75,7 +75,7 @@ export const TOKEN_TABS: TokenTab[] = [
       },
       {
         heading: "One tap invests it",
-        body: "Each holding is bought at a firm live quote through Arcus, the spot venue on Robinhood Chain. Gas is sponsored, so the user never pays network fees. Buys settle to the user's own wallet: self-custody, exportable key, and Monvera cannot move funds.",
+        body: "Each holding is bought at a live quote raced across every venue on Robinhood Chain — LiFi, Uniswap V4 and KyberSwap — and filled wherever the price is best. Gas is sponsored, so the user never pays network fees. Buys settle to the user's own wallet: self-custody, exportable key, and Monvera cannot move funds.",
       },
       {
         heading: "She keeps working",
@@ -87,7 +87,7 @@ export const TOKEN_TABS: TokenTab[] = [
       },
       {
         heading: "Free, honestly",
-        body: "Monvera charges no platform fee — revenue is a small venue referral on routed volume, so the app stays free for users.",
+        body: "Monvera charges no platform fee and no gas — revenue is a small routing fee built into the swap quote itself.",
       },
     ],
   },
@@ -106,7 +106,7 @@ export const TOKEN_TABS: TokenTab[] = [
       {
         heading: "Where value lands",
         bullets: [
-          "Buybacks, funded by real revenue: Monvera earns a venue referral on every dollar Vera routes, and that revenue buys back $MONVERA. More users, more volume, more buy pressure.",
+          "Buybacks, funded by real revenue: Monvera earns a routing fee on the volume Vera routes, and 20% of net revenue buys back $MONVERA. More users, more volume, more buy pressure.",
           "Pay with $MONVERA to hire Vera: she already sells portfolio construction to other agents on Virtuals ACP, and hiring her — as a person or an agent — becomes payable in $MONVERA at a discount over any other asset.",
           "Early access to everything new: Ask Vera, the daily brief, and public proof pages before public release.",
           "Holder-only theme baskets and strategies ahead of everyone else.",
@@ -172,7 +172,7 @@ export const TOKEN_TABS: TokenTab[] = [
       },
       {
         heading: "How do buybacks work?",
-        body: "Monvera earns revenue on every dollar Vera routes, and that revenue buys back $MONVERA. More volume, more buy pressure — a simple flywheel.",
+        body: "Monvera earns a routing fee on the volume Vera routes, and 20% of net revenue buys back $MONVERA — the numbers are public at monvera.best/buyback. More volume, more buy pressure — a simple flywheel.",
       },
       {
         heading: "Can I pay with $MONVERA?",

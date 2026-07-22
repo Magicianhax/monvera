@@ -45,7 +45,7 @@ export async function GET() {
   const card = {
     name: VERA.name,
     description:
-      "AI broker for real tokenized stocks on Robinhood Chain. You tell Vera a goal in plain words; she builds a diversified portfolio of tokenized stocks (traded via the Arcus spot RFQ venue), signs every recommendation with EIP-712, and places it gasless (ERC-4337). Autopilot runs the strategy on a schedule inside hard user-set bounds: amount, cadence, risk ceiling, spend cap. Every run is checked against those limits before anything signs. Non-custodial; the user holds the tokens.",
+      "AI broker for real tokenized stocks on Robinhood Chain. You tell Vera a goal in plain words; she builds a diversified portfolio of tokenized stocks (routed across LiFi, Uniswap V4 and KyberSwap), signs every recommendation with EIP-712, and places it gasless (ERC-4337). Autopilot runs the strategy on a schedule inside hard user-set bounds: amount, cadence, risk ceiling, spend cap. Every run is checked against those limits before anything signs. Non-custodial; the user holds the tokens.",
     image: "https://monvera.best/icon-512.png",
     active: true,
     persona: {

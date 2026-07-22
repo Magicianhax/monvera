@@ -27,7 +27,7 @@ export const FAQ: FaqItem[] = [
   },
   {
     q: "How much do I need to start?",
-    a: "About $20 is a comfortable start, and each stock in a plan needs roughly $11 to clear the venue minimum. No minimum balance, no paperwork, no waiting list, just a goal and a tap.",
+    a: "About $20 is a comfortable start. There's no venue minimum — any size fills — but each holding in a plan is its own sponsored transaction, so very small slices spend more on gas than they're worth. No minimum balance, no paperwork, no waiting list, just a goal and a tap.",
   },
   {
     q: "What is USDG?",

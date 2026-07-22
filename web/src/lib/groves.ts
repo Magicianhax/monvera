@@ -219,7 +219,9 @@ export function groveById(id: string): GroveDef | undefined {
   return GROVES.find((g) => g.id === id);
 }
 
-/** The ~venue floor per placed order, USD. One source for pages + chat. */
+/** Our per-leg sizing floor, USD — one source for pages + chat.
+ *  NOT a venue rule: no live venue rejects a size. Each leg is one sponsored
+ *  UserOp (~$0.075-0.09 gas), so tiny slices cost more than they're worth. */
 export const MIN_LEG_USD = 11;
 
 export interface GroveLeg {
@@ -231,7 +233,7 @@ export interface GroveLeg {
 /** The legs a buy of amountUsd actually places. Small buys CONCENTRATE: the
  *  same capAllocationLegs greedy the invest plans use keeps components by
  *  descending weight and drops the tail until every kept leg clears the ~$11
- *  venue floor at renormalized weights. Full diversification returns as the
+ *  sizing floor at renormalized weights. Full diversification returns as the
  *  amount grows (fullDiversificationUsd). One formula for pages + chat. */
 export function groveLegsFor(g: GroveDef, amountUsd: number): GroveLeg[] {
   return capAllocationLegs(

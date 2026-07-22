@@ -7,7 +7,7 @@ description: "POST /api/commit-plan returns the risk assessment Vera signs for a
 
 > `POST /api/commit-plan` · requires a Privy bearer token. Base URL, rate limits, and error shapes: [conventions](/dev/conventions/).
 
-This route signs and returns — it does not broadcast and does not return a transaction hash. The client calls `VeraRecord.record(planId, recHash, assessedRisk, maxRisk, expiry, signature, user, agentId, usdSpent, legCount)` and batches that with the Arcus settlement calls into one gas-sponsored ERC-4337 userOp, relayed via [`POST /api/pimlico`](/dev/api/pimlico/). Because the record and the buys share one atomic transaction, the assessment cannot be edited after the fact.
+This route signs and returns — it does not broadcast and does not return a transaction hash. The client calls `VeraRecord.record(planId, recHash, assessedRisk, maxRisk, expiry, signature, user, agentId, usdSpent, legCount)` and batches that with the venue settlement calls into one gas-sponsored ERC-4337 userOp, relayed via [`POST /api/pimlico`](/dev/api/pimlico/). Because the record and the buys share one atomic transaction, the assessment cannot be edited after the fact.
 
 ## Parameters
 

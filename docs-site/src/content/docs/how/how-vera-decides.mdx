@@ -28,7 +28,7 @@ Picking is judgment against your goal, constrained hard. Vera may only allocate 
 
 Sizing is the part that is not discretionary. Positions are sized inversely to volatility, so the wilder a name moves, the smaller its slice. That is why a plan built around one volatile stock still ends up with most of its weight somewhere calmer.
 
-Two things then happen before you see the draft. Any pick with no live executable quote is dropped and its weight redistributed, so Vera never proposes something that fails at invest time. And legs are capped to clear the venue minimum: you can start from $1, but each leg needs about $11, so a small amount buys fewer names rather than legs too small to fill.
+Two things then happen before you see the draft. Any pick with no live executable quote is dropped and its weight redistributed, so Vera never proposes something that fails at invest time. And legs are capped so each one is worth its own transaction: no venue rejects a size, but every leg costs gas Monvera sponsors, so a small amount buys fewer names rather than many slices too small to be worth it.
 
 <Transcript>
   <Turn who="you">Put $200 into AI companies, nothing too wild</Turn>

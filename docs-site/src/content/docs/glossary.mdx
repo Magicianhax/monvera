@@ -21,15 +21,15 @@ $MONVERA is the community's stake in Vera, launched on Virtuals Protocol on Robi
 
 ## Buy is a swap
 
-A "buy" is an on-chain swap routed through an Arcus spot RFQ quote, settling from USDG into the asset token. A "sell" swaps back to USDG. The firm quote, route, and expiry come from [`POST /api/quote`](/dev/api/quote/).
+A "buy" is an on-chain swap raced across the live venues (LI.FI, Uniswap V4 and KyberSwap) and filled wherever the price is best, settling from USDG into the asset token. A "sell" swaps back to USDG. The firm quote, route, and expiry come from [`POST /api/quote`](/dev/api/quote/).
 
 ## A company name and logo is a token
 
 The company name and logo you see is a real tokenized stock or fund: an 18-decimal ERC-20 token in the ERC-8056 family. The catalog of all 95 assets (86 stocks and 9 ETFs) with addresses is at [`/api/market`](/dev/api/market/).
 
-## Today's price is an RFQ quote
+## Today's price is a live executable quote
 
-The price shown before you trade is a firm Arcus spot RFQ quote in USDG, not an indicative feed number. Only firm quotes execute, and each carries an expiry, so a stale quote is refused at commit. Chainlink feeds (8-decimal, corporate-action adjusted) provide chart and reference prices where published. See [Where prices come from](/how/where-prices-come-from/).
+The price shown before you trade is a live executable quote in USDG, not an indicative feed number. Only firm quotes execute, and each carries an expiry, so a stale quote is refused at commit. Chainlink feeds (8-decimal, corporate-action adjusted) provide chart and reference prices where published. See [Where prices come from](/how/where-prices-come-from/).
 
 ## A plan is a basket
 

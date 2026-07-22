@@ -1,30 +1,43 @@
 ---
 title: "What it costs"
-description: "Nothing to Monvera: no platform fee, no account fee, no gas. You pay the trading venue's spread."
+description: "No platform fee, no account fee, no gas. Monvera takes a small routing fee inside the quote you approve — never on top of it."
 ---
 
 import Transcript from '../../../components/Transcript.astro';
 import Turn from '../../../components/Turn.astro';
 
-Monvera charges you nothing. The only cost in the whole flow is the trading venue's spread, and it is already inside the quote you see before you confirm.
+There is no platform fee, no account fee, and no gas fee. What Monvera does take is a small routing fee on the swap itself, and it is already inside the quote you see before you confirm — never added on top afterwards.
 
 | What | You pay |
 | --- | --- |
 | Platform fee | $0 |
 | Account fee or subscription | $0 |
 | Network (gas) fee | $0 — Monvera sponsors it |
-| Trading venue spread | The one real cost, already in your quote |
+| Monvera routing fee | 0.15%–0.25% depending on which venue wins your trade, inside the quote |
+| Trading venue spread | Set by the market, also already in your quote |
 | [Groves](/use/groves/) (when live) | $0 to enter, hold, or rebalance — 10% of realized profit, only when you exit |
 
-## The $1 minimum, and the $11 that actually matters
+## The routing fee, exactly
 
-You can start with $1. But each leg of a plan needs about $11, because that is the trading venue's minimum order size.
+Every trade is quoted across all the live venues at once and filled wherever you get the most back. What Monvera takes depends on which one wins:
 
-Both numbers are true and they pull against each other. $30 buys one name comfortably. $30 split across six names is six legs of $5, and none of them can fill. Starting small means fewer names, not thinner slices:
+| Venue | Monvera's fee |
+| --- | --- |
+| Uniswap V4 | 0.25% |
+| KyberSwap | 0.15% |
+| LI.FI | nothing — LI.FI charges its own 0.25% instead |
+
+The number you see quoted is what you get. The fee is taken out of the output before the quote is shown, so the figure you approve is the figure that lands in your wallet.
+
+## There is no minimum order
+
+You can start with $1, and there is no floor on any single trade — every venue fills any size, including selling a position worth a few cents.
+
+What is true is that very small orders are inefficient. Each holding in a plan settles as its own sponsored transaction, and Monvera pays that gas. On a $2 slice that cost is larger than the trade is worth to anyone. So a small amount buys fewer names rather than many tiny ones — not because anything would be rejected, but because it gets you more per dollar.
 
 <Transcript>
   <Turn who="you">I've only got $30 — can I do the AI basket?</Turn>
-  <Turn who="vera">Not across six names. That's $5 a leg and the venue won't fill under about $11. Two names at $15 each works — want that?</Turn>
+  <Turn who="vera">I can split $30 six ways, but each slice would be about $5 and the fees eat a real share of a slice that small. Two names at $15 each gets you more per dollar — want that instead?</Turn>
 </Transcript>
 
 ## What the spread is
@@ -37,4 +50,6 @@ Every trade on Robinhood Chain carries a network cost. Monvera pays it for you, 
 
 ## How Monvera makes money
 
-The trading venue pays Monvera a referral fee on the volume routed to it. That comes out of the venue's side rather than being added to your trade. It is the entire business model, and it is the reason there is no platform fee to charge you instead.
+The routing fee above is the business model. It is a share of the swap, it is disclosed in the quote before you confirm, and there is nothing else — no platform fee, no subscription, no payment for order flow, no charge for holding your positions.
+
+Some of that revenue buys back $MONVERA on-chain. The treasury, the exact split, and every buyback transaction are public at [monvera.best/buyback](https://monvera.best/buyback).

@@ -1,9 +1,9 @@
 ---
 title: "Get a firm price for one asset"
-description: "POST /api/quote returns a firm Arcus RFQ quote for one asset in USDG, plus the intent to sign."
+description: "POST /api/quote races the live venues for one asset in USDG and returns the winning executable quote, plus the intent to sign."
 ---
 
-`POST /api/quote` returns a firm Arcus spot RFQ quote for buying or selling one asset in USDG, along with the Permit2 typed data the taker signs and the settlement call to submit.
+`POST /api/quote` quotes every live venue (LI.FI, Uniswap V4 and KyberSwap) in parallel for buying or selling one asset in USDG, returns the biggest fill, and includes the typed data the taker signs plus the settlement calls to submit.
 
 > `POST /api/quote` · requires a Privy bearer token. Base URL, rate limits, and error shapes: [conventions](/dev/conventions/).
 

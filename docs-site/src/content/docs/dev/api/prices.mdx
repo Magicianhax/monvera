@@ -46,5 +46,5 @@ curl "https://monvera.best/api/prices"
 The `SPCX` entry is the shape for an asset with no live feed: `source: "none"` and no `priceUsd` key.
 
 <Aside type="note" title="Roughly half the universe has no feed yet">
-Many assets on this chain have no Chainlink feed published yet, so they return `source: "none"`. Trading still quotes those live through an Arcus RFQ (see [/api/quote](/dev/api/quote/)); this route reports only what has an on-chain feed. A price older than about 4.5 days is treated as stale and also returns `source: "none"`, so an equity feed does not value your holdings at zero over a long weekend.
+Many assets on this chain have no Chainlink feed published yet, so they return `source: "none"`. Trading still quotes those live through the venue routers (see [/api/quote](/dev/api/quote/)); this route reports only what has an on-chain feed. A price older than about 4.5 days is treated as stale and also returns `source: "none"`, so an equity feed does not value your holdings at zero over a long weekend.
 </Aside>

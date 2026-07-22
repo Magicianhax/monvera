@@ -26,15 +26,15 @@ Everything is denominated in USDG, the dollar-value currency the chain settles i
 
 ## The venues: what your order actually fills against
 
-Tokenized stocks on this chain have no deep pool of their own, so orders route through a spot router that quotes real market makers. Each quote comes back with up to two ways to fill it: one your wallet submits directly, and one the router settles on your behalf after you sign the order. Monvera takes whichever one can actually fill, and if the direct route fails on a given name, the leg retries through the router-settled one rather than dropping out of your plan.
+Liquidity for tokenized stocks is spread thin across several venues, so every order is quoted at all of them at once — LI.FI, Uniswap V4 and KyberSwap — and filled wherever you get the most back. If a fill fails on one venue, the leg re-quotes the others rather than dropping out of your plan.
 
 Legs are quoted and settled one at a time, immediately before each fill, because a quote taken for the whole plan up front goes stale by the time the last leg runs.
 
 <Aside type="note">
-A router-settled fill can arrive as a wrapped token that unwraps within about 1 to 15 minutes. It is already bought, already yours, and already counted in your balance. It just cannot be sold until it lands. Nothing is stuck.
+Every fill settles atomically in a single sponsored transaction: the moment it confirms, the position is yours and immediately sellable.
 </Aside>
 
-Each name needs about $11 per leg to clear the makers' minimum, which is why you can start from $1 but a small amount buys fewer names rather than more, smaller ones.
+No venue enforces a minimum order, but each leg is its own sponsored transaction, which is why a small amount buys fewer names rather than more, smaller ones.
 
 ## Privy: who holds the keys
 
@@ -67,4 +67,4 @@ None of this is something you operate. You say what you want, and the pieces arr
   <Turn who="vera">Four names, about $37 each. Gas is covered, it settles in USDG on Robinhood Chain, and I will record the risk assessment in the same transaction as the buys.</Turn>
 </Transcript>
 
-The one place the stack becomes visible is when a fill lands wrapped and takes a few minutes to unwrap, and even then it is already counted as yours.
+The one place the stack becomes visible is the venue name on your receipt, showing which one won your trade.

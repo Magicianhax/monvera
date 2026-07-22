@@ -153,7 +153,7 @@ const TurnSchema = z.discriminatedUnion("intent", [
   }),
   z.object({
     intent: z.literal("autopilot_config"),
-    amountUsd: z.number().min(11).max(100_000).describe("Dollars per run (venue minimum $11)."),
+    amountUsd: z.number().min(1).max(100_000).describe("Dollars per run. No venue minimum; small runs are just gas-inefficient."),
     cadence: z.enum(["daily", "weekly", "biweekly", "monthly"]),
     risk: z.enum(["careful", "balanced", "bolder"]),
     message: z.string().max(400).optional().describe("One line: you've filled the Autopilot form with their numbers, they hit Start to authorize."),
@@ -355,7 +355,7 @@ async function systemPrompt(ctx: VeraContext): Promise<string> {
     "- Cite only figures printed in this prompt — not printed = not known. Never quote market caps, P/E, targets, earnings dates, or returns from memory; offer price_history or compare. Arithmetic on printed numbers is fine.",
     '- COST BASIS: the app doesn\'t track what the user paid — NEVER state or estimate their profit/loss (not from dayChangePct — today\'s move only — nor Invested vs value). "How much have I made?": say you can\'t honestly compute it; give current value, today\'s moves, cash; offer my_activity.',
     "- MARKET PULSE lists only the biggest movers — never turn it into a universe-wide claim; rankings come from screener.",
-    '- A "settling" amount is bought, theirs, counted — never pending/stuck/lost; it just can\'t sell until it unwraps (~1-15 min).',
+    '- Trades settle atomically — bought and sellable at once. A legacy "settling" amount (retired RFQ venue) is still bought, theirs and counted; never pending/stuck/lost.',
     '- Options, never advice: no "you should", no good/bad-buy verdicts, no price predictions for anything including $MONVERA. Give 2-3 options, name each trade-off, let them decide. Backtests: same sentence — history, not a promise. Banned: "will go up", "undervalued", "guaranteed", "safe bet". No legal/tax advice — point at docs.monvera.best.',
     '- No commission, no platform fee — but the quoted price includes a small routing spread; that\'s how Monvera earns. Never "trading is free".',
     "",
@@ -375,8 +375,8 @@ async function systemPrompt(ctx: VeraContext): Promise<string> {
     '- Asks ABOUT your track record ("what\'s your track record", "have your plans made money", "prove it") → {"intent":"track_record"} (real on-chain numbers get attached). A navigation verb aimed at it ("open your track record/receipts/profile") → {"intent":"open","target":"vera"}. Everywhere: open/show = the screen; asking = the data intent that answers in chat.',
     '- Wants to buy ONE specific stock or trade the $MONVERA token → {"intent":"order","symbol":...,"side":...,"amountUsd": only if they said a number}. symbol must be from the universe or MONVERA.',
     '- Wants to SELL a stock ("sell half my NVDA", "sell $50 of Apple") → {"intent":"sell","symbol":...,"amountUsd": dollars if stated — for "half"/"a third", compute dollars from their position value in the context above; "all my X" → {"symbol":...,"all":true}}. Wants to SELL EVERYTHING / cash out → {"intent":"sell","all":true}. You place sells yourself in chat — the user confirms, every leg gets a receipt.',
-    '- Asks for HELP DECIDING how much of a stock to buy/sell → {"intent":"reply"} with a short honest take grounded in the data above, plus "suggestions" of concrete next messages like "Buy $15 of AAPL" / "Buy $50 of AAPL" (use their cash to pick sensible sizes, legs need $11+).',
-    '- Wants recurring investing / autopilot: if you ALREADY know their amount (≥$11), cadence, and risk (from this message or the recent conversation) → {"intent":"autopilot_config","amountUsd":...,"cadence":...,"risk":...}. If details are missing, ask via "reply" WITH suggestions. Just wants the panel → {"intent":"open","target":"autopilot"} per the NAVIGATION MAP.',
+    '- Asks for HELP DECIDING how much of a stock to buy/sell → {"intent":"reply"} with a short honest take grounded in the data above, plus "suggestions" of concrete next messages like "Buy $15 of AAPL" / "Buy $50 of AAPL" (use their cash to pick sensible sizes).',
+    '- Wants recurring investing / autopilot: if you ALREADY know their amount, cadence, and risk (from this message or the recent conversation) → {"intent":"autopilot_config","amountUsd":...,"cadence":...,"risk":...}. If details are missing, ask via "reply" WITH suggestions. Just wants the panel → {"intent":"open","target":"autopilot"} per the NAVIGATION MAP.',
     '- Asks WHAT ALERTS they have → {"intent":"list_alerts"}. Wants one CANCELLED ("cancel the Tesla alert", "remove all my alerts") → {"intent":"cancel_alert","symbol":...} or {"all":true}.',
     '- Asks what they MISSED / notifications / "anything happen?" → {"intent":"inbox"}; add "markRead":true when they say clear/dismiss/mark read.',
     '- Asks whether AUTOPILOT is on, when it next runs, or what it bought → {"intent":"autopilot_status"}. Asks to STOP/PAUSE it → {"intent":"autopilot_stop"}.',
@@ -394,7 +394,7 @@ async function systemPrompt(ctx: VeraContext): Promise<string> {
     '- Anything else (greetings, thanks, chit-chat, unclear) → {"intent":"reply"} in Vera\'s voice, briefly.',
     'TIE-BREAKS: 1) Step order wins — navigation beats analysis, action beats question, data intents beat "reply". 2) Still ambiguous → the LIGHTER intent (never build_plan/review_portfolio/rebalance — those cost a second slow pass; the deep dive is one ask away). 3) Intents and targets are closed lists — never invent one; nothing fits → "reply". 4) One intent per turn: for "do X and Y" pick what they need FIRST, cover the rest in "message". 5) Follow-ups inherit context ("and Nvidia?" → same intent, new symbol; "yes/do it" → what you just offered); read RECENT CONVERSATION before falling back to "reply". 6) Never infer an amountUsd they didn\'t state — omit it; the app asks.',
     'When your reply asks the user a question, ALSO include "suggestions": 2-4 short tappable example answers (each under ~40 chars) they can pick and edit.',
-    'WHEN MONEY MOVES (orders, quotes, sizing, plans): legs need $11+ — under that, say the floor and offer the nearest size; plans start ~$1 total. Sizes come FROM their cash, never above it ($63 → $15/$30/$60, not $100). A buy making one name a third+ of their holdings: state the number once, as fact, then respect their call. Sub-$20 buys wear the spread hardest — say once that more dollars, or a plan, gets more per dollar. A name we won\'t buy we won\'t help sell — decline BOTH ways in one line; offer liquidity for detail. Groves: "Opens soon", buys gated — discuss composition and the fee ($0 entry/mgmt, 10% of profit at exit); never imply one is buyable today.',
+    'WHEN MONEY MOVES (orders, quotes, sizing, plans): NO venue rejects a size — never tell someone an order is too small to route, and never quote a "venue floor" or "minimum". Any amount fills, including dust. Very small orders are just inefficient (each costs gas we sponsor), so if it matters say that once, plainly, and let them decide. Plans start ~$1 total. Sizes come FROM their cash, never above it ($63 → $15/$30/$60, not $100). A buy making one name a third+ of their holdings: state the number once, as fact, then respect their call. Sub-$20 buys wear the spread hardest — say once that more dollars, or a plan, gets more per dollar. A name we won\'t buy we won\'t help sell — decline BOTH ways in one line; offer liquidity for detail. Groves: "Opens soon", buys gated — discuss composition and the fee ($0 entry/mgmt, 10% of profit at exit); never imply one is buyable today.',
     'FORMATTING inside "message"/"reply" text: short plain sentences; **bold** only for key figures and names. When you present 3+ rows of comparable numbers (holdings, comparisons, performance, fee schedules), use a GitHub-style markdown table (| Column | … | header, |---| separator, one row per line) — the chat renders these as real tables. No headings, no code fences, no bullet-point walls; outside tables and **bold**, write prose.',
     'NEVER CLAIM WHAT DIDN\'T HAPPEN: nothing in a turn moves money — a ticket, panel, or plan is a handoff the user confirms. Write in that tense ("lined up — you confirm"), never "bought/sold/done"; unsure it happened → it didn\'t: say what was set up and where to verify (activity, receipts, on-chain record). Declines: what you can\'t do, the plain reason, a real alternative — no "as an AI", no apology stacks. Match depth: greetings get one warm line, no numbers; a price question gets the price and today\'s move; the risk sentence appears ONCE, only when a decision is on the table.',
   ].join("\n");
@@ -591,12 +591,9 @@ export async function routeVera(ctx: VeraContext): Promise<VeraResult> {
           if (cash >= MIN_LEG_USD) opts.push(`Buy $${cash} of ${symbol} (all my cash)`);
           return {
             intent: "reply",
-            message: `How much ${symbol}? You have $${(ctx.cashUsd ?? 0).toFixed(2)} in cash. A single order needs at least $${MIN_LEG_USD}.`,
+            message: `How much ${symbol}? You have $${(ctx.cashUsd ?? 0).toFixed(2)} in cash.`,
             suggestions: [...new Set(opts)].slice(0, 4),
           };
-        }
-        if (amount < MIN_LEG_USD) {
-          return { intent: "reply", message: `A single order needs at least $${MIN_LEG_USD}, the venue minimum. Round up to $${MIN_LEG_USD}?`, suggestions: [`Buy $${MIN_LEG_USD} of ${symbol}`] };
         }
         if (amount > cash) {
           return {
@@ -707,7 +704,7 @@ export async function routeVera(ctx: VeraContext): Promise<VeraResult> {
         const shares = Number(q.outRaw) / 1e18;
         return {
           intent: "reply",
-          message: `$${turn.amountUsd.toFixed(2)} of ${name} gets you about ${shares < 1 ? shares.toFixed(4) : shares.toFixed(2)} shares at today's quote. Gas is on us and the price includes the quoted spread. Single orders need at least $${MIN_LEG_USD}.`,
+          message: `$${turn.amountUsd.toFixed(2)} of ${name} gets you about ${shares < 1 ? shares.toFixed(4) : shares.toFixed(2)} shares at today's quote. Gas is on us and the price includes the quoted spread.`,
           suggestions: [`Buy $${Math.max(MIN_LEG_USD, Math.floor(turn.amountUsd))} of ${sym}`],
         };
       }
@@ -989,10 +986,10 @@ export async function routeVera(ctx: VeraContext): Promise<VeraResult> {
       }
       // TODO(GroveManager): when the contract deploys (NEXT_PUBLIC_GROVE_MANAGER
       // set), this becomes a single GroveManager.buy() — on-chain cost basis,
-      // exit-fee tracking, and no per-leg venue floor. Until then the buy runs
+      // exit-fee tracking, and no per-leg sizing floor. Until then the buy runs
       // per-leg through the existing invest rails: small amounts CONCENTRATE
       // into the largest holdings (groveLegsFor keeps every placed leg over
-      // the $11 venue floor), and full diversification returns from fullUsd up.
+      // our per-leg sizing floor), and full diversification returns from fullUsd up.
       const fullUsd = fullDiversificationUsd(g);
       const cash = Math.floor(ctx.cashUsd ?? 0);
       const amount = turn.amountUsd !== undefined ? Math.floor(turn.amountUsd) : undefined;
@@ -1030,7 +1027,7 @@ export async function routeVera(ctx: VeraContext): Promise<VeraResult> {
       return {
         intent: "plan",
         message: sizeNote + (legs.length < g.components.length
-          ? `The ${g.name} is ready. At $${amount} you'll hold the top ${legs.length === 1 ? "name" : `${legs.length} names`} of this Grove — every placed order has to clear the venue's $${MIN_LEG_USD} floor, so smaller buys concentrate; from $${fullUsd} every name is included. Entering costs nothing extra — the only fee is 10% of profit when you exit. Look it over, then invest.`
+          ? `The ${g.name} is ready. At $${amount} you'll hold the top ${legs.length === 1 ? "name" : `${legs.length} names`} of this Grove — each placed order still has to be worth its own gas, so smaller buys concentrate; from $${fullUsd} every name is included. Entering costs nothing extra — the only fee is 10% of profit when you exit. Look it over, then invest.`
           : `The ${g.name} is ready: $${amount} across ${g.components.length} names at the published weights, nothing substituted. Entering costs nothing extra — the only fee is 10% of profit when you exit. Look it over, then invest.`),
         payload: {
           summary: `${g.name} (${g.ticker}) — ${g.thesis}`,
@@ -1177,7 +1174,11 @@ export async function routeVera(ctx: VeraContext): Promise<VeraResult> {
 // The invest rails only BUY (sells are manual by design), so a rebalance here
 // means: pick a target mix that accounts for what the user already holds, then
 // spend their available cash on the underweight names. Every leg clears the
-// $11 venue floor or is dropped and the rest renormalized.
+// per-leg sizing floor or is dropped and the rest renormalized.
+// Our own sizing floor, NOT a venue rule — no live venue rejects a size.
+// Each leg is one sponsored UserOp (~$0.075-0.09 gas), so slicing a plan far
+// below this spends more on gas than the leg is worth. Never surface it to a
+// user as a "venue minimum": say it costs gas, or say nothing.
 const MIN_LEG_USD = 11;
 const EXPLORER = "https://robinhoodchain.blockscout.com/tx/";
 
@@ -1218,7 +1219,7 @@ function relTime(sec: number): string {
 
 // ── sell: chat-native, symmetrical with invest ───────────────────────────────
 // One leg or the whole portfolio: legs are sized from the LIVE holdings in
-// context, gated through tradability, floored at the venue minimum, and
+// context, gated through tradability, floored at our per-leg minimum, and
 // snapped to the full position when the ask is close enough that leftovers
 // would just be dust. $MONVERA never rides these rails (its own route).
 async function sellPlan(ctx: VeraContext, symbolRaw?: string, amountUsd?: number, all?: boolean): Promise<VeraResult> {
@@ -1295,13 +1296,10 @@ async function sellPlan(ctx: VeraContext, symbolRaw?: string, amountUsd?: number
   // Snap to the whole position when the remainder would be dust.
   const wholePosition = all || amount >= posUsd * 0.95;
   amount = wholePosition ? posUsd : amount;
-  if (amount < MIN_LEG_USD) {
-    return {
-      intent: "reply",
-      message: `A sell needs at least $${MIN_LEG_USD}, the venue minimum. Your ${symbol} position is $${posUsd.toFixed(2)}${posUsd >= MIN_LEG_USD ? `. Want to sell $${MIN_LEG_USD} or all of it?` : ", which is under the floor. It can be sold whole once it's worth more."}`,
-      suggestions: posUsd >= MIN_LEG_USD ? [`Sell $${MIN_LEG_USD} of ${symbol}`, `Sell all my ${symbol}`] : undefined,
-    };
-  }
+  // No floor on sells. The old $11/$5 gate was an Arcus RFQ maker rule; every
+  // live venue (LiFi / Uniswap V4 / KyberSwap) fills any size, so refusing a
+  // dust exit would trap the user in a position for no reason. The sponsored
+  // gas on a tiny sell is our cost to carry, not theirs to be blocked by.
   const amt = Math.round(amount * 100) / 100;
   return {
     intent: "sell_plan",
@@ -1359,7 +1357,7 @@ async function rebalancePlan(ctx: VeraContext, tilt?: string): Promise<VeraResul
     legs = legs.map((l) => ({ ...l, usd: (l.usd / kept) * cash }));
   }
   if (legs.length === 0 || legs[0].usd < MIN_LEG_USD) {
-    return { intent: "reply", message: `With $${cash} of cash the top-ups come out under the $${MIN_LEG_USD} venue minimum per name — add a bit more cash and I'll spread it properly.` };
+    return { intent: "reply", message: `With $${cash} of cash the top-ups come out so small that gas would eat most of each one — add a bit more and I'll spread it properly.` };
   }
 
   const allocations = legs.map((l) => ({

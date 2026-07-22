@@ -67,7 +67,7 @@ curl -X POST "https://monvera.best/api/allocate" \
   -d '{"goal":"grow my money steadily for five years","amountUsdg":"250"}'
 ```
 
-Nothing is signed or spent at this point. You can start from $1, but each leg needs roughly $11 to clear the trading venue's minimum, so a four-name plan wants about $44 or more. Amounts are strings of 6-decimal USDG units.
+Nothing is signed or spent at this point. You can start from $1 and no venue enforces a minimum, though each leg is a separately sponsored transaction, so very small slices are inefficient. Amounts are strings of 6-decimal USDG units.
 
 ## Commit it
 
@@ -86,7 +86,7 @@ Allocate and commit close together. The on-chain verify path reverts the whole t
 
 ## What settlement looks like
 
-A leg may fill through the router's RFQ venue, in which case the position arrives as a wrapped token that unwraps in about 1 to 15 minutes. It is already bought and already the holder's, and it counts in the balance the whole time — it just cannot be sold until it lands. Nothing is stuck.
+Every leg settles atomically in its own sponsored transaction — the position is held and sellable immediately. It is already bought and already the holder's, and it counts in the balance the whole time — it just cannot be sold until it lands. Nothing is stuck.
 
 There is no route that quotes a whole plan at once. Firm per-leg quotes come from [`POST /api/quote`](/dev/api/quote/), one leg at a time as you execute it — quote the whole plan upfront and the tail legs go stale before they settle.
 

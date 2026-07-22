@@ -85,7 +85,9 @@ const SAY_CARDS = [
 const TRUTHS = [
   { b: "You hold the keys.", rest: " Stocks settle to your own wallet. Vera can never touch them." },
   { b: "Nothing trades without your confirmation.", rest: " Every plan is shown in full first — then you tap once." },
-  { b: "Zero commission, no gas.", rest: " We earn a small routing referral from the venues. That's the whole business." },
+  // Was "we earn a referral from the venues" — true in the Arcus era, false now:
+  // we take our own 15-25 bps out of the swap. Say what the user actually pays.
+  { b: "No commission, no gas.", rest: " We take a small routing fee inside the quote you approve — nothing else, and never on top." },
   { b: "Backtests are history, not promises.", rest: " Stocks go down as well as up." },
 ];
 
