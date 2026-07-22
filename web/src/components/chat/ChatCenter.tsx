@@ -6,6 +6,7 @@
 // useVeraChat (D1); the intelligence runs on the real invest rails (useInvest)
 // and the numbers come from the real portfolio (usePortfolio) — no mock data.
 import { memo, useEffect, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { useInvest } from "@/hooks/useInvest";
 import { useSellAll, type SellSelection, type SellSuccess } from "@/hooks/useSellAll";
 import { useMonveraSwap } from "@/hooks/useMonveraSwap";
@@ -1478,6 +1479,39 @@ function ReviewCard({ review, onAsk, nav }: { review: ReviewPayload; onAsk: (tex
 
 /** The old ConfirmScreen's choice, chat-styled: one tap (Vera signs each
  *  holding silently) or maximum control (approve every signature yourself). */
+/** Render a fixed overlay into <body>.
+ *
+ *  These modals live inside the message list, which animates (transform) and so
+ *  creates a stacking context — that scopes their z-index locally and lets chat
+ *  content paint straight over the card, which is exactly what users saw on the
+ *  receipt. A portal takes them out to the document root where fixed + z-index
+ *  mean what they say. SSR-safe: renders nothing until mounted. */
+function Overlay({ children, onClose }: { children: React.ReactNode; onClose: () => void }) {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+    // Escape closes, and the page behind must not scroll under the sheet.
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", onKey);
+    return () => {
+      document.body.style.overflow = prev;
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [onClose]);
+  if (!mounted) return null;
+  return createPortal(
+    <div
+      onClick={onClose}
+      style={{ position: "fixed", inset: 0, zIndex: 1000, display: "grid", placeItems: "center", padding: 16, background: "color-mix(in srgb, #000 46%, transparent)", backdropFilter: "blur(6px)", WebkitBackdropFilter: "blur(6px)" }}
+    >
+      {children}
+    </div>,
+    document.body,
+  );
+}
+
 function ModeChooser({ plan, onChoose, onClose }: { plan: AllocateResult; onChoose: (m: "auto" | "manual") => void; onClose: () => void }) {
   const [mode, setMode] = useState<"auto" | "manual">("auto");
   const holdings = (plan.allocations ?? []).length;
@@ -1486,7 +1520,7 @@ function ModeChooser({ plan, onChoose, onClose }: { plan: AllocateResult; onChoo
     { mode: "manual" as const, icon: "ph-shield-check", title: "Approve each step", blurb: `You confirm every signature in your wallet, ${holdings} approvals in a row.` },
   ];
   return (
-    <div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 140, display: "grid", placeItems: "center", padding: 16, background: "color-mix(in srgb, #000 40%, transparent)", backdropFilter: "blur(6px)", WebkitBackdropFilter: "blur(6px)" }}>
+    <Overlay onClose={onClose}>
       <div onClick={(e) => e.stopPropagation()} style={{ width: "min(430px, 100%)", borderRadius: 22, border: "1px solid var(--line)", background: "var(--panel)", boxShadow: "0 24px 70px rgba(0,0,0,.35)", padding: "18px 18px 16px" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <ChatOrb size={30} />
@@ -1519,7 +1553,7 @@ function ModeChooser({ plan, onChoose, onClose }: { plan: AllocateResult; onChoo
         </button>
         <div style={{ marginTop: 9, fontSize: 11, color: "var(--ink-3)", textAlign: "center" }}>Self-custody either way. Your funds stay yours the whole time.</div>
       </div>
-    </div>
+    </Overlay>
   );
 }
 
@@ -1531,7 +1565,7 @@ function SellModeChooser({ totalUsd, count, onChoose, onClose }: { totalUsd: num
     { mode: "manual" as const, icon: "ph-shield-check", title: "Approve each step", blurb: `You confirm every signature in your wallet, ${count} approval${count === 1 ? "" : "s"} in a row.` },
   ];
   return (
-    <div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 140, display: "grid", placeItems: "center", padding: 16, background: "color-mix(in srgb, #000 40%, transparent)", backdropFilter: "blur(6px)", WebkitBackdropFilter: "blur(6px)" }}>
+    <Overlay onClose={onClose}>
       <div onClick={(e) => e.stopPropagation()} style={{ width: "min(430px, 100%)", borderRadius: 22, border: "1px solid var(--line)", background: "var(--panel)", boxShadow: "0 24px 70px rgba(0,0,0,.35)", padding: "18px 18px 16px" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <ChatOrb size={30} />
@@ -1564,7 +1598,7 @@ function SellModeChooser({ totalUsd, count, onChoose, onClose }: { totalUsd: num
         </button>
         <div style={{ marginTop: 9, fontSize: 11, color: "var(--ink-3)", textAlign: "center" }}>Self-custody either way. Proceeds land as USDG in your wallet.</div>
       </div>
-    </div>
+    </Overlay>
   );
 }
 
@@ -1594,7 +1628,7 @@ function SuccessCard({ s, nav }: { s: InvestSuccess; nav: ChatNav }) {
 function InvestReceiptPopup({ s, nav, onClose }: { s: InvestSuccess; nav: ChatNav; onClose: () => void }) {
   const holdings = s.holdings ?? [];
   return (
-    <div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 140, display: "grid", placeItems: "center", padding: 16, background: "color-mix(in srgb, #000 40%, transparent)", backdropFilter: "blur(6px)", WebkitBackdropFilter: "blur(6px)" }}>
+    <Overlay onClose={onClose}>
       <div onClick={(e) => e.stopPropagation()} style={{ width: "min(460px, 100%)", maxHeight: "86vh", overflowY: "auto", borderRadius: 22, border: "1px solid var(--line)", background: "var(--panel)", boxShadow: "0 24px 70px rgba(0,0,0,.35)" }}>
         <div style={{ padding: "16px 18px 12px", display: "flex", alignItems: "center", gap: 11, borderBottom: "1px solid var(--line)" }}>
           <span style={{ width: 36, height: 36, borderRadius: "50%", flex: "none", background: "var(--primary)", display: "grid", placeItems: "center" }}>
@@ -1657,6 +1691,6 @@ function InvestReceiptPopup({ s, nav, onClose }: { s: InvestSuccess; nav: ChatNa
           <button onClick={onClose} style={{ flex: "none", padding: "0 18px", height: 44, borderRadius: 14, fontSize: 13.5, fontWeight: 600, background: "var(--panel-2)", color: "var(--ink-2)" }}>Done</button>
         </div>
       </div>
-    </div>
+    </Overlay>
   );
 }

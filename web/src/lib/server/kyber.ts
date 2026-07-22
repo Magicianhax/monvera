@@ -84,11 +84,21 @@ async function routes(sellToken: Address, buyToken: Address, sellAmount: bigint)
       console.error("[kyber] rate limited — client id not whitelisted?");
       return null;
     }
-    if (!res.ok) return null;
-    const json = (await res.json()) as { code?: number; data?: { routeSummary?: RouteSummary } };
-    if (json.code !== 0 || !json.data?.routeSummary) return null;
+    if (!res.ok) {
+      console.error("[kyber] routes http error", { status: res.status, tokenIn: sellToken, tokenOut: buyToken });
+      return null;
+    }
+    const json = (await res.json()) as { code?: number; message?: string; data?: { routeSummary?: RouteSummary } };
+    if (json.code !== 0 || !json.data?.routeSummary) {
+      // code 4008 = genuinely no route; anything else is worth seeing.
+      console.error("[kyber] routes no quote", { code: json.code, message: json.message, tokenOut: buyToken });
+      return null;
+    }
     return json.data.routeSummary;
-  } catch {
+  } catch (err) {
+    // Timeouts land here. Silent nulls made a venue that never competes look
+    // identical to a venue that competed and lost — never let that happen again.
+    console.error("[kyber] routes threw", { tokenOut: buyToken, err: String(err) });
     return null;
   }
 }
@@ -152,11 +162,18 @@ export async function kyberQuote(
         source: CLIENT_ID,
       }),
     });
-    if (!res.ok) return null;
-    const json = (await res.json()) as { code?: number; data?: BuiltRoute };
-    if (json.code !== 0 || !json.data) return null;
+    if (!res.ok) {
+      console.error("[kyber] build http error", { status: res.status, tokenOut: buyToken });
+      return null;
+    }
+    const json = (await res.json()) as { code?: number; message?: string; data?: BuiltRoute };
+    if (json.code !== 0 || !json.data) {
+      console.error("[kyber] build rejected", { code: json.code, message: json.message, tokenOut: buyToken });
+      return null;
+    }
     built = json.data;
-  } catch {
+  } catch (err) {
+    console.error("[kyber] build threw", { tokenOut: buyToken, err: String(err) });
     return null;
   }
 
@@ -165,7 +182,10 @@ export async function kyberQuote(
   // Calldata must be non-empty, even-length hex — a malformed body should be
   // refused here rather than reverting an already-sponsored UserOp on-chain.
   const validData = typeof data === "string" && /^0x([0-9a-fA-F]{2})+$/.test(data);
-  if (!router || !validData || !/^0x[a-fA-F0-9]{40}$/.test(router)) return null;
+  if (!router || !validData || !/^0x[a-fA-F0-9]{40}$/.test(router)) {
+    console.error("[kyber] malformed build payload", { router, dataLen: typeof data === "string" ? data.length : null });
+    return null;
+  }
   // Every route we build sells an ERC-20 (USDG or a stock), so the call must
   // never carry native value. Anything else means we misread the response.
   if (built?.transactionValue && built.transactionValue !== "0") {
