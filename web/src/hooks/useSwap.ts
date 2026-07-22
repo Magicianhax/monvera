@@ -33,6 +33,11 @@ import { useDemo } from "@/components/demo/DemoProvider";
 import { explainError } from "@/lib/explainError";
 import { useRefreshBalances } from "@/hooks/useBalances";
 import { type Asset } from "@/lib/tokens";
+import type { ArcusQuoteResponse } from "@/lib/arcusShared";
+
+/** Best-execution vocabulary, shared with the order ticket's venue race. */
+export type VenueName = NonNullable<ArcusQuoteResponse["venue"]>;
+export type VenueBoard = NonNullable<ArcusQuoteResponse["venues"]>;
 
 // "settling": the trade is signed, submitted and on-chain; we're waiting for the
 // router's wrapped fill to unwrap into the real token. Never an error state.
@@ -50,13 +55,20 @@ interface SwapSubmission {
   /** Expected/guaranteed output per the executed quote (raw units of the buy token). */
   buyAmount?: bigint;
   minBuyAmount?: bigint;
+  /** Which venue won best execution, and the full board it beat. */
+  venue?: VenueName;
+  venues?: VenueBoard;
 }
 
 /** The quote's expected/min output, for the receipt the ticket shows. */
-function fillOf(quote: { buyAmount?: string; minBuyAmount?: string }): { buyAmount?: bigint; minBuyAmount?: bigint } {
+function fillOf(quote: { buyAmount?: string; minBuyAmount?: string; venue?: VenueName; venues?: VenueBoard }): {
+  buyAmount?: bigint; minBuyAmount?: bigint; venue?: VenueName; venues?: VenueBoard;
+} {
   return {
     buyAmount: quote.buyAmount ? BigInt(quote.buyAmount) : undefined,
     minBuyAmount: quote.minBuyAmount ? BigInt(quote.minBuyAmount) : undefined,
+    venue: quote.venue,
+    venues: quote.venues,
   };
 }
 
@@ -129,7 +141,7 @@ export async function executeSwap(
   // every settle failure adds that venue to `avoid` and we re-quote the rest —
   // best -> runner-up -> last venue standing. Arcus "tx" gets one extra
   // router-settled (RFQ) retry before Arcus is abandoned (the InvalidAction case).
-  const avoidList: ("arcus" | "rialto" | "lifi" | "uniswap")[] = [];
+  const avoidList: ("arcus" | "rialto" | "lifi" | "uniswap" | "kyber")[] = [];
   let lastErr: unknown = null;
   for (let round = 0; round < 4; round++) {
     let quote: Awaited<ReturnType<typeof fetchArcusQuote>>;
@@ -191,6 +203,9 @@ export interface SwapResult {
    *  (the asset on a buy at its own decimals; USDG 6dp on a sell). */
   buyAmount?: bigint;
   minBuyAmount?: bigint;
+  /** Best-execution outcome: the winning venue and everyone it outbid. */
+  venue?: VenueName;
+  venues?: VenueBoard;
   /**
    * The trade is on-chain but hasn't confirmed yet (RFQ fills can take minutes).
    * The receipt must say "settling", never "bought"/"sold".
@@ -233,9 +248,9 @@ export function useSwap() {
         if (sellAmount <= BigInt(0)) throw new Error("Enter an amount first.");
 
         setPhase("swapping");
-        const { txHash, settling, buyAmount, minBuyAmount } = await executeSwap(wallet, { side: "buy", symbol: asset.symbol, sellAmount });
+        const { txHash, settling, buyAmount, minBuyAmount, venue, venues } = await executeSwap(wallet, { side: "buy", symbol: asset.symbol, sellAmount });
         const confirmed = settling ? await settleRfq(txHash, setPhase, refreshBalances) : true;
-        setResult({ txHash, asset, amountUsd, side: "buy", pending: !confirmed, buyAmount, minBuyAmount });
+        setResult({ txHash, asset, amountUsd, side: "buy", pending: !confirmed, buyAmount, minBuyAmount, venue, venues });
         setPhase("done");
         refreshBalances();
       } catch (e) {
@@ -265,9 +280,9 @@ export function useSwap() {
         if (amountIn <= BigInt(0)) throw new Error("Nothing to sell.");
 
         setPhase("swapping");
-        const { txHash, settling, buyAmount, minBuyAmount } = await executeSwap(wallet, { side: "sell", symbol: asset.symbol, sellAmount: amountIn });
+        const { txHash, settling, buyAmount, minBuyAmount, venue, venues } = await executeSwap(wallet, { side: "sell", symbol: asset.symbol, sellAmount: amountIn });
         const confirmed = settling ? await settleRfq(txHash, setPhase, refreshBalances) : true;
-        setResult({ txHash, asset, amountUsd: estUsdcValue, side: "sell", pending: !confirmed, buyAmount, minBuyAmount });
+        setResult({ txHash, asset, amountUsd: estUsdcValue, side: "sell", pending: !confirmed, buyAmount, minBuyAmount, venue, venues });
         setPhase("done");
         refreshBalances();
       } catch (e) {

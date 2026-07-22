@@ -11,6 +11,21 @@ import type { Address } from "viem";
 import { chain } from "@/lib/chain";
 
 const KEY = process.env.LIFI_API_KEY;
+// LiFi attributes volume by the `integrator` QUERY PARAM, not by the API key.
+// Without it every quote came back as integrator "lifi-api" (their default) and
+// our swaps showed up nowhere on the LiFi dashboard.
+const INTEGRATOR = process.env.LIFI_INTEGRATOR ?? "monvera";
+// Our take, as a decimal share (0.0025 = 25 bps), matching UNISWAP_FEE_BPS.
+// Defaults to 0: LiFi only pays integrator fees out to a fee-collection wallet
+// registered in their portal, so charging before that is set up would cost the
+// user 25 bps that nobody receives. Set LIFI_FEE_BPS=25 once LiFi confirms it.
+const FEE_BPS = Number(process.env.LIFI_FEE_BPS ?? 0);
+
+/** Attribution (+ fee once enabled) applied to every LiFi quote. */
+function lifiAttribution(params: URLSearchParams): void {
+  params.set("integrator", INTEGRATOR);
+  if (FEE_BPS > 0) params.set("fee", String(Math.min(FEE_BPS, 100) / 10_000));
+}
 
 export interface LifiExecQuote {
   buyAmount: bigint;
@@ -46,6 +61,7 @@ export async function lifiExecQuote(
       toAddress: recipient.toLowerCase(),
       slippage: "0.005",
     });
+    lifiAttribution(params);
     const res = await fetch(`https://li.quest/v1/quote?${params.toString()}`, {
       headers: { "x-lifi-api-key": KEY },
       signal: AbortSignal.timeout(8000),
@@ -90,6 +106,7 @@ export async function lifiPrice(
       fromAddress: fromAddress.toLowerCase(),
       slippage: "0.005",
     });
+    lifiAttribution(params);
     const res = await fetch(`https://li.quest/v1/quote?${params.toString()}`, {
       headers: { "x-lifi-api-key": KEY },
       signal: AbortSignal.timeout(8000),

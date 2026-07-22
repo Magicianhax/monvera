@@ -11,6 +11,9 @@ import { TokenLogo } from "@/components/lite/TokenLogo";
 import { displayFor } from "@/lib/displayAssets";
 import { PIcon, usd } from "./chatKit";
 import fx from "@/components/lite/screens/conveyor.module.css";
+import { VenueMark, venueLabel, VENUE } from "./venueBrand";
+import { VENUE_RACE_CSS } from "./VenueRace";
+import type { VenueName } from "@/hooks/useSwap";
 
 export interface ConveyorLeg {
   symbol: string;
@@ -24,6 +27,10 @@ interface ConveyorProps {
   legs: ConveyorLeg[];
   /** Symbols that actually filled — only these get the check. */
   filled: string[];
+  /** Which venue won each filled leg (symbol -> venue). Absent while selling. */
+  legVenues?: Record<string, VenueName>;
+  /** Venues competing on this batch, for the live "who's bidding" strip. */
+  competing?: VenueName[];
   /** Legs attempted so far (drives skipped detection on the rail). */
   done: number;
   total: number;
@@ -90,6 +97,14 @@ export function ConveyorOverlay(p: ConveyorProps) {
 
   const usdFor = (sym: string | null) => (sym ? p.legs.find((l) => l.symbol === sym)?.usd : undefined);
   const filledSet = new Set(p.filled);
+  const competing = p.competing ?? [];
+  // Running count of which venue won each filled leg, biggest first.
+  const wonTally = Object.entries(
+    Object.values(p.legVenues ?? {}).reduce<Record<string, number>>((acc, v) => {
+      acc[v] = (acc[v] ?? 0) + 1;
+      return acc;
+    }, {}),
+  ).sort((a, b) => b[1] - a[1]) as [VenueName, number][];
   const buying = !!stage.cur;
   const finishing = p.total > 0 && p.done >= p.total && !current;
   const title = p.mode === "buy" ? "Securing your investment" : "Cashing out";
@@ -127,6 +142,7 @@ export function ConveyorOverlay(p: ConveyorProps) {
           )}
         </div>
 
+        <style dangerouslySetInnerHTML={{ __html: VENUE_RACE_CSS }} />
         {/* queue rail */}
         {p.legs.length > 0 && (
           <div style={{ display: "flex", justifyContent: "center", flexWrap: "wrap", gap: 9, margin: "0 auto", maxWidth: 300 }}>
@@ -135,6 +151,7 @@ export function ConveyorOverlay(p: ConveyorProps) {
               const active = idx === p.done && !!current;
               const attempted = idx < p.done;
               const failed = attempted && !filled;
+              const wonBy = p.legVenues?.[leg.symbol];
               return (
                 <div key={leg.symbol} style={{ position: "relative", width: 30, height: 30, borderRadius: "50%", opacity: filled || active ? 1 : failed ? 0.55 : 0.4, transform: active ? "scale(1.14)" : "scale(1)", boxShadow: active ? "0 0 0 2px var(--primary)" : filled ? "0 0 0 2px color-mix(in srgb, var(--primary) 45%, transparent)" : "none", transition: "opacity .3s ease, transform .3s ease" }}>
                   <TokenLogo symbol={leg.symbol} size={30} />
@@ -143,9 +160,58 @@ export function ConveyorOverlay(p: ConveyorProps) {
                       <PIcon name={filled ? "ph-check" : "ph-x"} size={9} weight="bold" />
                     </span>
                   )}
+                  {/* Which venue won this leg — a plan can fill each leg elsewhere. */}
+                  {filled && wonBy && (
+                    <span
+                      title={`Best price: ${venueLabel(wonBy)}`}
+                      style={{ position: "absolute", left: -3, top: -3, width: 15, height: 15, borderRadius: "50%", background: "var(--panel)", border: `1px solid color-mix(in srgb, ${VENUE[wonBy].color} 45%, transparent)`, display: "grid", placeItems: "center" }}
+                    >
+                      <VenueMark venue={wonBy} size={9} />
+                    </span>
+                  )}
                 </div>
               );
             })}
+          </div>
+        )}
+
+        {/* who is competing, and who has actually been winning so far */}
+        {competing.length > 1 && (
+          <div style={{ marginTop: 13, display: "flex", flexDirection: "column", alignItems: "center", gap: 7 }}>
+            {wonTally.length === 0 ? (
+              // Before the first fill there is no winner yet — say who's bidding.
+              <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", justifyContent: "center" }}>
+                <span className="mvv-sweep" style={{ fontSize: 11.5, fontWeight: 650 }}>
+                  {competing.length} venues competing for each holding
+                </span>
+                {competing.map((v) => (
+                  <VenueMark key={v} venue={v} size={14} muted />
+                ))}
+              </div>
+            ) : (
+              <>
+                <span style={{ fontSize: 11, fontWeight: 650, color: "var(--ink-3)" }}>Best price won by</span>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", justifyContent: "center" }}>
+                  {wonTally.map(([v, n]) => (
+                    <span
+                      key={v}
+                      className="mvv-in"
+                      style={{
+                        display: "inline-flex", alignItems: "center", gap: 6,
+                        padding: "4px 9px", borderRadius: 6,
+                        border: `1px solid color-mix(in srgb, ${VENUE[v].color} 34%, transparent)`,
+                        background: `color-mix(in srgb, ${VENUE[v].color} 8%, transparent)`,
+                        fontSize: 11.5, fontWeight: 650, color: "var(--ink-2)",
+                      }}
+                    >
+                      <VenueMark venue={v} size={14} />
+                      {venueLabel(v)}
+                      <span className="tnum" style={{ color: VENUE[v].color, fontWeight: 700 }}>×{n}</span>
+                    </span>
+                  ))}
+                </div>
+              </>
+            )}
           </div>
         )}
 

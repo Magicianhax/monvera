@@ -123,7 +123,10 @@ export interface ArcusToSign {
 export interface ArcusQuoteResponse {
   kind?: "tx" | "rfq" | "amm";
   /** Which venue priced/settles this quote (best-execution comparison). */
-  venue?: "arcus" | "rialto" | "lifi" | "uniswap";
+  venue?: "arcus" | "rialto" | "lifi" | "uniswap" | "kyber";
+  /** Every venue that returned a firm quote, best first — `venues[0]` is the
+   *  winner and matches `venue`. Surfaced so the UI can show the race. */
+  venues?: { venue: "arcus" | "rialto" | "lifi" | "uniswap" | "kyber"; buyAmount: string }[];
   /** kind "amm" only: calls the smart account runs right after its permit+pull
    *  of the sell token (approve/route/sweep - venue-specific, server-built). */
   steps?: { to: `0x${string}`; data: `0x${string}`; value: string }[];

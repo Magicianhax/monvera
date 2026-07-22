@@ -17,6 +17,9 @@ import { useUsdcBalance, usePortfolio } from "@/hooks/useBalances";
 import { usePrice } from "@/hooks/usePrices";
 import { useSmartAccount } from "@/hooks/useSmartAccount";
 import { displayFor } from "@/lib/displayAssets";
+import { VenueRaceLive, VenueRaceResult, VENUE_RACE_CSS } from "@/components/chat/VenueRace";
+import { isVenue } from "@/components/chat/venueBrand";
+import type { VenueName } from "@/hooks/useSwap";
 import { AssetTile } from "@/components/design";
 import { fromUnits } from "@/lib/format";
 import { CircleNotch } from "@phosphor-icons/react";
@@ -190,6 +193,17 @@ export function OrderTicket({ order, onClose, nav }: { order: OrderState; onClos
     return () => window.removeEventListener("keydown", onKey);
   }, [swap.busy, close]);
 
+  // Which venues are competing — flags live server-side, so ask once.
+  const [liveVenues, setLiveVenues] = useState<VenueName[]>([]);
+  useEffect(() => {
+    let alive = true;
+    fetch("/api/venues")
+      .then((r) => r.json())
+      .then((j) => { if (alive && Array.isArray(j?.venues)) setLiveVenues(j.venues.filter(isVenue)); })
+      .catch(() => { /* the race is a flourish; never block the ticket on it */ });
+    return () => { alive = false; };
+  }, []);
+
   const done = swap.phase === "done" && swap.result;
 
   return (
@@ -205,6 +219,7 @@ export function OrderTicket({ order, onClose, nav }: { order: OrderState; onClos
         onClick={(e) => e.stopPropagation()}
         style={{ width: "100%", maxWidth: 420, background: "linear-gradient(135deg,color-mix(in srgb,var(--primary) 10%,transparent),transparent 55%),var(--panel)", backdropFilter: "blur(14px) saturate(170%)", WebkitBackdropFilter: "blur(14px) saturate(170%)", border: "1px solid var(--line)", borderRadius: 24, boxShadow: "0 24px 70px rgba(8,20,12,.34)", overflow: "hidden" }}
       >
+        <style dangerouslySetInnerHTML={{ __html: VENUE_RACE_CSS }} />
         {/* header: side toggle + close */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 16px 0 16px" }}>
           <div style={{ display: "flex", background: "var(--panel-2)", borderRadius: 999, padding: 3, gap: 2 }}>
@@ -285,6 +300,14 @@ export function OrderTicket({ order, onClose, nav }: { order: OrderState; onClos
                 </div>
               );
             })()}
+            {swap.result.venues && swap.result.venues.length > 0 && (
+              <div style={{ width: "100%", textAlign: "left" }}>
+                <VenueRaceResult
+                  board={swap.result.venues}
+                  decimals={swap.result.side === "buy" ? asset?.decimals ?? 18 : 6}
+                />
+              </div>
+            )}
             <button
               onClick={() => {
                 nav.openCanvas("portfolio");
@@ -376,6 +399,7 @@ export function OrderTicket({ order, onClose, nav }: { order: OrderState; onClos
             {!swap.busy && !ready && reason && (
               <div style={{ fontSize: 12, color: over ? "var(--neg)" : "var(--ink-3)", marginTop: 9 }}>{reason}</div>
             )}
+            {swap.busy && !swap.settling && <VenueRaceLive venues={liveVenues} />}
             {swap.settling && (
               <div style={{ fontSize: 11.5, color: "var(--ink-3)", marginTop: 9, lineHeight: 1.5 }}>
                 Placed and on-chain — you can close this; it finishes settling on its own.

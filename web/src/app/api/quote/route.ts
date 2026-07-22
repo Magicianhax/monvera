@@ -5,6 +5,7 @@ import { getQuote, getPrice, getRfqQuote, needsPermit2Allowance, venueKind, PERM
 import { rialtoQuote, rialtoPrice } from "@/lib/server/rialto";
 import { lifiPrice, lifiExecQuote } from "@/lib/server/lifiStocks";
 import { uniV4Price, uniV4Quote } from "@/lib/server/uniswapV4";
+import { kyberPrice, kyberQuote } from "@/lib/server/kyber";
 import { venueEnabled } from "@/lib/server/venueFlags";
 import { assetBySymbol, USDG } from "@/lib/tokens";
 import { verifyRequest } from "@/lib/server/privyAuth";
@@ -39,7 +40,7 @@ const QuoteSchema = z.object({
   venue: z.enum(["rfq"]).optional(),
   // Cross-venue retry: skip venues that just failed to settle, so the client
   // ladder (best -> next best) can walk down without re-hitting the loser.
-  avoid: z.array(z.enum(["arcus", "rialto", "lifi", "uniswap"])).max(4).optional(),
+  avoid: z.array(z.enum(["arcus", "rialto", "lifi", "uniswap", "kyber"])).max(5).optional(),
   // The user's smart account. When present, LiFi becomes an EXECUTABLE venue:
   // it quotes with fromAddress=executor (the relayed batch pulls funds there
   // first) and toAddress=taker, so output lands straight in the EOA.
@@ -77,16 +78,17 @@ export async function POST(req: NextRequest) {
       // not per keystroke. It lets the screen warn about RFQ minimums and settlement
       // time before the user commits.
       const sellDec = body.side === "buy" ? USDG.decimals : (asset.decimals ?? 18);
-      const [arcusP, arcusKind, riP, lfP, uniP] = await Promise.all([
+      const [arcusP, arcusKind, riP, lfP, uniP, kyP] = await Promise.all([
         venueEnabled("arcus") ? getPrice(sellToken, buyToken, sellAmount).catch(() => null) : null,
         venueEnabled("arcus") ? venueKind(sellToken, buyToken).catch(() => "tx" as const) : "tx" as const,
         venueEnabled("rialto") ? rialtoPrice(sellToken, buyToken, sellAmount, sellDec, body.taker as Address) : null,
         venueEnabled("lifi") ? lifiPrice(sellToken, buyToken, sellAmount, body.taker as Address) : null,
         venueEnabled("uniswap") ? uniV4Price(sellToken, buyToken, sellAmount) : null,
+        venueEnabled("kyber") ? kyberPrice(sellToken, buyToken, sellAmount) : null,
       ]);
       const prices: { buy: bigint; kind: string }[] = [];
       if (arcusP?.liquidityAvailable) prices.push({ buy: arcusP.buyAmount, kind: arcusKind });
-      for (const v of [riP, lfP, uniP]) if (v !== null) prices.push({ buy: v, kind: "tx" });
+      for (const v of [riP, lfP, uniP, kyP]) if (v !== null) prices.push({ buy: v, kind: "tx" });
       if (prices.length === 0) return Response.json({ liquidityAvailable: false, buyAmount: "0", kind: "tx" });
       prices.sort((a, b) => (b.buy > a.buy ? 1 : b.buy < a.buy ? -1 : 0));
       return Response.json({ liquidityAvailable: true, buyAmount: prices[0].buy.toString(), kind: prices[0].kind });
@@ -113,16 +115,19 @@ export async function POST(req: NextRequest) {
     // Best execution: quote every venue in parallel and take the biggest fill.
     // A venue erroring never blocks the comparison — it just doesn't compete.
     const executor = body.executor as Address | undefined;
-    const skip = (v: "arcus" | "rialto" | "lifi" | "uniswap") => avoid.has(v) || !venueEnabled(v);
-    const [txQ, rfqQ, riQ, lfQ, uniQ] = await Promise.all([
+    const skip = (v: "arcus" | "rialto" | "lifi" | "uniswap" | "kyber") => avoid.has(v) || !venueEnabled(v);
+    const [txQ, rfqQ, riQ, lfQ, uniQ, kyQ] = await Promise.all([
       skip("arcus") ? null : getQuote(sellToken, buyToken, sellAmount, taker).catch(() => null),
       skip("arcus") ? null : getRfqQuote(sellToken, buyToken, sellAmount, taker).catch(() => null),
       skip("rialto") ? null : rialtoQuote(sellToken, buyToken, sellAmount, sellDec, taker),
       skip("lifi") || !executor ? null : lifiExecQuote(sellToken, buyToken, sellAmount, executor, taker),
       skip("uniswap") ? null : uniV4Quote(sellToken, buyToken, sellAmount, taker).catch(() => null),
+      // Kyber builds calldata for a specific `sender`, so it needs the smart
+      // account — same constraint as LiFi.
+      skip("kyber") || !executor ? null : kyberQuote(sellToken, buyToken, sellAmount, executor, taker).catch(() => null),
     ]);
 
-    type Candidate = { venue: "arcus" | "rialto" | "lifi" | "uniswap"; kind: "tx" | "rfq" | "amm"; buy: bigint; json: () => Promise<Record<string, unknown>> };
+    type Candidate = { venue: "arcus" | "rialto" | "lifi" | "uniswap" | "kyber"; kind: "tx" | "rfq" | "amm"; buy: bigint; json: () => Promise<Record<string, unknown>> };
     const candidates: Candidate[] = [];
     if (txQ?.liquidityAvailable && txQ.tx) {
       candidates.push({
@@ -185,9 +190,32 @@ export async function POST(req: NextRequest) {
         }),
       });
     }
+    if (kyQ) {
+      candidates.push({
+        venue: "kyber", kind: "amm", buy: kyQ.buyAmount,
+        json: async () => ({
+          kind: "amm", venue: "kyber", liquidityAvailable: true,
+          buyAmount: kyQ.buyAmount.toString(), minBuyAmount: kyQ.minBuyAmount.toString(),
+          needsAllowance: false, sellToken, sellAmount: sellAmount.toString(),
+          steps: kyQ.steps,
+        }),
+      });
+    }
     if (candidates.length === 0) return Response.json({ liquidityAvailable: false });
     candidates.sort((a, b) => (b.buy > a.buy ? 1 : b.buy < a.buy ? -1 : 0));
-    return Response.json(await candidates[0].json());
+
+    if (process.env.NODE_ENV !== "production") {
+      // Dev-only: which venue actually won, and by how much. Without this the
+      // best-execution ladder is a black box when testing a new venue.
+      console.log(
+        `[quote] ${body.side} ${body.symbol} -> ${candidates.map((c) => `${c.venue}:${c.buy}`).join("  ")}`,
+      );
+    }
+    // Ship the whole comparison, not just the winner: the order ticket shows the
+    // user which venues competed and by how much the best one won. It is real
+    // quote data, so it stays honest even when the margin is tiny.
+    const board = candidates.map((c) => ({ venue: c.venue, buyAmount: c.buy.toString() }));
+    return Response.json({ ...(await candidates[0].json()), venues: board });
   } catch (err) {
     // Arcus failed outright — before surfacing anything, try the Rialto
     // fallback (firm quotes only; price mode already handled its own fallback).

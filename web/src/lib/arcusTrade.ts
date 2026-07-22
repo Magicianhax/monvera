@@ -39,7 +39,7 @@ export async function fetchArcusQuote(params: {
   /** Force the router-settled venue (used to retry legs whose "tx" settle reverts). */
   venue?: "rfq";
   /** Venues that just failed to settle — the server skips them and returns the next best. */
-  avoid?: ("arcus" | "rialto" | "lifi" | "uniswap")[];
+  avoid?: ("arcus" | "rialto" | "lifi" | "uniswap" | "kyber")[];
   /** The user's smart account — unlocks LiFi as an executable venue server-side. */
   executor?: string;
 }): Promise<ArcusQuoteResponse> {

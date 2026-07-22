@@ -31,12 +31,15 @@ export interface AllocateResult extends Allocation {
 }
 
 /** A receipt-ish summary surfaced to the success screen. */
+import type { VenueName } from "@/hooks/useSwap";
+
 export interface InvestSuccess {
   /** The on-chain record tx (VeraRecord) when it ran, else the last filled buy. */
   txHash: `0x${string}`;
   /** Each buy is its own sponsored UserOp now (not a bundle), so every holding
       carries its own Blockscout receipt — surfaced per-row on the success screen. */
-  holdings: { symbol: string; name: string; weightPct: number; amountUsd: number; txHash?: `0x${string}` }[];
+  /** `venue` = which venue won best execution for that leg (legs can differ). */
+  holdings: { symbol: string; name: string; weightPct: number; amountUsd: number; txHash?: `0x${string}`; venue?: VenueName }[];
   amountUsd: number;
   /** Some legs settled via RFQ — submitted + on-chain, shares unwrap in minutes. */
   anySettling?: boolean;

@@ -30,6 +30,7 @@ import { useRefreshBalances } from "@/hooks/useBalances";
 import { authHeader } from "@/lib/authedFetch";
 import type { Allocation } from "@/lib/allocation-schema";
 import type { AllocateResult, InvestSuccess } from "@/lib/invest-types";
+import type { VenueName } from "@/hooks/useSwap";
 import { explainError, explainInvestFailure } from "@/lib/explainError";
 
 /** POST /api/commit-plan response — Vera's signed risk inference for this plan. */
@@ -66,6 +67,9 @@ export interface InvestProgress {
   /** Symbols that actually filled — so the conveyor only checks off real buys,
       never a leg that was attempted and failed. */
   filledSymbols: string[];
+  /** Which venue won each filled leg, symbol -> venue. A plan can fill different
+      legs on different venues, so this is per-leg, not per-plan. */
+  legVenues: Record<string, VenueName>;
 }
 
 export interface UseInvest {
@@ -200,6 +204,7 @@ export function useInvest(): UseInvest {
             etaSeconds: (dLegs.length - i) * 2,
             mode,
             filledSymbols: dLegs.slice(0, i).map((a) => a.symbol),
+            legVenues: {},
           });
           await sleep(700);
         }
@@ -265,6 +270,7 @@ export function useInvest(): UseInvest {
         setPhase("investing");
         const filled: { leg: (typeof active)[number]["leg"]; amountMicro: bigint; txHash: `0x${string}`; settling: boolean }[] = [];
         const filledSyms: string[] = [];
+        const legVenues: Record<string, VenueName> = {};
         const failures: { symbol: string; message: string }[] = [];
         let lastTx: `0x${string}` | null = null;
         let permitDone = false;
@@ -309,6 +315,7 @@ export function useInvest(): UseInvest {
             etaSeconds: idx === 0 ? total * 6 : Math.ceil(((Date.now() - startedAt) / 1000 / idx) * (total - idx)),
             mode,
             filledSymbols: [...filledSyms],
+            legVenues: { ...legVenues },
           });
           try {
             const freshQuote = () =>
@@ -348,6 +355,7 @@ export function useInvest(): UseInvest {
             lastTx = res.txHash;
             filled.push({ leg: q.leg, amountMicro: q.amountMicro, txHash: res.txHash, settling: res.settling });
             filledSyms.push(q.leg.symbol);
+            if (quote.venue) legVenues[q.leg.symbol] = quote.venue;
             spentMicroRunning += q.amountMicro;
           } catch (legErr) {
             // "No liquidity" is an expected skip; anything else is logged loudly.
@@ -368,6 +376,7 @@ export function useInvest(): UseInvest {
             etaSeconds: doneCount < total ? Math.ceil(perLeg * (total - doneCount)) : 0,
             mode,
             filledSymbols: [...filledSyms],
+            legVenues: { ...legVenues },
           });
         }
         if (filled.length === 0) {
@@ -419,6 +428,8 @@ export function useInvest(): UseInvest {
           weightPct: leg.weightPct,
           amountUsd: Number(amountMicro) / 1_000_000,
           txHash,
+          // Which venue actually won this leg — legs can fill on different venues.
+          venue: legVenues[leg.symbol],
         }));
 
         setSuccess({

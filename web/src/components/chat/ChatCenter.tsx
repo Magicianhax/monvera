@@ -26,6 +26,8 @@ import { useTheme } from "@/hooks/useTheme";
 import { useColorStyle } from "@/hooks/useColorStyle";
 import { portfolioDayCurve, equityCurveFrom } from "@/lib/portfolioCurve";
 import { ConveyorOverlay } from "./ConveyorOverlay";
+import type { VenueName } from "@/hooks/useSwap";
+import { VenueMark, venueLabel, isVenue } from "./venueBrand";
 import { assetBySymbol } from "@/lib/tokens";
 
 export interface ChatCenterHandle { submit: (text: string) => void }
@@ -307,6 +309,15 @@ export function ChatCenter({ nav, chat, narrowed, pendingAsk, consumeAsk, mobile
 
   // Live preview on the confirm card: "$10 → ≈ 61,200 $MONVERA" from a real
   // quote, so the user sees what they're getting BEFORE they confirm.
+  const [liveVenues, setLiveVenues] = useState<VenueName[]>([]);
+  useEffect(() => {
+    let alive = true;
+    fetch("/api/venues")
+      .then((r) => r.json())
+      .then((j) => { if (alive && Array.isArray(j?.venues)) setLiveVenues(j.venues.filter(isVenue)); })
+      .catch(() => { /* decorative only — never block the plan on it */ });
+    return () => { alive = false; };
+  }, []);
   const [orderPreview, setOrderPreview] = useState<{ msgId: string; text: string } | null>(null);
   const lastMsg = chat.messages[chat.messages.length - 1];
   const lastOrder = (lastMsg?.payload as { tokenOrder?: { side: "buy" | "sell"; amountUsd: number } } | null)?.tokenOrder;
@@ -760,6 +771,8 @@ ${seller.error.slice(0, 160)}`, payload: { suggestions: ["Try again"] } }).catch
           current={seller.progress.currentSymbol}
           legs={(sellAsk?.legs ?? lastSellLegsRef.current).map((l) => ({ symbol: l.symbol, usd: l.amountUsd }))}
           filled={seller.progress.filledSymbols}
+          legVenues={seller.progress.legVenues}
+          competing={liveVenues}
           done={seller.progress.done}
           total={seller.progress.total}
           movedUsd={seller.progress.proceedsUsd}
@@ -783,6 +796,8 @@ ${seller.error.slice(0, 160)}`, payload: { suggestions: ["Try again"] } }).catch
           current={invest.progress?.currentSymbol ?? null}
           legs={(placingPlan.allocations ?? []).map((a) => ({ symbol: a.symbol, usd: (placingPlan.amountUsd * a.weightPct) / 100 }))}
           filled={invest.progress?.filledSymbols ?? []}
+          legVenues={invest.progress?.legVenues}
+          competing={liveVenues}
           done={invest.progress?.done ?? 0}
           total={invest.progress?.total ?? (placingPlan.allocations ?? []).length}
           movedUsd={invest.progress?.spentUsd ?? 0}
@@ -1605,6 +1620,13 @@ function InvestReceiptPopup({ s, nav, onClose }: { s: InvestSuccess; nav: ChatNa
                   </a>
                 ) : (
                   <span style={{ fontSize: 11, color: "var(--ink-3)" }}>settling, lands in minutes</span>
+                )}
+                {/* which venue won best execution for THIS leg */}
+                {h.venue && (
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11, color: "var(--ink-3)", marginLeft: h.txHash ? 8 : 0 }}>
+                    <VenueMark venue={h.venue} size={11} />
+                    {venueLabel(h.venue)}
+                  </span>
                 )}
               </span>
               <span style={{ textAlign: "right" }}>

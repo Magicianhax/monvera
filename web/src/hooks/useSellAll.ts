@@ -16,7 +16,7 @@ import { useActiveWallet } from "@/hooks/useActiveWallet";
 import { useRefreshBalances } from "@/hooks/useBalances";
 import { useDemo } from "@/components/demo/DemoProvider";
 import { explainError } from "@/lib/explainError";
-import { executeSwap } from "@/hooks/useSwap";
+import { executeSwap, type VenueName } from "@/hooks/useSwap";
 import { typedDataSigner, waitForRfqFill, type Eip1193 } from "@/lib/arcusTrade";
 import type { Asset } from "@/lib/tokens";
 import type { InvestMode } from "@/hooks/useInvest";
@@ -38,6 +38,8 @@ export interface SellProgress {
   mode: InvestMode;
   /** Symbols actually sold — the conveyor only checks off real fills. */
   filledSymbols: string[];
+  /** Which venue won each sold leg (symbol -> venue). */
+  legVenues: Record<string, VenueName>;
 }
 
 export interface SoldHolding {
@@ -96,6 +98,7 @@ export function useSellAll() {
             etaSeconds: (sels.length - i) * 2,
             mode,
             filledSymbols: sels.slice(0, i).map((s) => s.asset.symbol),
+            legVenues: {},
           });
           await sleep(700);
         }
@@ -126,6 +129,7 @@ export function useSellAll() {
         setPhase("selling");
         const sold: SoldHolding[] = [];
         const filledSyms: string[] = [];
+        const legVenues: Record<string, VenueName> = {};
         const total = sels.length;
         const startedAt = Date.now();
         let proceeds = 0;
@@ -140,10 +144,11 @@ export function useSellAll() {
             etaSeconds: idx === 0 ? total * 6 : Math.ceil(((Date.now() - startedAt) / 1000 / idx) * (total - idx)),
             mode,
             filledSymbols: [...filledSyms],
+            legVenues: { ...legVenues },
           });
           try {
             const trade = { side: "sell" as const, symbol: sel.asset.symbol, sellAmount: sel.amountIn };
-            let res: { txHash: `0x${string}`; settling: boolean };
+            let res: Awaited<ReturnType<typeof executeSwap>>;
             try {
               res = await executeSwap(wallet, trade, signTyped);
             } catch (firstErr) {
@@ -154,6 +159,7 @@ export function useSellAll() {
             }
             sold.push({ symbol: sel.asset.symbol, name: sel.asset.name, amountUsd: sel.estUsd, txHash: res.txHash, settling: res.settling });
             filledSyms.push(sel.asset.symbol);
+            if (res.venue) legVenues[sel.asset.symbol] = res.venue;
             proceeds += sel.estUsd;
           } catch (legErr) {
             console.error(`[sell-all] ${sel.asset.symbol} failed (after retry):`, legErr instanceof Error ? legErr.message : legErr);
@@ -169,6 +175,7 @@ export function useSellAll() {
             etaSeconds: doneCount < total ? Math.ceil(perLeg * (total - doneCount)) : 0,
             mode,
             filledSymbols: [...filledSyms],
+            legVenues: { ...legVenues },
           });
         }
         if (sold.length === 0) {
