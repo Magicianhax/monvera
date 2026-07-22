@@ -19,16 +19,28 @@ export const USDT0_XLAYER = "0x779ded0c9e1022225f8e0630b35a9b54be713736";
 export const CHALLENGE_TTL_SECONDS = 300;
 
 /** Per-call prices in USD. The scheme's default parser converts to USDT0 6dp. */
+// Priced against the live OKX.AI marketplace (113 priced ASPs, 2026-07-23:
+// p25 0.01 · median 0.10 · p75 0.50). The card shows an agent's MIN price, so
+// the entry tier is what gets us scanned — it sits under the median on purpose.
+// Tiering follows marginal cost: deterministic compute is near-free to serve;
+// plan/research pay for model inference.
+// LIVE PRICES MUST MATCH THE OKX LISTING FEES. The listing is the advertised
+// contract; a live 402 that charges a different amount is what a validator
+// reads as a spec violation. Change both in one go, never one alone.
+//
+// When cutting, deploy this file FIRST, then drop the listing fees. The interim
+// then undercharges against the advertised price, which is benign; the reverse
+// order overcharges against it, which is the violation.
 export const PRICES = {
-  plan: 0.5,
-  research: 0.25,
-  halalScreen: 0.25,
-  basket: 0.35,
-  build: 0.25,
-  backtest: 0.25,
-  screener: 0.25,
-  compare: 0.3,
-  rebalance: 0.35,
+  plan: 0.15,
+  research: 0.03,
+  halalScreen: 0.03,
+  basket: 0.08,
+  build: 0.03,
+  backtest: 0.03,
+  screener: 0.03,
+  compare: 0.05,
+  rebalance: 0.08,
 } as const;
 
 /** Route path -> price key. Wildcard basket handled explicitly. */

@@ -56,7 +56,8 @@ test("unpaid /v1/plan gets a 402 with a v2 challenge for USDT0 on X Layer", asyn
   expect(accept.scheme).toBe("exact");
   expect(accept.network).toBe("eip155:196");
   expect(accept.asset.toLowerCase()).toBe(USDT0_XLAYER);
-  expect(accept.amount).toBe("500000"); // $0.50 in 6dp
+  // derived from PRICES so a pricing change never breaks the wire-format test
+  expect(accept.amount).toBe(String(Math.round(PRICES.plan * 1_000_000)));
   expect(accept.payTo).toBe("0x1111111111111111111111111111111111111111");
 });
 
@@ -74,7 +75,7 @@ test("the 402 body carries the decoded challenge, signing contract and how-to", 
   };
   expect(body.code).toBe("PAYMENT_REQUIRED");
   expect(body.charged).toBe(false);
-  expect(body.x402?.accepts[0]?.amount).toBe("500000");
+  expect(body.x402?.accepts[0]?.amount).toBe(String(Math.round(PRICES.plan * 1_000_000)));
   expect(body.signing.eip712Domain.name).toBe("USD₮0");
   expect(body.signing.eip712Domain.chainId).toBe(196);
   expect(body.signing.template).toContain("PAYMENT-SIGNATURE");
@@ -83,13 +84,13 @@ test("the 402 body carries the decoded challenge, signing contract and how-to", 
   expect(body.prerequisites.execution.asset).toBe("USDC");
 });
 
-test("basket wildcard route is payment-gated at $0.35", async () => {
+test("basket wildcard route is payment-gated at the basket price", async () => {
   const out = await verifyAndSettle(new Request("https://asp.example/v1/basket/halal", { method: "POST" }), env);
   if (out.kind !== "challenge") throw new Error("expected challenge");
   const challenge = decodeBase64Json(out.response.headers.get("PAYMENT-REQUIRED")!) as {
     accepts: Array<{ amount: string }>;
   };
-  expect(challenge.accepts[0].amount).toBe("350000");
+  expect(challenge.accepts[0].amount).toBe(String(Math.round(PRICES.basket * 1_000_000)));
 });
 
 test("challengeEntryFor matches the live 402 accepts for every paid route", async () => {
@@ -161,5 +162,7 @@ test("routes outside the paid table pass through unpaid", async () => {
 
 test("prices cover all paid routes", () => {
   expect(Object.keys(PAID_ROUTES).length).toBe(9);
-  for (const key of Object.values(PAID_ROUTES)) expect(PRICES[key]).toBeGreaterThanOrEqual(0.25);
+  // floor, not a fixed price: below ~$0.02 a listing reads as unserious and
+  // the per-call revenue stops covering inference on the model-backed routes.
+  for (const key of Object.values(PAID_ROUTES)) expect(PRICES[key]).toBeGreaterThanOrEqual(0.02);
 });
