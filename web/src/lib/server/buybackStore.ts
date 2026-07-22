@@ -23,7 +23,7 @@ import "server-only";
 //   availableToBuy = buybackBudget - totalSpent
 import { createPublicClient, http, parseAbiItem, getAddress, formatUnits, type Address } from "viem";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
-import { chain } from "@/lib/chain";
+import { chain, RPC_URL } from "@/lib/chain";
 import { SERVER_RPC_URL } from "@/lib/server/rpc";
 import { MONVERA, VIRTUAL } from "@/lib/monveraToken";
 import { USDG } from "@/lib/tokens";
@@ -32,6 +32,14 @@ export const TREASURY = getAddress("0xb87f5A74267ca3F9512b8511B32cCd804EA3707E")
 const BUYBACK_PCT = 0.2;
 
 const client = createPublicClient({ chain, transport: http(SERVER_RPC_URL, { retryCount: 1, timeout: 8_000 }) });
+// Wide log scans go to the PUBLIC RPC, not the keyed one. Alchemy's free tier
+// caps eth_getLogs at a 10-BLOCK range ("Upgrade to PAYG for expanded block
+// range"), which silently wedged this indexer: every catch-up failed on its
+// first chunk, so the cursor never moved and four buybacks went unrecorded.
+// The public RPC serves topic-filtered scans over millions of blocks in well
+// under a second (measured: 2M blocks in ~640ms). Point reads (receipts,
+// blocks, balances) stay on `client`, which Alchemy handles fine.
+const logsClient = createPublicClient({ chain, transport: http(RPC_URL, { retryCount: 1, timeout: 20_000 }) });
 const TRANSFER = parseAbiItem("event Transfer(address indexed from, address indexed to, uint256 value)");
 const TRANSFER_TOPIC = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
 const BAL_ABI = [
@@ -89,10 +97,14 @@ async function balanceOf(token: Address, decimals: number): Promise<number> {
 // ── Indexer: record new treasury funding (USDG->VIRTUAL) and buyback legs ──
 const LAST_BLOCK_KEY = "buyback:lastblock:v1";
 const INDEX_LOCK_KEY = "buyback:indexed:v1";
-// The RPC serves topic-filtered getLogs over 500k+ block ranges in one call
-// (verified live); tiny chunks made the cursor crawl ~9k blocks per run and lag
-// the chain head by days. Keep a chunk cap only as a safety valve.
-const CHUNK = BigInt(400_000);
+// The RPC serves topic-filtered getLogs over multi-million block ranges in one
+// call (verified live at 4.9M), so the chunk is a safety valve, not a crawl.
+const CHUNK = BigInt(2_000_000);
+// Bounded work per invocation. This runs inside a request on a Worker, so a
+// long catch-up gets killed part-way; we stop early and on purpose instead,
+// having already persisted progress, and the next run continues.
+const MAX_CHUNKS_PER_RUN = 8;
+const RUN_BUDGET_MS = 20_000;
 const ZERO = BigInt(0);
 const ONE = BigInt(1);
 const WINDOW = BigInt(20000);
@@ -106,7 +118,7 @@ async function findFundingOutflow(fillBlock: bigint): Promise<{ txHash: string; 
   const from = fillBlock > RELAY_LOOKBACK ? fillBlock - RELAY_LOOKBACK : ZERO;
   let logs;
   try {
-    logs = await client.getLogs({ address: USDG.address, event: TRANSFER, args: { from: TREASURY }, fromBlock: from, toBlock: fillBlock });
+    logs = await logsClient.getLogs({ address: USDG.address, event: TRANSFER, args: { from: TREASURY }, fromBlock: from, toBlock: fillBlock });
   } catch {
     return null;
   }
@@ -202,10 +214,152 @@ async function classifyTx(txHash: `0x${string}`): Promise<void> {
   }
 }
 
+// ── Zerion: the treasury's decoded transaction history ──────────────────────
+// Zerion indexes Robinhood Chain as `robinhood` (external_id 0x1237 = 4663) and
+// returns DECODED transfers, so this path needs no block cursor, no chunking and
+// no per-tx receipt fetch — the three things that made the RPC path fragile.
+// The RPC scanner below stays as the fallback.
+
+const ZERION_KEY = process.env.ZERION_API_KEY;
+const ZERION_CHAIN = "robinhood";
+const ZERION_PAGE_SIZE = 100;
+const ZERION_MAX_PAGES = 5;
+
+interface ZTransfer {
+  direction?: string;
+  quantity?: { float?: number };
+  fungible_info?: { implementations?: { chain_id?: string; address?: string }[] };
+}
+interface ZTx {
+  attributes?: { hash?: string; mined_at_block?: number; mined_at?: string; status?: string; transfers?: ZTransfer[] };
+}
+
+/** One treasury tx reduced to the four movements the buyback ledger cares about. */
+interface TreasuryTx {
+  hash: `0x${string}`;
+  blockNumber: number;
+  at: number;
+  usdgOut: number;
+  virtualIn: number;
+  virtualOut: number;
+  monveraIn: number;
+}
+
+const lc = (a: string) => a.toLowerCase();
+const USDG_LC = lc(USDG.address);
+const VIRTUAL_LC = lc(VIRTUAL.address);
+const MONVERA_LC = lc(MONVERA.address);
+
+/** Treasury history from Zerion, newest first. */
+async function zerionTreasuryTxs(): Promise<TreasuryTx[]> {
+  let url =
+    `https://api.zerion.io/v1/wallets/${TREASURY}/transactions/` +
+    `?filter%5Bchain_ids%5D=${ZERION_CHAIN}&page%5Bsize%5D=${ZERION_PAGE_SIZE}`;
+  const out: TreasuryTx[] = [];
+
+  for (let page = 0; page < ZERION_MAX_PAGES && url; page++) {
+    const res = await fetch(url, {
+      headers: { accept: "application/json", authorization: `Basic ${btoa(`${ZERION_KEY}:`)}` },
+    });
+    if (!res.ok) throw new Error(`zerion ${res.status}`);
+    const json = (await res.json()) as { data?: ZTx[]; links?: { next?: string } };
+
+    for (const tx of json.data ?? []) {
+      const a = tx.attributes;
+      // A reverted tx moved nothing; recording it would invent a buyback.
+      if (!a?.hash || a.status !== "confirmed") continue;
+      const t: TreasuryTx = {
+        hash: a.hash as `0x${string}`,
+        blockNumber: a.mined_at_block ?? 0,
+        at: a.mined_at ? Math.floor(Date.parse(a.mined_at) / 1000) : 0,
+        usdgOut: 0, virtualIn: 0, virtualOut: 0, monveraIn: 0,
+      };
+      for (const tr of a.transfers ?? []) {
+        const addr = lc(tr.fungible_info?.implementations?.find((i) => i.chain_id === ZERION_CHAIN)?.address ?? "");
+        const amt = typeof tr.quantity?.float === "number" ? tr.quantity.float : 0;
+        const outbound = tr.direction === "out";
+        if (addr === USDG_LC && outbound) t.usdgOut += amt;
+        else if (addr === VIRTUAL_LC) { if (outbound) t.virtualOut += amt; else t.virtualIn += amt; }
+        else if (addr === MONVERA_LC && !outbound) t.monveraIn += amt;
+      }
+      out.push(t);
+    }
+    url = json.links?.next ?? "";
+  }
+  return out;
+}
+
+/** Every tx hash already recorded, including the funding legs consumed by a
+ *  relayed fill (`source_tx`). Loaded once per run so classification costs one
+ *  D1 read instead of one per transaction. */
+async function loadKnownHashes(): Promise<Set<string>> {
+  const rows = (
+    await db()
+      .prepare(
+        "SELECT tx_hash AS h FROM buybacks UNION SELECT source_tx AS h FROM buybacks WHERE source_tx IS NOT NULL UNION SELECT tx_hash AS h FROM treasury_funding",
+      )
+      .all<{ h: string }>()
+  ).results;
+  return new Set(rows.map((r) => lc(r.h)));
+}
+
+/** Record one treasury tx using pre-decoded amounts. Mirrors classifyTx's
+ *  branches exactly; `all` supplies the funding leg for a relayed fill. */
+async function recordTreasuryTx(t: TreasuryTx, all: TreasuryTx[], known: Set<string>): Promise<void> {
+  if (known.has(lc(t.hash))) return;
+
+  const insertBuyback = async (usdgSpent: number, virtualSpent: number, sourceTx: string | null) => {
+    const price = usdgSpent > 0 && t.monveraIn > 0 ? usdgSpent / t.monveraIn : 0;
+    await db()
+      .prepare("INSERT OR IGNORE INTO buybacks (tx_hash,block_number,bought_at,monvera_amount,usdg_spent,virtual_spent,price_usd,source_tx) VALUES (?,?,?,?,?,?,?,?)")
+      .bind(t.hash, t.blockNumber, t.at, t.monveraIn, usdgSpent, virtualSpent, price, sourceTx)
+      .run();
+    known.add(lc(t.hash));
+    if (sourceTx) known.add(lc(sourceTx));
+  };
+
+  // Routed buyback: VIRTUAL out + MONVERA in. Priced later off the cost basis.
+  if (t.virtualOut > 0 && t.monveraIn > 0) return insertBuyback(0, t.virtualOut, null);
+  // Direct buyback: USDG out + MONVERA in within one tx.
+  if (t.usdgOut > 0 && t.monveraIn > 0) return insertBuyback(t.usdgOut, 0, null);
+  // Relayed fill: MONVERA arrives with no treasury outflow in the same tx. Pair
+  // it with the nearest prior unconsumed USDG outflow (the funding tx).
+  if (t.monveraIn > 0 && t.usdgOut === 0 && t.virtualOut === 0) {
+    const lookback = Number(RELAY_LOOKBACK);
+    const funding = all
+      .filter((x) => x.usdgOut > 0 && x.blockNumber <= t.blockNumber && x.blockNumber >= t.blockNumber - lookback && !known.has(lc(x.hash)))
+      .sort((a, b) => b.blockNumber - a.blockNumber)[0];
+    return insertBuyback(funding?.usdgOut ?? 0, 0, funding?.hash ?? null);
+  }
+  // Funding leg: USDG out + VIRTUAL in, no MONVERA yet.
+  if (t.usdgOut > 0 && t.virtualIn > 0) {
+    await db()
+      .prepare("INSERT OR IGNORE INTO treasury_funding (tx_hash,block_number,funded_at,usdg_spent,virtual_bought) VALUES (?,?,?,?,?)")
+      .bind(t.hash, t.blockNumber, t.at, t.usdgOut, t.virtualIn)
+      .run();
+    known.add(lc(t.hash));
+  }
+}
+
+async function indexViaZerion(): Promise<void> {
+  const txs = await zerionTreasuryTxs();
+  const known = await loadKnownHashes();
+  // Oldest first: a relayed fill must see the funding leg that preceded it, and
+  // funding must be marked consumed before a later fill can claim it.
+  const ordered = [...txs].sort((a, b) => a.blockNumber - b.blockNumber);
+  for (const t of ordered) {
+    try {
+      await recordTreasuryTx(t, ordered, known);
+    } catch (err) {
+      console.error("[buyback] zerion record failed", { tx: t.hash, err });
+    }
+  }
+}
+
 /** Scan for new VIRTUAL and MONVERA inflows to the treasury and record the funding
  *  and buyback legs behind them. Incremental via a KV block cursor; cheap when
  *  nothing happens (empty getLogs). */
-export async function indexBuybacks(): Promise<void> {
+async function indexViaRpc(): Promise<void> {
   const store = kv();
   const latest = await client.getBlockNumber();
   const saved = store ? await store.get(LAST_BLOCK_KEY) : null;
@@ -214,23 +368,57 @@ export async function indexBuybacks(): Promise<void> {
   let cursor = saved ? BigInt(saved) + ONE : latest > WINDOW ? latest - WINDOW : ZERO;
   if (cursor > latest) return;
 
-  while (cursor <= latest) {
+  const startedAt = Date.now();
+  let chunks = 0;
+  while (cursor <= latest && chunks < MAX_CHUNKS_PER_RUN && Date.now() - startedAt < RUN_BUDGET_MS) {
     const end = cursor + CHUNK - ONE < latest ? cursor + CHUNK - ONE : latest;
     let hashes: Set<string>;
     try {
       // Funding legs land VIRTUAL in the treasury; buyback legs land MONVERA.
       const [virtLogs, monLogs] = await Promise.all([
-        client.getLogs({ address: VIRTUAL.address, event: TRANSFER, args: { to: TREASURY }, fromBlock: cursor, toBlock: end }),
-        client.getLogs({ address: MONVERA.address, event: TRANSFER, args: { to: TREASURY }, fromBlock: cursor, toBlock: end }),
+        logsClient.getLogs({ address: VIRTUAL.address, event: TRANSFER, args: { to: TREASURY }, fromBlock: cursor, toBlock: end }),
+        logsClient.getLogs({ address: MONVERA.address, event: TRANSFER, args: { to: TREASURY }, fromBlock: cursor, toBlock: end }),
       ]);
       hashes = new Set([...virtLogs, ...monLogs].map((l) => l.transactionHash as string));
-    } catch {
-      break; // stop; resume from `cursor` next run
+    } catch (err) {
+      console.error("[buyback] getLogs failed", { fromBlock: String(cursor), toBlock: String(end), err });
+      return; // progress up to the previous chunk is already saved
     }
-    for (const h of hashes) await classifyTx(h as `0x${string}`);
+
+    // One unclassifiable tx must never wedge the cursor: a permanently failing
+    // receipt would otherwise re-run and re-fail on every request forever.
+    for (const h of hashes) {
+      try {
+        await classifyTx(h as `0x${string}`);
+      } catch (err) {
+        console.error("[buyback] classifyTx failed", { tx: h, err });
+      }
+    }
+
     cursor = end + ONE;
+    chunks++;
+    // Persist after EVERY chunk. Saving only after the whole loop meant a
+    // Worker killed mid-catch-up discarded all progress and restarted from the
+    // same block on every run — the cursor sat at 10.7M while indexed rows
+    // existed at 11.2M, and four buybacks never got recorded.
+    if (store) await store.put(LAST_BLOCK_KEY, (cursor - ONE).toString());
   }
-  if (store) await store.put(LAST_BLOCK_KEY, (cursor - ONE).toString());
+}
+
+/** Record new treasury funding and buyback legs. Zerion first (decoded history,
+ *  no block range to page over); the RPC log scanner is the fallback for when
+ *  Zerion is unset, erroring, or lagging. Both write the same rows and are
+ *  idempotent, so falling back mid-catch-up is safe. */
+export async function indexBuybacks(): Promise<void> {
+  if (ZERION_KEY) {
+    try {
+      await indexViaZerion();
+      return;
+    } catch (err) {
+      console.error("[buyback] zerion index failed, falling back to RPC", err);
+    }
+  }
+  await indexViaRpc();
 }
 
 /** Run the indexer at most once per ~2 minutes (KV throttle), so dashboard loads

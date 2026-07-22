@@ -59,8 +59,10 @@ export default async function BuybackPage() {
 
       {/* metrics */}
       <div className={s.stats}>
+        {/* Row 1 — money in, and what's left of it. Net revenue is shown rather
+            than implied so revenue - expenses = net is checkable on the page. */}
         <div className={s.stat}>
-          <div className={s.statLabel}>Treasury revenue</div>
+          <div className={s.statLabel}>Fees earned</div>
           <div className={s.statValue}>{usd(st.totalRevenue)}</div>
           <div className={s.statSub}>from Monvera trading fees</div>
         </div>
@@ -71,14 +73,44 @@ export default async function BuybackPage() {
           <ArrowDown size={14} strokeWidth={2.2} className={s.statArrow} aria-hidden />
         </a>
         <div className={s.stat}>
+          <div className={s.statLabel}>Net revenue</div>
+          <div className={s.statValue}>{usd(st.netRevenue)}</div>
+          <div className={s.statSub}>after expenses</div>
+        </div>
+
+        {/* Row 2 — the policy, what it has funded, and what is still sitting there. */}
+        <div className={s.stat}>
           <div className={s.statLabel}>Buyback budget</div>
           <div className={`${s.statValue} ${s.statAccent}`}>{usd(st.buybackBudget)}</div>
           <div className={s.statSub}>20% of net · dynamic</div>
         </div>
         <div className={s.stat}>
+          <div className={s.statLabel}>Spent on buybacks</div>
+          <div className={s.statValue}>{usd(st.totalSpent)}</div>
+          <div className={s.statSub}>across {st.buybackCount} buyback{st.buybackCount === 1 ? "" : "s"}</div>
+        </div>
+        {/* Expenses are accrued but NOT yet withdrawn — that USDG is still sitting
+            in the wallet, so the raw balance overstates what is actually
+            deployable. We show the balance net of them, and say so, because the
+            wallet is public and the two figures must be reconcilable.
+            NOTE: when an expense is finally withdrawn the on-chain balance drops
+            by itself, and subtracting it here too would double-count. Revisit
+            this the moment a withdrawal happens. */}
+        <div className={s.stat}>
+          <div className={s.statLabel}>In treasury now</div>
+          <div className={s.statValue}>{usd(Math.max(0, st.treasuryUsdg - st.totalExpenses))}</div>
+          <div className={s.statSub}>
+            {st.totalExpenses > 0
+              ? `USDG available · ${usd(st.totalExpenses)} set aside for expenses`
+              : "USDG held on-chain"}
+          </div>
+        </div>
+
+        {/* Row 3 — what the spending actually bought. */}
+        <div className={s.stat}>
           <div className={s.statLabel}>Bought back</div>
           <div className={s.statValue}>{num(st.totalBought)} <span className={s.statUnit}>$MONVERA</span></div>
-          <div className={s.statSub}>{usd(st.totalSpent, 0)} spent</div>
+          <div className={s.statSub}>{num(st.treasuryMonvera)} held in treasury</div>
         </div>
         <div className={s.stat}>
           <div className={s.statLabel}>Supply bought back</div>
