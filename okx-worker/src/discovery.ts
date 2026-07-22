@@ -89,6 +89,11 @@ export function catalog(env: Env): Record<string, unknown> {
     pricing: {
       changelog: [
         {
+          date: "2026-07-23",
+          change:
+            "Per-call fees cut: plan $0.50->$0.15, basket & rebalance $0.35->$0.08, compare $0.30->$0.05, research/halal-screen/build/backtest/screener $0.25->$0.03. Quote stays free.",
+        },
+        {
           date: FEE_DISCLOSURE_DATE,
           change: "Pricing published: flat per-call fees only. Any future change will be dated here.",
         },
