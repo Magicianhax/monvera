@@ -1488,8 +1488,21 @@ function ReviewCard({ review, onAsk, nav }: { review: ReviewPayload; onAsk: (tex
  *  mean what they say. SSR-safe: renders nothing until mounted. */
 function Overlay({ children, onClose }: { children: React.ReactNode; onClose: () => void }) {
   const [mounted, setMounted] = useState(false);
+  // Every theme variable (--panel, --ink, --line, --primary) is defined on the
+  // app's `.mvc[data-mode][data-style]` root. Portalling to <body> escapes that
+  // scope, so the card loses all of them and renders as a washed-out white box.
+  // Carry the scope onto the portal container instead.
+  const [theme, setTheme] = useState<{ cls: string; mode: string; style: string }>({ cls: "mvc", mode: "light", style: "emerald" });
   useEffect(() => {
     setMounted(true);
+    const root = document.querySelector<HTMLElement>(".mvc[data-mode]");
+    if (root) {
+      setTheme({
+        cls: root.className,
+        mode: root.dataset.mode ?? "light",
+        style: root.dataset.style ?? "emerald",
+      });
+    }
     // Escape closes, and the page behind must not scroll under the sheet.
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
     const prev = document.body.style.overflow;
@@ -1503,8 +1516,13 @@ function Overlay({ children, onClose }: { children: React.ReactNode; onClose: ()
   if (!mounted) return null;
   return createPortal(
     <div
+      className={theme.cls}
+      data-mode={theme.mode}
+      data-style={theme.style}
       onClick={onClose}
-      style={{ position: "fixed", inset: 0, zIndex: 1000, display: "grid", placeItems: "center", padding: 16, background: "color-mix(in srgb, #000 46%, transparent)", backdropFilter: "blur(6px)", WebkitBackdropFilter: "blur(6px)" }}
+      // `background` (not the .mvc animated gradient) — this is a scrim, and the
+      // class above would otherwise paint the liquid backdrop over the page.
+      style={{ position: "fixed", inset: 0, zIndex: 1000, display: "grid", placeItems: "center", padding: 16, background: "color-mix(in srgb, #000 40%, transparent)", backdropFilter: "blur(6px)", WebkitBackdropFilter: "blur(6px)", animation: "none" }}
     >
       {children}
     </div>,
