@@ -36,6 +36,16 @@ const ROUTER_4663 = "0x6131b5fae19ea4f9d964eac0408e4408b66337b5";
 // Kyber asks integrators to send a stable app name; un-whitelisted clients are
 // capped at 3 rps. Register this value with them, don't randomise it per call.
 const CLIENT_ID = process.env.KYBER_CLIENT_ID ?? "monvera";
+// Cloudflare Workers' fetch sends NO User-Agent, and Kyber's WAF 403s requests
+// without one — so in production every Kyber quote failed while the identical
+// call succeeded from a laptop, and the venue silently never competed.
+// Reproduced exactly: curl -H "User-Agent:" -> 403, with any UA -> 200.
+// Every request to this API must carry it.
+const HEADERS = {
+  "x-client-id": CLIENT_ID,
+  "user-agent": "monvera/1.0 (+https://monvera.best)",
+  accept: "application/json",
+} as const;
 const SLIPPAGE_BPS = 50; // 0.5% — same as the other AMM venues
 const BPS = BigInt(10_000);
 const TIMEOUT_MS = 9_000;
@@ -77,7 +87,7 @@ async function routes(sellToken: Address, buyToken: Address, sellAmount: bigint)
   }
   try {
     const res = await fetch(`${BASE}/routes?${qs}`, {
-      headers: { "x-client-id": CLIENT_ID },
+      headers: HEADERS,
       signal: AbortSignal.timeout(TIMEOUT_MS),
     });
     if (res.status === 429) {
@@ -151,7 +161,7 @@ export async function kyberQuote(
   try {
     const res = await fetch(`${BASE}/route/build`, {
       method: "POST",
-      headers: { "x-client-id": CLIENT_ID, "content-type": "application/json" },
+      headers: { ...HEADERS, "content-type": "application/json" },
       signal: AbortSignal.timeout(TIMEOUT_MS),
       body: JSON.stringify({
         routeSummary: summary,
