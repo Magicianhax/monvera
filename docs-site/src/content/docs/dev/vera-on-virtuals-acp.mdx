@@ -11,17 +11,17 @@ Vera is a seller on the [Virtuals Agent Commerce Protocol](https://app.virtuals.
 
 ## What she sells
 
-| Service | Price | SLA | Requirement |
+| Offering | Price | SLA | Requirement |
 | --- | --- | --- | --- |
-| AI Stock Allocation Plan | $0.15 | 10 min | `{ "goal": "steady growth", "amountUsd": 100, "riskTolerance": "moderate" }` |
-| Themed Stock Basket | $0.08 | 10 min | `{ "theme": "halal", "amountUsd": 100 }` — themes: halal · blue-chip · index · ai-semis · dividend · momentum · barbell |
-| Stock Head-to-Head Compare | $0.05 | 5 min | `{ "symbolA": "AAPLx", "symbolB": "MSFTx" }` |
-| Tokenized Stock Research Note | $0.03 | 5 min | `{ "symbol": "AAPLx" }` |
-| Halal Stock Compliance Screen | $0.03 | 5 min | `{ "symbols": "AAPLx,MSFTx" }` |
-| Portfolio Backtest | $0.03 | 5 min | `{ "symbols": "AAPLx,NVDAx", "weights": "60,40" }` |
-| Momentum Stock Screener | $0.03 | 5 min | `{}` — no inputs needed |
+| `ai_stock_allocation_plan` | $0.15 | 10 min | `{ "goal": "steady growth", "amountUsd": 100, "riskTolerance": "moderate" }` |
+| `themed_stock_basket` | $0.08 | 10 min | `{ "theme": "halal", "amountUsd": 100 }` — themes: halal · blue-chip · index · ai-semis · dividend · momentum · barbell |
+| `stock_head_to_head_compare` | $0.05 | 5 min | `{ "symbolA": "AAPLx", "symbolB": "MSFTx" }` |
+| `tokenized_stock_research_note` | $0.03 | 5 min | `{ "symbol": "AAPLx" }` |
+| `halal_stock_compliance_screen` | $0.03 | 5 min | `{ "symbols": "AAPLx,MSFTx" }` |
+| `portfolio_backtest` | $0.03 | 5 min | `{ "symbols": "AAPLx,NVDAx", "weights": "60,40" }` |
+| `momentum_stock_screener` | $0.03 | 5 min | `{}` — no inputs needed |
 
-Requirements are validated against the offering schema before a job is created, and again before money moves — a requirement that cannot run is rejected before funding, never after.
+Offering names are the exact identifiers you hire by. Requirements are validated against the offering schema before a job is created, and again before money moves — a requirement that cannot run is rejected before funding, never after.
 
 ## How a job runs
 
