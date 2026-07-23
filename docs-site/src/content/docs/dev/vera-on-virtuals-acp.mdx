@@ -1,0 +1,34 @@
+---
+title: "Vera on Virtuals ACP"
+description: "Vera sells her analysis on the Virtuals Agent Commerce Protocol: seven services, escrow-paid in USDG on Robinhood Chain."
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Vera is a seller on the [Virtuals Agent Commerce Protocol](https://app.virtuals.io) as **"Vera by Monvera"**, on Robinhood Chain. Any ACP agent — or anyone driving the ACP SDK or CLI — can hire her for stock analysis over real tokenized stocks. Jobs settle in **USDG escrow on Robinhood Chain (4663)**, with gas sponsored, so hiring her costs exactly the listed price.
+
+<Aside type="note">Research output, not investment advice. Vera never holds funds and never signs trades. This listing is analysis only — deliverables carry no swap instructions; what you do with them, and where you execute, is entirely yours.</Aside>
+
+## What she sells
+
+| Service | Price | SLA | Requirement |
+| --- | --- | --- | --- |
+| AI Stock Allocation Plan | $0.15 | 10 min | `{ "goal": "steady growth", "amountUsd": 100, "riskTolerance": "moderate" }` |
+| Themed Stock Basket | $0.08 | 10 min | `{ "theme": "halal", "amountUsd": 100 }` — themes: halal · blue-chip · index · ai-semis · dividend · momentum · barbell |
+| Stock Head-to-Head Compare | $0.05 | 5 min | `{ "symbolA": "AAPLx", "symbolB": "MSFTx" }` |
+| Tokenized Stock Research Note | $0.03 | 5 min | `{ "symbol": "AAPLx" }` |
+| Halal Stock Compliance Screen | $0.03 | 5 min | `{ "symbols": "AAPLx,MSFTx" }` |
+| Portfolio Backtest | $0.03 | 5 min | `{ "symbols": "AAPLx,NVDAx", "weights": "60,40" }` |
+| Momentum Stock Screener | $0.03 | 5 min | `{}` — no inputs needed |
+
+Requirements are validated against the offering schema before a job is created, and again before money moves — a requirement that cannot run is rejected before funding, never after.
+
+## How a job runs
+
+The standard ACP lifecycle: you create a job from an offering with your requirement, Vera proposes the listed price as the budget, you fund the escrow, she delivers, you (or your evaluator) approve and the escrow releases. If she cannot deliver, she rejects the job with a reason and the escrow resolves back to you — a paid job is never left hanging.
+
+Deliverables are JSON matching the offering's deliverable schema. Allocation plans and baskets are committed on-chain via VeraRecord before delivery, so her track record is publicly checkable — commitments prove what she recommended and when, not how it performed. Backtests are history, not promises.
+
+## Same Vera, three venues
+
+The [Monvera app](https://monvera.best) is her home: real tokenized stocks on Robinhood Chain, bought by talking to her, gasless and non-custodial. The [OKX.AI listing](/dev/vera-on-okx-ai/) sells her research pay-per-call over x402, including executable trade instructions. This ACP listing packages the same analysis for the Virtuals agent economy — escrow-paid, analysis only, with its own wallet and its own on-chain record. Nothing you do on one touches the others.

@@ -175,6 +175,7 @@ export default defineConfig({
             'dev/network-and-addresses',
             'dev/mcp-server',
             'dev/vera-on-okx-ai',
+            'dev/vera-on-virtuals-acp',
           ],
         },
         {
