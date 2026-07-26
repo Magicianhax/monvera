@@ -1,6 +1,7 @@
 import type { NextRequest } from "next/server";
 import { z } from "zod";
 import { routeVera } from "@/lib/server/veraRouter";
+import { isInjection, CANNED_REFUSAL } from "@/lib/server/guardrails";
 import { hasAiProvider } from "@/lib/server/aiModel";
 import { verifyRequest } from "@/lib/server/privyAuth";
 import { rateLimit } from "@/lib/server/rateLimit";
@@ -51,6 +52,15 @@ export async function POST(req: NextRequest) {
     body = BodySchema.parse(await req.json());
   } catch {
     return badRequest("Invalid request body.");
+  }
+
+  // Deterministic injection prefilter (post-auth, post-rate-limit): a blatant
+  // role-override / jailbreak / "no JSON" attempt never reaches the model, and
+  // its text is never echoed back. Real scope enforcement is still the closed
+  // schema + STEP-0 prompt rule; this just short-circuits the obvious attacks.
+  if (isInjection(body.text)) {
+    console.warn(`[vera] injection prefilter tripped for user ${user.userId}`);
+    return Response.json({ intent: "reply", message: CANNED_REFUSAL });
   }
 
   try {
