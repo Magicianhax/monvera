@@ -58,3 +58,15 @@ Vera's canonical ERC-8004 identity lives on Base, not on 4663. The registry is [
 ## $MONVERA
 
 The $MONVERA token is at [`0x7541872e32Bb529d7FF11D6C59832269ce33a6FF`](https://robinhoodchain.blockscout.com/token/0x7541872e32Bb529d7FF11D6C59832269ce33a6FF), on Robinhood Chain, not on Base. It is unrelated to the trading stack: no route above touches it, and it is not an investment product.
+
+## $MONVERA staking
+
+Staking is a separate, self-contained system. `MonveraStaking` holds staked $MONVERA and has no owner, no pause, and no upgrade path — nobody, including the team, can move, freeze, or redirect a stake, and the unstake cooldown is fixed at deploy. See the [staking guide](/use/staking/) for how it works and what a season pays.
+
+| Contract | Address | What it backs |
+| --- | --- | --- |
+| MonveraStaking | [`0xd6b6c5587499fea30d5c5147ebec1f6043c27f2a`](https://robinhoodchain.blockscout.com/address/0xd6b6c5587499fea30d5c5147ebec1f6043c27f2a) | Stake $MONVERA. Ownerless, no admin, immutable 14-day unstake cooldown. Accrues the stake-time weight a season is split by; `stakedOf`, `pendingOf`, `weightOf`, `totalWeight` |
+| SeasonDistributor | [`0xe51658ee2fed7ae09b81a91e2e0ffc6698648163`](https://robinhoodchain.blockscout.com/address/0xe51658ee2fed7ae09b81a91e2e0ffc6698648163) | Merkle claims for a closed season. Per-season funded and accounted; `claim(...)` pays exactly the leaf amount against a published root, once |
+| GroveCuratorRegistry | [`0xe1882878df4e39566abea9ef9200d73dba83a0cf`](https://robinhoodchain.blockscout.com/address/0xe1882878df4e39566abea9ef9200d73dba83a0cf) | The on-chain record of which staker curates each Grove and the fee share owed, capped at 50%; `curatorEligible`, `curatorOf` |
+
+All three are verified on Blockscout. The registry and distributor are owned by a cold key; the staking contract itself is ownerless.

@@ -1,0 +1,65 @@
+---
+title: "Staking $MONVERA"
+description: "Stake $MONVERA to earn a slice of every epoch, unlock the right to run your own Grove, and plug into everything the token grows into. Non-custodial, yours the whole way."
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Staking is how you put $MONVERA to work and get the most the token gives. Stake, and you earn a slice of every **epoch** — a fixed 24-hour reward window — paid by how much you stake and how long you hold. Stake enough and you unlock the right to run your own [Grove](/use/groves/) and earn a cut of it. And as Vera's agent economy grows, staking is how you plug straight into it.
+
+Your tokens never leave your hands. Staked $MONVERA sits in a contract with **no owner and no pause** — nobody, not even the team, can move or freeze it, and you can pull it out whenever you want after the cooldown.
+
+<Aside type="note">
+Staking is live at [monvera.best/stake](https://monvera.best/stake). Stake with the wallet you already use in the app, or sign in with email, Google, or X and one is made for you.
+</Aside>
+
+## How staking works
+
+| Step | What happens |
+| --- | --- |
+| **Stake** | Move $MONVERA into the staking contract. It starts earning stake-time weight the instant it lands, and that weight is your share of every epoch. |
+| **Unstake** | Two steps: request, wait out the **14-day cooldown**, then withdraw. The wait keeps the season fair, so nobody can flash-stake at the last minute and dilute the people who actually held. |
+| **Cancel** | Changed your mind? Cancel any time before the cooldown clears and your stake is right back at work. |
+
+Cooling-down stake sits out — the moment you request an unstake, that amount stops earning. Everything still staked keeps stacking weight.
+
+## Epochs: the clock rewards run on
+
+A season is split into **90 epochs**. One epoch is **24 hours, midnight to midnight UTC**, and each one pays out a fixed slice of the pool — about **22,222 $MONVERA** — split across everyone staked, by stake-time.
+
+Inside an epoch your share is live: it moves as other people stake and unstake. The moment the epoch **closes, your share of it is banked to your address and frozen.** Nothing that happens afterwards can touch it. That is why your banked total only ever goes up, and why getting in earlier in an epoch earns you more of it.
+
+<Aside type="caution" title="Epochs close on UTC, not your local clock">
+Epoch boundaries are **00:00 UTC**. On UTC+5 your epoch closes at 05:00 local; on UTC−5 it closes at 19:00 the evening before. So if your own calendar has rolled over to a new day but your banked total has not moved, this is why. The **Next epoch in** countdown in the app is the authoritative clock.
+</Aside>
+
+What the app shows you:
+
+| Reading | What it means |
+| --- | --- |
+| **Epoch 7 of 90 · 6 ended, 84 left** | where the season has got to |
+| **Next epoch in** | live countdown to the next 00:00 UTC boundary |
+| **Banked so far** | your closed epochs, locked in — this number only ever rises |
+| **This epoch, accruing** | your live share of the epoch running right now, which still moves |
+
+## Season 1: a 2,000,000 $MONVERA reward pool
+
+The first season puts **2,000,000 $MONVERA on the table across 90 epochs** — a fixed pool of about 22,222 per epoch, split by that epoch's stake-time.
+
+- **The more you stake and the longer you hold, the bigger your slice.** One rule for everyone. No multipliers, no cap, no games.
+- **It banks at the end of every epoch and only ever goes up.** A latecomer can never dilute an epoch that already closed, so what you earn is locked in as you go.
+- **Claim it on-chain when the season closes.** The rewards are tallied to your address every epoch, but the tokens move **once**: at the end of the season your total is committed on-chain and you claim the lot in one tap. What you earned is yours, in your wallet, provably.
+
+The rewards come straight from the team's own allocation — the share of the fixed supply that starts unlocking in October, laid out in the token's [tokenomics](/start/the-monvera-token/). We are putting our own tokens behind the people who stake $MONVERA. Supply stays capped at one billion; nothing is minted for a season.
+
+## Run your own Grove
+
+Stake **500,000 $MONVERA** and you unlock curator rights: publish your own [Grove](/use/groves/) — a basket under your name — and earn up to **half of its performance fee** every time its holders exit in profit, recorded on-chain in the curator registry. It is a real earnings stream that grows with the people who follow your picks, and it is only open to stakers.
+
+## Where staking is going
+
+Seasons and curator rights are what staking earns you today. The direction is bigger: staked holders are the ones first in line for what Vera is building next — a larger say in the strategies she runs, early access to new capabilities as they ship, and a direct line into the agent-to-agent economy where Vera already sells her work to other agents on Virtuals ACP. As the agent grows, staking is the seat at the table. Everything beyond today's seasons and curator rights follows the [roadmap](https://monvera.best/roadmap) standard — building in the open, live when it ships.
+
+<Aside type="caution" title="Only ever the real contract">
+Stake on the real contract, on Robinhood Chain, and no other: [`0xd6b6c5587499fea30d5c5147ebec1f6043c27f2a`](https://robinhoodchain.blockscout.com/address/0xd6b6c5587499fea30d5c5147ebec1f6043c27f2a), verified on Blockscout and listed on [network and addresses](/dev/network-and-addresses/). Anyone pushing a different address, a "staking migration", or a guaranteed return is a scammer. See [staying safe from scams](/safety/scams-and-support/).
+</Aside>

@@ -130,6 +130,7 @@ export default defineConfig({
             'use/your-portfolio',
             'use/find-and-trade',
             { slug: 'use/groves', badge: { text: 'Soon', variant: 'tip' } },
+            { slug: 'use/staking', badge: { text: 'New', variant: 'success' } },
             'use/money-in-and-out',
             'use/watchlist-and-alerts',
             'use/autopilot',
