@@ -30,7 +30,9 @@
   // scan from block 0 is millions of chunks. A public block number, so config
   // rather than a secret.
   "vars": {
-    "SEASON_DEPLOY_BLOCK": "17820981"
+    "SEASON_DEPLOY_BLOCK": "17820981",
+    // Season 1 day-0, 2026-07-24T00:00:00Z. Public, not a secret.
+    "SEASON_START": "1784851200"
   },
   "assets": {
     "directory": ".open-next/assets",

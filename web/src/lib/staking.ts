@@ -20,11 +20,22 @@ import { defineChain, http, createPublicClient, parseAbi } from "viem";
 
 export const STAKING_TESTNET = false;
 
-/** Never keyed: it serves the log scan, and Alchemy's free tier cannot. */
 const PUBLIC_RPC = "https://rpc.mainnet.chain.robinhood.com";
 const READ_RPC = process.env.NEXT_PUBLIC_RPC_URL || PUBLIC_RPC;
-/** Server-only, so a key here is never inlined into the browser bundle. */
-const LOGS_RPC = process.env.STAKING_LOGS_RPC_URL || PUBLIC_RPC;
+/** Server-only, so a key here is never inlined into the browser bundle.
+ *
+ *  Defaults to the KEYED endpoint, not the public one. Measured 2026-07-26 from
+ *  the deployed Worker, and this is why the first production deploy of staking
+ *  returned seasonStarted:false:
+ *    - the PUBLIC Robinhood RPC rate-limits Cloudflare's egress IPs on sight —
+ *      "Rate Limit Hit, limit will reset in 60 seconds", on eth_blockNumber
+ *      alone. It answers fine from a laptop, which is exactly why this could
+ *      not be caught locally.
+ *    - Alchemy's free tier refuses eth_getLogs at EVERY span, 10 blocks
+ *      included, so it cannot serve history either.
+ *  Blockscout therefore owns all history (see fetch.ts) and the RPC only serves
+ *  the cheap calls: eth_blockNumber, eth_getBlockByNumber, eth_call. */
+const LOGS_RPC = process.env.STAKING_LOGS_RPC_URL || READ_RPC;
 
 export const stakingChain = defineChain({
   id: 4663,

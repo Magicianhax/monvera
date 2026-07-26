@@ -92,8 +92,12 @@ export async function GET(req: Request): Promise<Response> {
       todayAccruing: p.todayAccruing.toString(),
       ...(stakers ? { stakers } : {}),
     });
-  } catch {
-    // Never surface as an error the page must handle — the tiles just stay "—".
+  } catch (err) {
+    // The RESPONSE stays soft — the tiles just read "—" rather than the page
+    // having to handle an error. But the failure is logged: swallowing it
+    // silently meant a production outage here was indistinguishable from
+    // "season not started", which is exactly how it shipped.
+    console.error("[staking/rewards] snapshot failed:", err instanceof Error ? err.message : err);
     return Response.json({ seasonStarted: false }, { status: 200 });
   }
 }

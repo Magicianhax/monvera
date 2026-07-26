@@ -138,24 +138,41 @@ export async function fetchStakeEvents(
   // this just avoids relying on it for the common case.)
   const SUSPECT_CAP = 9_000;
   let step = initialStep;
-  while (start <= toBlock) {
-    const end = start + step - BigInt(1) > toBlock ? toBlock : start + step - BigInt(1);
-    try {
-      const logs = await client.getLogs({ address, events: EVENTS, fromBlock: start, toBlock: end });
-      if (logs.length >= SUSPECT_CAP && step > BigInt(1)) { step = step / BigInt(2); continue; } // possible silent cap: shrink, don't advance.
-      for (const l of logs) {
-        raw.push({
-          blockNumber: l.blockNumber!,
-          logIndex: l.logIndex!,
-          eventName: l.eventName as string,
-          args: l.args as { user?: `0x${string}`; amount?: bigint; stakedAfter?: bigint },
-        });
+  try {
+    while (start <= toBlock) {
+      const end = start + step - BigInt(1) > toBlock ? toBlock : start + step - BigInt(1);
+      try {
+        const logs = await client.getLogs({ address, events: EVENTS, fromBlock: start, toBlock: end });
+        if (logs.length >= SUSPECT_CAP && step > BigInt(1)) { step = step / BigInt(2); continue; } // possible silent cap: shrink, don't advance.
+        for (const l of logs) {
+          raw.push({
+            blockNumber: l.blockNumber!,
+            logIndex: l.logIndex!,
+            eventName: l.eventName as string,
+            args: l.args as { user?: `0x${string}`; amount?: bigint; stakedAfter?: bigint },
+          });
+        }
+        start = end + BigInt(1);
+      } catch (err) {
+        if (step > BigInt(1)) { step = step / BigInt(2); continue; } // range too large: shrink and retry.
+        throw err;
       }
-      start = end + BigInt(1);
-    } catch (err) {
-      if (step > BigInt(1)) { step = step / BigInt(2); continue; } // range too large: shrink and retry.
-      throw err;
     }
+  } catch (err) {
+    // The tail is a BEST EFFORT once Blockscout has supplied history. No RPC
+    // reachable from the Worker will serve eth_getLogs — the public one rate-
+    // limits Cloudflare, Alchemy's free tier refuses every span — so treating a
+    // failed tail as fatal took the whole feature down rather than costing it
+    // the last few minutes of events. Degrade instead: serve the explorer's
+    // history and let the next scan pick the tail up once it indexes.
+    //
+    // Only tolerable BECAUSE Blockscout succeeded. With no history at all this
+    // still throws, so a genuine outage is never mistaken for "no stakers".
+    if (!bs) throw err;
+    console.warn(
+      `[season/fetch] tail scan from ${start} failed, serving Blockscout history to ${bs.maxBlock}:`,
+      err instanceof Error ? err.message.split("\n")[0] : err,
+    );
   }
 
   raw.sort((a, b) => (a.blockNumber === b.blockNumber ? a.logIndex - b.logIndex : a.blockNumber < b.blockNumber ? -1 : 1));

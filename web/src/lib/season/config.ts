@@ -15,8 +15,18 @@ export const DEPLOY_BLOCK = BigInt(E.SEASON_DEPLOY_BLOCK ?? "0");
 /** UTC unix seconds of Season 1 day-0 00:00. Owner-set; no safe default, so a
  *  rehearsal must pass it explicitly. Falls back to NEXT_PUBLIC_SEASON_START so a
  *  single value drives both the server preview (this) and the client strip
- *  (staking.ts). NEVER open a real season without setting it. */
-export const SEASON_START = BigInt(E.SEASON_START ?? E.NEXT_PUBLIC_SEASON_START ?? "0");
+ *  (staking.ts). NEVER open a real season without setting it.
+ *
+ *  The NEXT_PUBLIC_ fallback is read as a DIRECT process.env member access on
+ *  purpose. Next only substitutes NEXT_PUBLIC_* at build time when it can see
+ *  the literal `process.env.NAME` expression — routed through the `E` alias it
+ *  is left as a runtime lookup, which is empty in the Worker. That is exactly
+ *  what shipped: the client strip (staking.ts, direct access) showed the season
+ *  running while this returned seasonStarted:false and every reward tile read
+ *  "—". SEASON_START is also set in wrangler vars as a belt-and-braces. */
+export const SEASON_START = BigInt(
+  E.SEASON_START ?? process.env.NEXT_PUBLIC_SEASON_START ?? "0",
+);
 
 export const SEASON1: SeasonParams = {
   seasonId: BigInt(0),
