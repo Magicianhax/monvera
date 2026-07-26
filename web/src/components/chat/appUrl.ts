@@ -37,7 +37,7 @@ export function readAppUrl(): AppUrlState {
   const q = new URLSearchParams(window.location.search);
   const tab = q.get("tab");
   if (!tab) return { tab: null };
-  if (tab === "chat") return { tab };
+  if (tab === "chat" || tab === "staking") return { tab };
   if (tab === "groves") return { tab, id: q.get("id") };
   if (CANVASES.has(tab)) return { tab, sym: q.get("sym") };
   return { tab: null };

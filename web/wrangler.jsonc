@@ -22,6 +22,16 @@
     { "pattern": "www.monvera.best", "custom_domain": true },
     { "pattern": "app.monvera.best", "custom_domain": true }
   ],
+  // Server-only, non-secret config. SEASON_DEPLOY_BLOCK is the block
+  // MonveraStaking was deployed at; it is the floor for the staking log scan.
+  // It is NOT a NEXT_PUBLIC_ var, so it is not inlined at build time and would
+  // otherwise default to 0 in the Worker — harmless on the Blockscout fast path
+  // (which returns full history anyway) but fatal on the RPC fallback, where a
+  // scan from block 0 is millions of chunks. A public block number, so config
+  // rather than a secret.
+  "vars": {
+    "SEASON_DEPLOY_BLOCK": "17820981"
+  },
   "assets": {
     "directory": ".open-next/assets",
     "binding": "ASSETS"

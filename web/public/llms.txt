@@ -15,7 +15,7 @@ Monvera is built for people who are new to investing and to crypto. There is no 
 - Autopilot: optional automated, recurring investing (dollar-cost averaging).
 - Open strategies: rule-based portfolios published with methods, weights, and honest walk-forward backtests (no look-ahead), free to reproduce or build on.
 - Built on Robinhood Chain, a fast, low-cost Ethereum L2. You can start from as little as $1.
-- Not available in the United States, Canada, the United Kingdom, or Switzerland.
+- Stake $MONVERA at /stake to earn a share of each reward epoch, and at 500,000+ staked to curate a Grove.
 
 ## Pages
 

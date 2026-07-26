@@ -252,4 +252,8 @@ describe("GroveCuratorRegistry", function () {
     // ...but a new assignment at the old stake fails
     await expectRevert(registry.write.setCurator([1n, alice.account.address, 4000]), "CuratorNotEligible");
   });
+
+  it("renounceOwnership is disabled — curator terms can never be frozen by a renounce", async () => {
+    await expectRevert(registry.write.renounceOwnership(), "RenounceDisabled");
+  });
 });

@@ -38,6 +38,7 @@ const PanelLoading = () => (
   </div>
 );
 const GrovesPage = dynamic(() => import("./GrovesPage").then((m) => m.GrovesPage), { ssr: false, loading: PanelLoading });
+const StakingPage = dynamic(() => import("./StakingPage").then((m) => m.StakingPage), { ssr: false, loading: PanelLoading });
 const CanvasBody = dynamic(() => import("./CanvasBody").then((m) => m.CanvasBody), { ssr: false, loading: PanelLoading });
 const OrderTicket = dynamic(() => import("./OrderTicket").then((m) => m.OrderTicket), { ssr: false });
 const TokenOrderTicket = dynamic(() => import("./TokenOrderTicket").then((m) => m.TokenOrderTicket), { ssr: false });
@@ -86,6 +87,8 @@ export function ChatApp() {
   // In-app Groves surface — a FULL-PAGE takeover of the center (chat/menu come
   // back untouched when it closes). null = closed; id null = the shelf.
   const [grovesView, setGrovesView] = useState<{ id: string | null; auto: boolean } | null>(null);
+  // Staking — same full-page takeover pattern as Groves.
+  const [stakingOpen, setStakingOpen] = useState(false);
 
   // True while the mount-time effects below are normalizing the arrival URL —
   // the first URL sync after that must replace, not push (see the sync effect).
@@ -113,6 +116,7 @@ export function ChatApp() {
     const u = readAppUrl();
     if (!u.tab) return;
     if (u.tab === "chat") setHome("chat");
+    else if (u.tab === "staking") setStakingOpen(true);
     else if (u.tab === "groves") setGrovesView({ id: u.id && groveById(u.id) ? u.id : null, auto: false });
     else if (isCanvasTab(u.tab)) {
       if (u.tab === "holding" && u.sym) setCanvasSymbol(u.sym.toUpperCase());
@@ -131,10 +135,11 @@ export function ChatApp() {
     if (!urlSynced.current) { urlSynced.current = true; return; }
     const replace = restoredFromUrl.current;
     restoredFromUrl.current = false;
-    if (grovesView) writeAppUrl({ tab: "groves", id: grovesView.id }, { replace });
+    if (stakingOpen) writeAppUrl({ tab: "staking" }, { replace });
+    else if (grovesView) writeAppUrl({ tab: "groves", id: grovesView.id }, { replace });
     else if (canvas) writeAppUrl({ tab: canvas, sym: canvas === "holding" ? canvasSymbol : null }, { replace });
     else writeAppUrl({ tab: home === "chat" ? "chat" : null }, { replace });
-  }, [home, canvas, canvasSymbol, grovesView]);
+  }, [home, canvas, canvasSymbol, grovesView, stakingOpen]);
 
   // Back/forward: re-apply whatever view the restored URL describes. The sync
   // effect then no-ops because the URL already matches the applied state.
@@ -144,6 +149,7 @@ export function ChatApp() {
       // restore and wipe the very canvas the user navigated back to.
       if (closeTimer.current) { clearTimeout(closeTimer.current); closeTimer.current = null; }
       const u = readAppUrl();
+      setStakingOpen(u.tab === "staking");
       if (u.tab === "groves") setGrovesView({ id: u.id && groveById(u.id) ? u.id : null, auto: false });
       else setGrovesView(null);
       if (u.tab && isCanvasTab(u.tab)) {
@@ -178,12 +184,13 @@ export function ChatApp() {
       if (sym) setCanvasSymbol(sym);
     },
     closeCanvas: dismissCanvas,
-    goChat: () => { setHome("chat"); setGrovesView(null); },
-    goMenu: () => { setHome("menu"); setGrovesView(null); dismissCanvas(); },
+    goChat: () => { setHome("chat"); setGrovesView(null); setStakingOpen(false); },
+    goMenu: () => { setHome("menu"); setGrovesView(null); setStakingOpen(false); dismissCanvas(); },
     openBuy: (symbol) => setOrder({ symbol, side: "buy" }),
     openSell: (symbol) => setOrder({ symbol, side: "sell" }),
-    askVera: (text) => { setHome("chat"); setGrovesView(null); setPendingAsk(text); },
-    openGroves: (id, opts) => { dismissCanvas(); setGrovesView({ id: id ?? null, auto: !!opts?.auto }); },
+    askVera: (text) => { setHome("chat"); setGrovesView(null); setStakingOpen(false); setPendingAsk(text); },
+    openGroves: (id, opts) => { dismissCanvas(); setStakingOpen(false); setGrovesView({ id: id ?? null, auto: !!opts?.auto }); },
+    openStaking: () => { dismissCanvas(); setGrovesView(null); setStakingOpen(true); },
     openSend: () => setPayMode("send"),
     openReceive: () => setPayMode("receive"),
     openSettings: () => setSettingsOpen(true),
@@ -247,6 +254,12 @@ export function ChatApp() {
             </span>
             {label("Groves")}
           </button>
+          <button onClick={() => nav.openStaking()} title="Staking" style={navBtn(stakingOpen)}>
+            <span style={{ width: 22, display: "grid", placeItems: "center", flex: "none" }}>
+              <PIcon name="ph-stack" size={19} />
+            </span>
+            {label("Staking")}
+          </button>
           {LAUNCHERS.map(([id, lbl, icon]) => (
             <button key={id} onClick={() => nav.openCanvas(id)} title={lbl} style={navBtn(canvas === id)}>
               <span style={{ width: 22, display: "grid", placeItems: "center", flex: "none", position: "relative" }}>
@@ -299,7 +312,9 @@ export function ChatApp() {
 
       {/* ── center (Groves takes the whole surface over; back restores it) ── */}
       <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
-        {grovesView
+        {stakingOpen
+          ? <StakingPage nav={nav} onBack={() => setStakingOpen(false)} />
+          : grovesView
           ? <GrovesPage groveId={grovesView.id} autoManage={grovesView.auto} nav={nav} onOpen={(id) => setGrovesView({ id, auto: false })} onBack={() => setGrovesView(grovesView.id ? { id: null, auto: false } : null)} />
           : home === "menu" ? <HomeMenu nav={nav} /> : <ChatCenter nav={nav} chat={chat} narrowed={!!canvas} pendingAsk={pendingAsk} consumeAsk={consumeAsk} />}
       </div>

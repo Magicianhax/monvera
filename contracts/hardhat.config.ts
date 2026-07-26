@@ -46,7 +46,15 @@ const config: HardhatUserConfig = {
   // Etherscan V2: ONE API key verifies across chains. Mantle (5000) isn't built into the plugin,
   // so register it explicitly via the V2 unified endpoint (the plugin appends chainid automatically).
   etherscan: {
-    apiKey: process.env.ETHERSCAN_API_KEY ?? "",
+    // Per-network keys: a bare string routes everything through the Etherscan V2
+    // unified endpoint (which rejects chain 4663). An object keyed by network name
+    // makes hardhat-verify use each customChain's apiURL — so robinhood verifies
+    // against Blockscout with the Blockscout key, not Etherscan.
+    apiKey: {
+      mantle: process.env.ETHERSCAN_API_KEY ?? "",
+      robinhood: process.env.BLOCKSCOUT_API_KEY ?? "",
+      robinhoodTestnet: process.env.BLOCKSCOUT_API_KEY ?? "",
+    },
     customChains: [
       {
         network: "mantle",

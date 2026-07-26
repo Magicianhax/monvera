@@ -192,4 +192,14 @@ describe("SeasonDistributor", function () {
     await dist.write.openSeason([root, M(2), deadline]);
     await expectRevert(dist.write.sweep([0n], { account: alice.account }));
   });
+
+  it("renounceOwnership is disabled — ownership can never drop to address(0)", async () => {
+    await expectRevert(dist.write.renounceOwnership(), "RenounceDisabled");
+    // …but it can still be transferred (two-step) to a new owner.
+    await dist.write.transferOwnership([alice.account.address]);
+    await dist.write.acceptOwnership({ account: alice.account });
+    expect((await dist.read.owner()).toLowerCase()).to.equal(alice.account.address.toLowerCase());
+    // and the new owner also cannot renounce.
+    await expectRevert(dist.write.renounceOwnership({ account: alice.account }), "RenounceDisabled");
+  });
 });

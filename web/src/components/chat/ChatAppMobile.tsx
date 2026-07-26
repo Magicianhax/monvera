@@ -35,6 +35,7 @@ const PanelLoading = () => (
   </div>
 );
 const GrovesPage = dynamic(() => import("./GrovesPage").then((m) => m.GrovesPage), { ssr: false, loading: PanelLoading });
+const StakingPage = dynamic(() => import("./StakingPage").then((m) => m.StakingPage), { ssr: false, loading: PanelLoading });
 const CanvasBody = dynamic(() => import("./CanvasBody").then((m) => m.CanvasBody), { ssr: false, loading: PanelLoading });
 const OrderTicket = dynamic(() => import("./OrderTicket").then((m) => m.OrderTicket), { ssr: false });
 const TokenOrderTicket = dynamic(() => import("./TokenOrderTicket").then((m) => m.TokenOrderTicket), { ssr: false });
@@ -80,6 +81,7 @@ export function ChatAppMobile() {
   // In-app Groves surface — a full-screen page over the shell (its own sheet,
   // below the canvas sheet so holdings tapped inside it open on top).
   const [grovesView, setGrovesView] = useState<{ id: string | null; auto: boolean } | null>(null);
+  const [stakingOpen, setStakingOpen] = useState(false);
   const [grovesClosing, setGrovesClosing] = useState(false);
   const grovesTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const closeGroves = () => {
@@ -114,6 +116,7 @@ export function ChatAppMobile() {
     const u = readAppUrl();
     if (!u.tab) return;
     if (u.tab === "chat") setHome("chat");
+    else if (u.tab === "staking") setStakingOpen(true);
     else if (u.tab === "groves") setGrovesView({ id: u.id && groveById(u.id) ? u.id : null, auto: false });
     else if (isCanvasTab(u.tab)) {
       if (u.tab === "holding" && u.sym) setCanvasSymbol(u.sym.toUpperCase());
@@ -132,10 +135,11 @@ export function ChatAppMobile() {
     if (!urlSynced.current) { urlSynced.current = true; return; }
     const replace = restoredFromUrl.current;
     restoredFromUrl.current = false;
-    if (grovesView) writeAppUrl({ tab: "groves", id: grovesView.id }, { replace });
+    if (stakingOpen) writeAppUrl({ tab: "staking" }, { replace });
+    else if (grovesView) writeAppUrl({ tab: "groves", id: grovesView.id }, { replace });
     else if (canvas) writeAppUrl({ tab: canvas, sym: canvas === "holding" ? canvasSymbol : null }, { replace });
     else writeAppUrl({ tab: home === "chat" ? "chat" : null }, { replace });
-  }, [home, canvas, canvasSymbol, grovesView]);
+  }, [home, canvas, canvasSymbol, grovesView, stakingOpen]);
 
   // Back/forward: re-apply whatever view the restored URL describes. The sync
   // effect then no-ops because the URL already matches the applied state.
@@ -146,6 +150,7 @@ export function ChatAppMobile() {
       if (closeTimer.current) { clearTimeout(closeTimer.current); closeTimer.current = null; }
       if (grovesTimer.current) { clearTimeout(grovesTimer.current); grovesTimer.current = null; }
       const u = readAppUrl();
+      setStakingOpen(u.tab === "staking");
       if (u.tab === "groves") {
         setGrovesView({ id: u.id && groveById(u.id) ? u.id : null, auto: false });
         setGrovesClosing(false);
@@ -185,18 +190,20 @@ export function ChatAppMobile() {
       setDrawer(false);
     },
     closeCanvas: dismissSheet,
-    goChat: () => { setHome("chat"); setDrawer(false); dismissSheet(); closeGroves(); },
-    goMenu: () => { setHome("menu"); setDrawer(false); dismissSheet(); closeGroves(); },
+    goChat: () => { setHome("chat"); setDrawer(false); dismissSheet(); closeGroves(); setStakingOpen(false); },
+    goMenu: () => { setHome("menu"); setDrawer(false); dismissSheet(); closeGroves(); setStakingOpen(false); },
     openBuy: (symbol) => setOrder({ symbol, side: "buy" }),
     openSell: (symbol) => setOrder({ symbol, side: "sell" }),
-    askVera: (text) => { setHome("chat"); dismissSheet(); closeGroves(); setPendingAsk(text); },
+    askVera: (text) => { setHome("chat"); dismissSheet(); closeGroves(); setStakingOpen(false); setPendingAsk(text); },
     openGroves: (id, opts) => {
       if (grovesTimer.current) { clearTimeout(grovesTimer.current); grovesTimer.current = null; }
       setGrovesClosing(false);
+      setStakingOpen(false);
       setGrovesView({ id: id ?? null, auto: !!opts?.auto });
       setDrawer(false);
       dismissSheet();
     },
+    openStaking: () => { closeGroves(); setStakingOpen(true); setDrawer(false); dismissSheet(); },
     openSend: () => setPayMode("send"),
     openReceive: () => setPayMode("receive"),
     openSettings: () => setSettingsOpen(true),
@@ -236,6 +243,10 @@ export function ChatAppMobile() {
           <button onClick={() => { nav.openGroves(); }} style={{ display: "flex", alignItems: "center", gap: 13, height: 48, padding: "0 12px", borderRadius: 13, background: grovesView !== null ? "var(--primary-soft)" : "transparent", textAlign: "left", flex: "none" }}>
             <span style={{ width: 26, display: "grid", placeItems: "center", flex: "none", color: grovesView !== null ? "var(--primary)" : "var(--ink-2)" }}><PIcon name="ph-tree" size={23} /></span>
             <span style={{ fontSize: 15.5, fontWeight: 600, color: grovesView !== null ? "var(--primary)" : "var(--ink)" }}>Groves</span>
+          </button>
+          <button onClick={() => { nav.openStaking(); }} style={{ display: "flex", alignItems: "center", gap: 13, height: 48, padding: "0 12px", borderRadius: 13, background: stakingOpen ? "var(--primary-soft)" : "transparent", textAlign: "left", flex: "none" }}>
+            <span style={{ width: 26, display: "grid", placeItems: "center", flex: "none", color: stakingOpen ? "var(--primary)" : "var(--ink-2)" }}><PIcon name="ph-stack" size={23} /></span>
+            <span style={{ fontSize: 15.5, fontWeight: 600, color: stakingOpen ? "var(--primary)" : "var(--ink)" }}>Staking</span>
           </button>
           {DRAWER_ITEMS.map(([id, lbl, icon]) => (
             <button key={id} onClick={() => nav.openCanvas(id)} style={{ display: "flex", alignItems: "center", gap: 13, height: 48, padding: "0 12px", borderRadius: 13, background: canvas === id ? "var(--primary-soft)" : "transparent", textAlign: "left", flex: "none" }}>
@@ -322,6 +333,13 @@ export function ChatAppMobile() {
       {grovesView && (
         <div className={grovesClosing ? "sheet sheet-out aur" : "sheet aur"} style={{ position: "absolute", inset: 0, zIndex: 60, background: "var(--bg)", display: "flex", flexDirection: "column" }}>
           <GrovesPage mobile groveId={grovesView.id} autoManage={grovesView.auto} nav={nav} onOpen={(id) => setGrovesView({ id, auto: false })} onBack={() => (grovesView.id ? setGrovesView({ id: null, auto: false }) : closeGroves())} />
+        </div>
+      )}
+
+      {/* full-screen Staking page — same layer as Groves */}
+      {stakingOpen && (
+        <div className="sheet aur" style={{ position: "absolute", inset: 0, zIndex: 60, background: "var(--bg)", display: "flex", flexDirection: "column" }}>
+          <StakingPage mobile nav={nav} onBack={() => setStakingOpen(false)} />
         </div>
       )}
 

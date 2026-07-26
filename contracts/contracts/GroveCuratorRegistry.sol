@@ -51,6 +51,7 @@ contract GroveCuratorRegistry is Ownable2Step {
     error ZeroAddress();
     error ShareTooHigh(uint16 shareBps);
     error CuratorNotEligible(address curator, uint256 staked, uint256 required);
+    error RenounceDisabled();
 
     constructor(address staking_, uint256 minCuratorStake_) Ownable(msg.sender) {
         if (staking_ == address(0)) revert ZeroAddress();
@@ -83,6 +84,13 @@ contract GroveCuratorRegistry is Ownable2Step {
         address curator = _entries[groveId].curator;
         delete _entries[groveId];
         emit CuratorCleared(groveId, curator);
+    }
+
+    /// @notice Renounce is disabled — dropping ownership to address(0) would
+    /// freeze curator terms forever (no more setCurator/clearCurator/threshold
+    /// changes). Ownership can still be TRANSFERRED via Ownable2Step.
+    function renounceOwnership() public view override onlyOwner {
+        revert RenounceDisabled();
     }
 
     // ---------------------------------------------------------------- views

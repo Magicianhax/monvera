@@ -20,6 +20,7 @@ export const VERA_CONTRACT_URL =
 
 const NAV_LINKS = [
   { label: "Groves", href: "/groves" },
+  { label: "Staking", href: "/stake" },
   { label: "Agent", href: "/agent" },
   { label: "Strategies", href: "/strategies" },
   { label: "Roadmap", href: "/roadmap" },
@@ -30,6 +31,7 @@ const NAV_LINKS = [
 const FOOT_PRODUCT = [
   { label: "Open the app", href: "/app" },
   { label: "Groves", href: "/groves" },
+  { label: "Staking", href: "/stake" },
   { label: "Vera's record", href: "/agent" },
   { label: "Strategies", href: "/strategies" },
   { label: "Themes", href: "/themes" },

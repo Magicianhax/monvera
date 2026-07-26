@@ -307,6 +307,8 @@ export interface ChatNav {
   /** Open the in-app Groves surface — the shelf, or one Grove's full page.
    *  `auto` lands on the (gated) auto-manage section of the detail page. */
   openGroves: (id?: string, opts?: { auto?: boolean }) => void;
+  /** Open the $MONVERA staking page (full-page takeover, like Groves). */
+  openStaking: () => void;
   openSend: () => void;
   openReceive: () => void;
   openSettings: () => void;

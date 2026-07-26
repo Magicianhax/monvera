@@ -8,10 +8,14 @@ import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol
 import {MerkleProof} from "@openzeppelin/contracts/utils/cryptography/MerkleProof.sol";
 
 /// @title SeasonDistributor — merkle claims for Monvera staking seasons.
-/// @notice Each season is a snapshot computation everyone can reproduce:
-/// reward_i = pool × (stake-time weight_i over the season) / (total weight).
-/// Weights come from MonveraStaking's on-chain accumulators / event stream, so
-/// a published root is CHECKABLE, not trusted. The owner's only powers are to
+/// @notice Each season is a snapshot computation everyone can reproduce from the
+/// published off-chain builder (src/lib/season/compute.ts): the pool is split
+/// into one FLAT daily bucket per season day, and each day's bucket is divided by
+/// that day's stake-time (token-seconds) —
+/// reward_i = Σ_days ( dayPool × yourTokenSeconds_day / everyonesTokenSeconds_day ),
+/// with an empty day's bucket rolled forward to the next. Token-seconds come from
+/// MonveraStaking's event stream, so a published root is CHECKABLE, not trusted.
+/// The owner's only powers are to
 /// open a season (root + funded pool) and to sweep leftovers after a season's
 /// claim window closes — an open window's funds cannot be touched:
 ///
@@ -50,6 +54,7 @@ contract SeasonDistributor is Ownable2Step {
     error InvalidProof();
     error PoolExhausted(uint256 seasonId);
     error WindowStillOpen(uint64 claimDeadline);
+    error RenounceDisabled();
 
     constructor(address token_) Ownable(msg.sender) {
         if (token_ == address(0)) revert ZeroAddress();
@@ -100,5 +105,13 @@ contract SeasonDistributor is Ownable2Step {
         s.claimed = s.pool;
         if (remainder > 0) token.safeTransfer(owner(), remainder);
         emit Swept(seasonId, remainder);
+    }
+
+    /// @notice Renounce is disabled. This contract is immutable with no re-init
+    /// path, so dropping ownership to address(0) would permanently brick
+    /// openSeason and sweep and strand every future season's remainder. Ownership
+    /// can still be TRANSFERRED (Ownable2Step) — it just can never be abandoned.
+    function renounceOwnership() public view override onlyOwner {
+        revert RenounceDisabled();
     }
 }

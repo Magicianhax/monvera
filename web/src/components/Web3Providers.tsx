@@ -21,10 +21,21 @@ import { PrivyProvider } from "@privy-io/react-auth";
 import { WagmiProvider } from "wagmi";
 import type { ReactNode } from "react";
 import { chain, wagmiConfig } from "@/lib/wagmi";
+import { stakingChain } from "@/lib/staking";
 
 const PRIVY_APP_ID = process.env.NEXT_PUBLIC_PRIVY_APP_ID;
 
-export function Web3Providers({ children }: { children: ReactNode }) {
+export function Web3Providers({
+  children,
+  showWalletUIs = false,
+}: {
+  children: ReactNode;
+  /** Show Privy's own confirmation modal for embedded-wallet transactions.
+   *  The app keeps this OFF (a plan invest signs once per leg — 10+ modals for
+   *  one tap). Standalone surfaces like /stake turn it ON: one transaction,
+   *  and users expect to see their wallet confirm it. */
+  showWalletUIs?: boolean;
+}) {
   // Fail loudly in development if the app id is missing; render children bare
   // so the rest of the app can still mount (auth-gated UI simply won't unlock).
   if (!PRIVY_APP_ID) {
@@ -42,7 +53,9 @@ export function Web3Providers({ children }: { children: ReactNode }) {
         // (Passkey is omitted: it's currently disabled in the Privy dashboard. Re-add "passkey" once enabled there.)
         loginMethods: ["email", "google", "twitter", "wallet"],
         defaultChain: chain,
-        supportedChains: [chain],
+        // stakingChain (testnet today) rides along so the embedded wallet can
+        // switch over for staking txs; every other flow stays on 4663.
+        supportedChains: [chain, stakingChain],
         // Social/email users get a no-seed-phrase embedded wallet; users who connect
         // their own wallet keep using that EOA (it owns their gasless smart account).
         embeddedWallets: {
@@ -52,7 +65,7 @@ export function Web3Providers({ children }: { children: ReactNode }) {
           // reviews and approves the whole plan/trade before signing begins, so
           // per-signature confirmations only add friction. (External wallets
           // still show their own UI — this only affects Privy embedded wallets.)
-          showWalletUIs: false,
+          showWalletUIs,
         },
         // Branded to match the app: deep "Soft"-dark surface, sage-green accent,
         // the Monvera logo, email/social first (beginner-friendly), on-voice copy.
