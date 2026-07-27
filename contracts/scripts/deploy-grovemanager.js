@@ -21,7 +21,7 @@ const robinhood = defineChain({
 // Run: npx hardhat run scripts/deploy-grovemanager.js --network robinhood
 
 const USDG = "0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168"; // 6dp
-const TREASURY = "0xb87f5A749B0110B24B841B1ea9d3a166fbde707E"; // buyback treasury
+const TREASURY = "0xb87f5A74267ca3F9512b8511B32cCd804EA3707E"; // buyback treasury
 // Venues verified contract-callable on 4663. LiFi's approvalAddress can differ
 // from its call target per-quote, so both roles get queued for the diamond.
 const UNIVERSAL_ROUTER = "0x8876789976dEcBfCbBbe364623C63652db8C0904";
