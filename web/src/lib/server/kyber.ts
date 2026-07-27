@@ -52,6 +52,19 @@ const TIMEOUT_MS = 9_000;
 
 const ERC20_ABI = parseAbi(["function approve(address, uint256) returns (bool)"]);
 
+/** Which fee schedule a quote is built under.
+ *
+ *  "integrator" — normal trading: our routing bps rides inside the swap.
+ *  "none"       — GROVES ONLY. A grove charges exactly one fee, the performance
+ *                 fee GroveManager takes from profit at exit. Charging the
+ *                 routing fee here as well would silently double-charge inside a
+ *                 product that promises "zero on entry, zero on rebalance".
+ *                 Do not "fix" this back to the default.
+ *
+ *  Explicit rather than inferred: a future caller must choose, so it cannot pick
+ *  up the wrong schedule by forgetting an argument. */
+export type KyberFeeMode = "integrator" | "none";
+
 /** Our integrator fee, taken in the OUTPUT token like the Uniswap v4 PAY_PORTION
  *  path, and paid to the same wallet. Falls back to the Uniswap settings so the
  *  fee never silently differs between venues. */
@@ -72,8 +85,17 @@ interface RouteSummary {
  *  just means it does not compete this round. (Never let a 429 read as "no
  *  liquidity": that is exactly the false negative that made a rate-limited
  *  sweep look like missing pools.) */
-async function routes(sellToken: Address, buyToken: Address, sellAmount: bigint): Promise<RouteSummary | null> {
-  const fee = integratorFee();
+async function routes(
+  sellToken: Address,
+  buyToken: Address,
+  sellAmount: bigint,
+  feeMode: KyberFeeMode,
+): Promise<RouteSummary | null> {
+  // A fee-free quote is a SEPARATE GET, never a fee'd routeSummary with the fee
+  // stripped afterwards: the summary carries a checksum and Kyber requires it
+  // posted back verbatim. Two independent GET -> build pipelines is the only
+  // checksum-safe way to have both schedules.
+  const fee = feeMode === "integrator" ? integratorFee() : null;
   const qs = new URLSearchParams({
     tokenIn: sellToken,
     tokenOut: buyToken,
@@ -115,8 +137,13 @@ async function routes(sellToken: Address, buyToken: Address, sellAmount: bigint)
 
 /** Indicative NET price (our fee already deducted by Kyber) — comparable
  *  directly against uniV4Price/lifiPrice/rialtoPrice. */
-export async function kyberPrice(sellToken: Address, buyToken: Address, sellAmount: bigint): Promise<bigint | null> {
-  const summary = await routes(sellToken, buyToken, sellAmount);
+export async function kyberPrice(
+  sellToken: Address,
+  buyToken: Address,
+  sellAmount: bigint,
+  feeMode: KyberFeeMode = "integrator",
+): Promise<bigint | null> {
+  const summary = await routes(sellToken, buyToken, sellAmount, feeMode);
   if (!summary) return null;
   try {
     const out = BigInt(summary.amountOut);
@@ -153,8 +180,9 @@ export async function kyberQuote(
   sellAmount: bigint,
   executor: Address,
   taker: Address,
+  feeMode: KyberFeeMode = "integrator",
 ): Promise<KyberQuote | null> {
-  const summary = await routes(sellToken, buyToken, sellAmount);
+  const summary = await routes(sellToken, buyToken, sellAmount, feeMode);
   if (!summary) return null;
 
   let built: BuiltRoute | null = null;

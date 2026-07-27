@@ -6,6 +6,15 @@ import {Ownable2Step} from "@openzeppelin/contracts/access/Ownable2Step.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
+
+/// @dev Minimal Chainlink AggregatorV3 surface. Declared locally rather than
+/// pulling in the Chainlink contracts package: two functions do not justify a
+/// new dependency in a contract that holds user money.
+interface AggregatorV3Interface {
+    function latestRoundData() external view returns (uint80, int256, uint256, uint256, uint80);
+    function decimals() external view returns (uint8);
+}
 
 /// @title GroveManager — the mandatory rail for Monvera's Groves (curated stock baskets).
 /// @notice A grove is a STRATEGY, not a wrapper token. Users buy a basket of real
@@ -38,10 +47,16 @@ import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol
 /// read. All USD accounting is in raw USDG units (6 decimals); stock tokens are 18dp.
 ///
 /// Design choices where the spec was silent (conservative options, documented):
-/// - Rebalance proceeds must re-enter buy legs EXACTLY: any residual USDG at the end
-///   of a rebalance reverts. The server must size buy legs to consume sell proceeds
-///   precisely; there is deliberately no refund path because a rebalance may not send
-///   USDG to anyone.
+/// - Rebalance proceeds re-enter buy legs, and a BOUNDED tail returns to the
+///   position's own owner. The exact-zero rule this replaces could not ship: buy-leg
+///   amountIn is baked into venue calldata at QUOTE time while the pool is only known
+///   after the sell legs FILL, so any price move between the two reverted the whole
+///   rebalance — over-delivery and under-delivery alike. The server now sizes buy legs
+///   from the sum of sell-leg minOuts, which the contract enforces, so under-funding is
+///   structurally impossible; the over-delivery lands as residue and is refunded to the
+///   user, capped at max(3% of measured sell proceeds, 1 USDG) so a rebalance can never
+///   become a disguised cash-out channel. A rebalance still may not send USDG to any
+///   THIRD party — returning the tail to the owner is not a withdrawal.
 /// - A full exit (fractionBps == 10000) MUST liquidate the whole position: every
 ///   tracked token amount has to reach zero in the exit legs, otherwise it reverts.
 ///   This closes the pooled-basis front-loading dodge — withdrawing 100% of the
@@ -57,10 +72,16 @@ import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol
 ///   party (minOut == 0, out == 0) would otherwise pass every check while the value
 ///   walks out the door. minOut > 0 makes the contract-measured, user-delivered
 ///   output strictly positive, so a full output redirect reverts.
-/// - managedRebalance is bounded by the user's maxPerBuyUsdg: the USDG turnover
-///   (sum of sell-leg proceeds routed through the transient pool) in a single
-///   managed rebalance may not exceed that cap. A net-zero-USDG rebalance no longer
-///   means unbounded value churn per cooldown.
+/// - managedRebalance is bounded three ways, none of them in a quantity the
+///   manager supplies: a per-token FRACTION of the position snapshot (no oracle
+///   involved), the ORACLE VALUE of everything sold against maxPerBuyUsdg, and a
+///   lifetime maxTotalUsdg budget shared with managed buys. The previous bound
+///   was the MEASURED sell proceeds — precisely the number an attacker minimises,
+///   so it was anti-correlated with the damage: it blocked honest large
+///   rebalances while permitting total liquidation.
+/// - Every leg on every path must carry minOut > 0, and every fill is checked
+///   against a Chainlink band the contract derives itself. minOut is authored by
+///   whoever authored the calldata, so it was never a bound on the manager.
 /// - Re-enabling auto-manage resets the cumulative manager-spend counter: enableAuto
 ///   is callable only by the user, so a fresh call is explicit consent to a fresh
 ///   budget.
@@ -80,7 +101,11 @@ contract GroveManager is Ownable2Step, ReentrancyGuard {
     /// @dev Hard cap on legs per call — bounds gas and loop work everywhere.
     uint256 public constant MAX_LEGS = 20;
     uint256 public constant MIN_COMPONENTS = 3;
-    uint256 public constant MAX_COMPONENTS = 30;
+    /// @dev MUST stay <= MAX_LEGS so a full exit of a single-version position is
+    /// always expressible in one call. Was 30: with a 20-leg ceiling that made a
+    /// fee-bearing full exit unexpressible, forcing users onto the zero-fee
+    /// closePosition hatch and leaking the protocol's only fee.
+    uint256 public constant MAX_COMPONENTS = 20;
     /// @dev Composition changes and swap-target ADDITIONS wait this long. Removal of
     /// a swap target is instant — you never want to wait 48h to cut a bad venue.
     uint256 public constant TIMELOCK = 48 hours;
@@ -91,6 +116,35 @@ contract GroveManager is Ownable2Step, ReentrancyGuard {
     /// (0.000001 USDG) mints a full activeUserCount++, letting the public tracker
     /// metrics be Sybil-inflated for ~gas.
     uint256 public constant MIN_BUY_USDG = 11_000_000; // 11 USDG (6dp)
+
+    // ── oracle band ─────────────────────────────────────────────────────────
+    /// @dev Hard ceilings on the owner-settable bands. Gamma Strategies lost ~$6M
+    /// in Jan 2024 because its deviation threshold was a config value with no code
+    /// floor. These two constants ARE that floor: no governance action, no
+    /// timelock, nothing can widen past them.
+    uint16 public constant MAX_BAND_BPS = 500; // 5%  — fresh-feed band
+    uint16 public constant MAX_STALE_BAND_BPS = 2_000; // 20% — closed-market band
+    /// @dev Past this a feed is not stale, it is DEAD, and we stop pretending to
+    /// price the token. 5 days covers the longest legitimate equity gap.
+    uint256 public constant MAX_FEED_AGE = 5 days;
+    /// @dev Chainlink L2 recovery grace after the sequencer comes back up.
+    uint256 public constant SEQUENCER_GRACE = 1 hours;
+    /// @dev Sanity ceiling on a feed answer, used only to make the overflow bound
+    /// in _checkBand provable. 1e30 at 8dp is $1e22 per share — no false rejects.
+    uint256 public constant MAX_ANSWER = 1e30;
+
+    // ── rebalance residue ───────────────────────────────────────────────────
+    /// @dev A rebalance may not send USDG to a THIRD party — but returning the
+    /// unspent tail to the position's OWN owner is not a withdrawal. The old
+    /// exact-zero rule could not ship: buy-leg amountIn is baked into venue
+    /// calldata at quote time while the pool is only known after the sell legs
+    /// fill, so any price move between quote and execution reverted the whole
+    /// rebalance in one direction or the other. The server now sizes buy legs
+    /// from the SUM OF SELL-LEG minOuts (which the contract enforces), making
+    /// under-funding structurally impossible; over-delivery lands here and goes
+    /// back to the user, capped so it can never become a disguised cash-out.
+    uint256 public constant MAX_REBALANCE_RESIDUE_BPS = 300; // 3% of value sold
+    uint256 public constant MIN_REBALANCE_RESIDUE = 1_000_000; // 1 USDG floor
 
     /// @notice USDG (6 decimals) — the only cash asset. Immutable by construction.
     IERC20 public immutable usdg;
@@ -144,10 +198,23 @@ contract GroveManager is Ownable2Step, ReentrancyGuard {
     struct AutoConfig {
         bool enabled;
         uint256 maxPerBuyUsdg;
-        uint256 maxTotalUsdg; // cumulative cap across all manager buys
-        uint256 managerSpentUsdg;
+        uint256 maxTotalUsdg; // lifetime cap on manager-MOVED value, buys and rebalances alike
+        uint256 managerMovedUsdg;
         uint256 minSecondsBetween; // cooldown between ANY two manager actions
         uint256 lastManagerAction;
+        /// @dev Price-free blast radius: the manager may sell at most this
+        /// fraction of ANY single holding per rebalance. Oracle-independent, so a
+        /// compromised feed cannot widen it.
+        uint16 maxRebalanceFractionBps;
+    }
+
+    /// @dev One registered price source. `scalePow` = tokenDecimals + feedDecimals
+    /// - 6 (20 for an 18dp stock on an 8dp feed) — snapshotted at registration so
+    /// the hot path never calls decimals(). Packs into ONE slot: 160 + 32 + 8.
+    struct Feed {
+        address aggregator;
+        uint32 heartbeat; // per-feed freshness bound. NEVER one global constant.
+        uint8 scalePow; // <= 36
     }
 
     struct PendingComposition {
@@ -174,6 +241,20 @@ contract GroveManager is Ownable2Step, ReentrancyGuard {
     mapping(address => uint64) public pendingCallTargetEta;
     mapping(address => uint64) public pendingApprovalTargetEta;
 
+    mapping(address => Feed) public feedOf;
+    mapping(address => Feed) private _pendingFeed;
+    mapping(address => uint64) public pendingFeedEta;
+
+    uint16 public bandBps = 300; // 3%  — fresh feed
+    uint16 public staleBandBps = 1_000; // 10% — market closed / sequencer grace
+    uint16 public pendingBandBps;
+    uint16 public pendingStaleBandBps;
+    uint64 public pendingBandEta;
+
+    /// @notice Chainlink sequencer-uptime feed. address(0) = check disabled.
+    /// Deployed disabled; enable once the 4663 address is verified.
+    address public sequencerUptimeFeed;
+
     /// @notice Vera's ops key for auto-manage flows. Can only act inside user caps.
     address public manager;
     /// @notice Can pause/unpause. Pause blocks buys + manager actions, never exits.
@@ -196,12 +277,20 @@ contract GroveManager is Ownable2Step, ReentrancyGuard {
         uint256 indexed groveId,
         uint256 maxPerBuyUsdg,
         uint256 maxTotalUsdg,
-        uint256 minSecondsBetween
+        uint256 minSecondsBetween,
+        uint16 maxRebalanceFractionBps
     );
     event AutoRevoked(address indexed user, uint256 indexed groveId);
     event SwapTargetProposed(address indexed target, bool asApproval, uint64 eta);
     event SwapTargetAdded(address indexed target, bool asApproval);
     event SwapTargetRemoved(address indexed target, bool asApproval);
+    event FeedProposed(address indexed token, address aggregator, uint32 heartbeat, uint64 eta);
+    event FeedSet(address indexed token, address aggregator, uint32 heartbeat);
+    event FeedRemoved(address indexed token);
+    event BandsProposed(uint16 bandBps, uint16 staleBandBps, uint64 eta);
+    event BandsSet(uint16 bandBps, uint16 staleBandBps);
+    event SequencerFeedSet(address feed);
+    event RebalanceResidueRefunded(address indexed user, uint256 indexed groveId, uint256 amount);
     event ManagerUpdated(address indexed manager);
     event GuardianUpdated(address indexed guardian);
     event PauseSet(bool paused);
@@ -232,7 +321,13 @@ contract GroveManager is Ownable2Step, ReentrancyGuard {
     error BadFraction(uint16 fractionBps);
     error IncompleteFullExit(address token, uint256 remaining);
     error BuyLegTooSmall(uint256 index, uint256 amountIn);
-    error ManagerMinOutRequired(uint256 index);
+    error MinOutRequired();
+    error FeedRequired(address token);
+    error StaleFeedForManaged(address token, uint256 updatedAt);
+    error PriceBandBreached(address token, uint256 out, uint256 minAcceptable);
+    error BadBand(uint16 bandBps, uint16 staleBandBps);
+    error BadFeed();
+    error RebalanceFractionExceeded(address token, uint256 sold, uint256 cap);
     error RebalanceTurnoverCapExceeded(uint256 turnover, uint256 cap);
     error AutoNotEnabled(address user, uint256 groveId);
     error PerBuyCapExceeded(uint256 want, uint256 cap);
@@ -357,6 +452,81 @@ contract GroveManager is Ownable2Step, ReentrancyGuard {
         emit SwapTargetRemoved(target, asApproval);
     }
 
+    /// @notice Queue a price feed for a token (48h). Registering a feed is the
+    /// only thing that lets the manager rail touch that token at all, so an owner
+    /// cannot swap in a lying aggregator and drain through a compromised manager
+    /// in the same block.
+    function proposeFeed(address token, address aggregator, uint32 heartbeat) external onlyOwner {
+        if (token == address(0) || aggregator == address(0) || heartbeat == 0) revert BadFeed();
+        uint8 td = IERC20Metadata(token).decimals();
+        uint8 fd = AggregatorV3Interface(aggregator).decimals();
+        if (td > 18 || fd > 18 || uint256(td) + uint256(fd) < 6) revert BadFeed();
+        (bool ok,,) = _readFeed(aggregator); // must answer NOW, or it is a dead address
+        if (!ok) revert BadFeed();
+        _pendingFeed[token] = Feed({aggregator: aggregator, heartbeat: heartbeat, scalePow: uint8(td + fd - 6)});
+        uint64 eta = uint64(block.timestamp + TIMELOCK);
+        pendingFeedEta[token] = eta;
+        emit FeedProposed(token, aggregator, heartbeat, eta);
+    }
+
+    function applyFeed(address token) external onlyOwner {
+        uint64 eta = pendingFeedEta[token];
+        if (eta == 0) revert NothingPending();
+        if (block.timestamp < eta) revert TimelockPending(eta);
+        Feed memory f = _pendingFeed[token];
+        feedOf[token] = f;
+        delete _pendingFeed[token];
+        delete pendingFeedEta[token];
+        emit FeedSet(token, f.aggregator, f.heartbeat);
+    }
+
+    /// @notice Instant, on purpose. Dropping a feed only ever makes things
+    /// STRICTER: managed legs on that token stop entirely and new buys stop.
+    /// Cutting a broken oracle must not wait 48h, exactly like removeSwapTarget.
+    function removeFeed(address token) external onlyOwner {
+        delete feedOf[token];
+        delete _pendingFeed[token];
+        delete pendingFeedEta[token];
+        emit FeedRemoved(token);
+    }
+
+    /// @notice Tightening the band is instant; widening waits 48h.
+    function tightenBands(uint16 fresh_, uint16 stale_) external onlyOwner {
+        if (fresh_ == 0 || fresh_ > bandBps || stale_ > staleBandBps || stale_ < fresh_) {
+            revert BadBand(fresh_, stale_);
+        }
+        bandBps = fresh_;
+        staleBandBps = stale_;
+        emit BandsSet(fresh_, stale_);
+    }
+
+    function proposeBands(uint16 fresh_, uint16 stale_) external onlyOwner {
+        if (fresh_ == 0 || fresh_ > MAX_BAND_BPS || stale_ > MAX_STALE_BAND_BPS || stale_ < fresh_) {
+            revert BadBand(fresh_, stale_);
+        }
+        pendingBandBps = fresh_;
+        pendingStaleBandBps = stale_;
+        pendingBandEta = uint64(block.timestamp + TIMELOCK);
+        emit BandsProposed(fresh_, stale_, pendingBandEta);
+    }
+
+    function applyBands() external onlyOwner {
+        if (pendingBandEta == 0) revert NothingPending();
+        if (block.timestamp < pendingBandEta) revert TimelockPending(pendingBandEta);
+        bandBps = pendingBandBps;
+        staleBandBps = pendingStaleBandBps;
+        pendingBandEta = 0;
+        emit BandsSet(bandBps, staleBandBps);
+    }
+
+    /// @notice Set/clear the sequencer-uptime feed. Instant both ways: it can only
+    /// matter while the sequencer is down or inside its grace window, and in that
+    /// window every equity feed is stale anyway, which already blocks the manager.
+    function setSequencerFeed(address feed) external onlyOwner {
+        sequencerUptimeFeed = feed;
+        emit SequencerFeedSet(feed);
+    }
+
     function setManager(address manager_) external onlyOwner {
         manager = manager_;
         emit ManagerUpdated(manager_);
@@ -403,13 +573,16 @@ contract GroveManager is Ownable2Step, ReentrancyGuard {
 
         uint256 basisWithdrawn = (p.costBasisUsdg * fractionBps) / BPS;
         uint256 proceeds;
+        bool seqOk = _sequencerOk();
         for (uint256 i = 0; i < legs.length; i++) {
             SwapLeg calldata leg = legs[i];
             if (leg.tokenOut != address(usdg)) revert LegTokenNotUsdg(i);
             uint256 held = p.amountOf[leg.tokenIn];
             if (held < leg.amountIn) revert InsufficientPositionAmount(leg.tokenIn, leg.amountIn, held);
-            p.amountOf[leg.tokenIn] = held - leg.amountIn;
-            proceeds += _executeLeg(leg, msg.sender);
+            uint256 left = held - leg.amountIn;
+            p.amountOf[leg.tokenIn] = left;
+            proceeds += _executeLeg(leg, msg.sender, false, seqOk);
+            if (left == 0) _untrack(p, leg.tokenIn);
         }
 
         uint256 fee;
@@ -446,7 +619,7 @@ contract GroveManager is Ownable2Step, ReentrancyGuard {
     /// anyone. Works while paused (only new money in is pause-gated).
     function rebalance(uint256 groveId, SwapLeg[] calldata legs, uint256 deadline) external nonReentrant {
         _checkDeadline(deadline);
-        _rebalance(msg.sender, groveId, legs, false);
+        _rebalance(msg.sender, groveId, legs, false, 0);
     }
 
     /// @notice The emergency hatch: zero the caller's accounting for a grove without
@@ -471,20 +644,25 @@ contract GroveManager is Ownable2Step, ReentrancyGuard {
     /// contract enforces on every manager call. Calling again overwrites the caps
     /// and resets the cumulative spend counter — only the user can call this, so a
     /// fresh call is explicit consent to a fresh budget.
-    function enableAuto(uint256 groveId, uint256 maxPerBuyUsdg, uint256 maxTotalUsdg, uint256 minSecondsBetween)
-        external
-        nonReentrant
-    {
+    function enableAuto(
+        uint256 groveId,
+        uint256 maxPerBuyUsdg,
+        uint256 maxTotalUsdg,
+        uint256 minSecondsBetween,
+        uint16 maxRebalanceFractionBps
+    ) external nonReentrant {
         _requireGrove(groveId);
         if (minSecondsBetween < MIN_COOLDOWN) revert CooldownTooShort(minSecondsBetween);
         if (maxPerBuyUsdg == 0 || maxTotalUsdg < maxPerBuyUsdg) revert BadAutoCaps();
+        if (maxRebalanceFractionBps == 0 || maxRebalanceFractionBps > BPS) revert BadAutoCaps();
         AutoConfig storage a = autoConfigs[msg.sender][groveId];
         a.enabled = true;
         a.maxPerBuyUsdg = maxPerBuyUsdg;
         a.maxTotalUsdg = maxTotalUsdg;
-        a.managerSpentUsdg = 0;
+        a.managerMovedUsdg = 0;
         a.minSecondsBetween = minSecondsBetween;
-        emit AutoEnabled(msg.sender, groveId, maxPerBuyUsdg, maxTotalUsdg, minSecondsBetween);
+        a.maxRebalanceFractionBps = maxRebalanceFractionBps;
+        emit AutoEnabled(msg.sender, groveId, maxPerBuyUsdg, maxTotalUsdg, minSecondsBetween, maxRebalanceFractionBps);
     }
 
     /// @notice Revoke auto-manage instantly. No cooldown, no timelock, works while
@@ -505,20 +683,23 @@ contract GroveManager is Ownable2Step, ReentrancyGuard {
     {
         _checkDeadline(deadline);
         AutoConfig storage a = _checkAutoAndCooldown(user, groveId);
-        // managed=true: every leg must carry minOut > 0 (see _buy) so a redirected
-        // output (out == 0) can never pass the delta check.
+        // Every managed fill is additionally banded against the token's Chainlink
+        // feed (see _checkBand) — minOut alone is not a bound, because whoever
+        // authored the calldata also authored minOut.
         uint256 totalIn = _buy(user, groveId, legs, true);
         if (totalIn > a.maxPerBuyUsdg) revert PerBuyCapExceeded(totalIn, a.maxPerBuyUsdg);
-        uint256 spent = a.managerSpentUsdg + totalIn;
-        if (spent > a.maxTotalUsdg) revert TotalCapExceeded(spent, a.maxTotalUsdg);
-        a.managerSpentUsdg = spent;
+        uint256 moved = a.managerMovedUsdg + totalIn;
+        if (moved > a.maxTotalUsdg) revert TotalCapExceeded(moved, a.maxTotalUsdg);
+        a.managerMovedUsdg = moved;
     }
 
     /// @notice Manager rebalances a user's position within the opted-in grove.
     /// Net-zero USDG (enforced by the shared rebalance path). It consumes the
-    /// cooldown, requires minOut > 0 on every leg, and is bounded in VALUE: the USDG
-    /// turnover (sum of sell-leg proceeds) may not exceed the user's maxPerBuyUsdg,
-    /// so a compromised manager key cannot churn the whole position out per cooldown.
+    /// cooldown and is bounded three ways, none of them in a quantity the manager
+    /// supplies: a per-token FRACTION of the position snapshot (oracle-free), the
+    /// ORACLE VALUE of everything sold against maxPerBuyUsdg, and the lifetime
+    /// maxTotalUsdg budget. The old bound was measured sell-leg proceeds — exactly
+    /// the number an attacker minimises, so it was anti-correlated with the damage.
     function managedRebalance(address user, uint256 groveId, SwapLeg[] calldata legs, uint256 deadline)
         external
         nonReentrant
@@ -527,8 +708,11 @@ contract GroveManager is Ownable2Step, ReentrancyGuard {
     {
         _checkDeadline(deadline);
         AutoConfig storage a = _checkAutoAndCooldown(user, groveId);
-        uint256 turnover = _rebalance(user, groveId, legs, true);
-        if (turnover > a.maxPerBuyUsdg) revert RebalanceTurnoverCapExceeded(turnover, a.maxPerBuyUsdg);
+        uint256 valueSold = _rebalance(user, groveId, legs, true, a.maxRebalanceFractionBps);
+        if (valueSold > a.maxPerBuyUsdg) revert RebalanceTurnoverCapExceeded(valueSold, a.maxPerBuyUsdg);
+        uint256 moved = a.managerMovedUsdg + valueSold;
+        if (moved > a.maxTotalUsdg) revert TotalCapExceeded(moved, a.maxTotalUsdg);
+        a.managerMovedUsdg = moved;
     }
 
     // ---------------------------------------------------------------- views
@@ -598,7 +782,6 @@ contract GroveManager is Ownable2Step, ReentrancyGuard {
         for (uint256 i = 0; i < legs.length; i++) {
             if (legs[i].tokenIn != address(usdg)) revert LegTokenNotUsdg(i);
             if (legs[i].amountIn < MIN_BUY_USDG) revert BuyLegTooSmall(i, legs[i].amountIn);
-            if (managed && legs[i].minOut == 0) revert ManagerMinOutRequired(i);
             if (_weightOf[groveId][v][legs[i].tokenOut] == 0) revert TokenNotInComposition(legs[i].tokenOut);
             totalIn += legs[i].amountIn;
         }
@@ -607,8 +790,9 @@ contract GroveManager is Ownable2Step, ReentrancyGuard {
         usdg.safeTransferFrom(user, address(this), totalIn);
         Position storage p = _positions[user][groveId];
         bool wasEmpty = p.costBasisUsdg == 0;
+        bool seqOk = _sequencerOk();
         for (uint256 i = 0; i < legs.length; i++) {
-            uint256 out = _executeLeg(legs[i], address(0));
+            uint256 out = _executeLeg(legs[i], address(0), managed, seqOk);
             _creditToken(p, legs[i].tokenOut, out);
             IERC20(legs[i].tokenOut).safeTransfer(user, out);
         }
@@ -624,42 +808,69 @@ contract GroveManager is Ownable2Step, ReentrancyGuard {
     /// fill an in-memory USDG pool; buy legs drain it; a non-zero residue reverts.
     /// `managed` requires minOut > 0 on every leg (so a manager cannot redirect a
     /// sell or buy leg's output to a third party with out == 0). Returns the total
-    /// USDG turnover (sum of sell-leg proceeds) so the manager path can bound it.
-    function _rebalance(address user, uint256 groveId, SwapLeg[] calldata legs, bool managed)
-        internal
-        returns (uint256 turnover)
-    {
+    /// ORACLE VALUE of everything sold, which is what the manager path bounds —
+    /// deliberately not the measured proceeds, since that is the number an
+    /// attacker minimises.
+    function _rebalance(
+        address user,
+        uint256 groveId,
+        SwapLeg[] calldata legs,
+        bool managed,
+        uint16 fractionBps
+    ) internal returns (uint256 valueSoldUsdg) {
         Grove storage g = _requireGrove(groveId);
         _checkLegCount(legs.length);
         Position storage p = _positions[user][groveId];
         if (p.costBasisUsdg == 0) revert NoPosition(user, groveId);
         uint32 v = g.version;
+        // Snapshot bounds BEFORE any leg executes, so the fraction cap measures
+        // the true pre-call position rather than one already drained by leg 0.
+        if (managed) valueSoldUsdg = _preflightManagedRebalance(p, legs, fractionBps);
+        bool seqOk = _sequencerOk();
 
         uint256 pool;
+        // Measured sell proceeds. This is the residue cap's denominator — NOT a
+        // security bound (that is valueSoldUsdg, priced by the oracle). It has to
+        // be the measured number so a USER rebalance, which never runs the
+        // oracle preflight, still scales its allowance with its own size instead
+        // of being stuck at the 1 USDG floor.
+        uint256 soldProceeds;
         for (uint256 i = 0; i < legs.length; i++) {
             SwapLeg calldata leg = legs[i];
-            if (managed && leg.minOut == 0) revert ManagerMinOutRequired(i);
             if (leg.tokenOut == address(usdg)) {
                 // Sell leg: stock (pulled from the user) -> USDG held transiently.
                 uint256 held = p.amountOf[leg.tokenIn];
                 if (held < leg.amountIn) revert InsufficientPositionAmount(leg.tokenIn, leg.amountIn, held);
-                p.amountOf[leg.tokenIn] = held - leg.amountIn;
-                uint256 got = _executeLeg(leg, user);
+                uint256 left = held - leg.amountIn;
+                p.amountOf[leg.tokenIn] = left;
+                uint256 got = _executeLeg(leg, user, managed, seqOk);
                 pool += got;
-                turnover += got;
+                soldProceeds += got;
+                if (left == 0) _untrack(p, leg.tokenIn);
             } else if (leg.tokenIn == address(usdg)) {
                 // Buy leg: transient USDG -> stock forwarded to the user.
                 if (leg.amountIn > pool) revert RebalanceInsufficientUsdg(leg.amountIn, pool);
                 if (_weightOf[groveId][v][leg.tokenOut] == 0) revert TokenNotInComposition(leg.tokenOut);
                 pool -= leg.amountIn;
-                uint256 out = _executeLeg(leg, address(0));
+                uint256 out = _executeLeg(leg, address(0), managed, seqOk);
                 _creditToken(p, leg.tokenOut, out);
                 IERC20(leg.tokenOut).safeTransfer(user, out);
             } else {
                 revert BadRebalanceLeg(i);
             }
         }
-        if (pool != 0) revert RebalanceUsdgResidue(pool);
+        // Over-delivery goes back to the POSITION'S OWN OWNER, capped so it can
+        // never become a disguised cash-out path. The old exact-zero rule was
+        // unshippable: buy-leg amountIn is baked into venue calldata at quote
+        // time while the pool is only known after the sell legs fill, so any
+        // price move between quote and execution reverted the whole rebalance.
+        if (pool != 0) {
+            uint256 cap = (soldProceeds * MAX_REBALANCE_RESIDUE_BPS) / BPS;
+            if (cap < MIN_REBALANCE_RESIDUE) cap = MIN_REBALANCE_RESIDUE;
+            if (pool > cap) revert RebalanceUsdgResidue(pool);
+            usdg.safeTransfer(user, pool);
+            emit RebalanceResidueRefunded(user, groveId, pool);
+        }
         emit Rebalanced(user, groveId);
     }
 
@@ -669,7 +880,10 @@ contract GroveManager is Ownable2Step, ReentrancyGuard {
     /// amount to the approval target and resets it to zero after — no dangling
     /// approvals, ever. Reverts unless the router delivered >= minOut AND consumed
     /// exactly amountIn (a partially-consuming or lying router fails the whole tx).
-    function _executeLeg(SwapLeg calldata leg, address pullFrom) internal returns (uint256 out) {
+    function _executeLeg(SwapLeg calldata leg, address pullFrom, bool managed, bool seqOk)
+        internal
+        returns (uint256 out)
+    {
         if (!callTargetAllowed[leg.callTarget]) revert TargetNotAllowed(leg.callTarget);
         if (!approvalTargetAllowed[leg.approvalTarget]) revert ApprovalTargetNotAllowed(leg.approvalTarget);
         // Never let a "swap" be a direct call into a token contract.
@@ -677,6 +891,12 @@ contract GroveManager is Ownable2Step, ReentrancyGuard {
             revert TargetIsToken(leg.callTarget);
         }
         if (leg.amountIn == 0) revert ZeroAmount();
+        // Kills only the degenerate out == 0 shape (a venue that consumes the
+        // input and delivers the output to a foreign receiver). It is NOT the
+        // slippage bound — minOut is authored by whoever authored `data`, so 1 wei
+        // clears it. The real floor is _checkBand, which the contract derives
+        // itself. Universal now: user flows could previously pass minOut = 0.
+        if (leg.minOut == 0) revert MinOutRequired();
 
         IERC20 tokenIn = IERC20(leg.tokenIn);
         IERC20 tokenOut = IERC20(leg.tokenOut);
@@ -701,6 +921,146 @@ contract GroveManager is Ownable2Step, ReentrancyGuard {
         uint256 spent = inBefore - tokenIn.balanceOf(address(this));
         if (out < leg.minOut) revert OutputBelowMin(leg.tokenOut, out, leg.minOut);
         if (spent != leg.amountIn) revert SpendMismatch(leg.tokenIn, leg.amountIn, spent);
+        _checkBand(leg, out, managed, seqOk);
+    }
+
+    /// @dev Best-effort feed read. A reverting or nonsense aggregator degrades to
+    /// unpriceable instead of bricking the call — an oracle outage must never be
+    /// able to freeze an exit.
+    function _readFeed(address agg) internal view returns (bool ok, uint256 answer, uint256 updatedAt) {
+        try AggregatorV3Interface(agg).latestRoundData() returns (uint80, int256 a, uint256, uint256 u, uint80) {
+            if (a > 0 && uint256(a) <= MAX_ANSWER && u != 0) return (true, uint256(a), u);
+        } catch {}
+        return (false, 0, 0);
+    }
+
+    /// @dev Read ONCE per transaction, not once per leg.
+    function _sequencerOk() internal view returns (bool) {
+        address f = sequencerUptimeFeed;
+        if (f == address(0)) return true; // check disabled
+        try AggregatorV3Interface(f).latestRoundData() returns (uint80, int256 a, uint256 startedAt, uint256, uint80)
+        {
+            return a == 0 && startedAt != 0 && block.timestamp - startedAt > SEQUENCER_GRACE;
+        } catch {
+            return false;
+        }
+    }
+
+    /// @dev The contract computes its OWN expected output from Chainlink and
+    /// rejects the leg below it. Whoever authored minOut — client, server, or a
+    /// fully compromised manager key — cannot move this floor. That is the whole
+    /// point: every economic bound on the manager rail used to be denominated in a
+    /// number the manager chose.
+    ///
+    /// Cross-multiplied, so there is NO division and therefore no truncation and
+    /// no rounding direction to argue about:
+    ///
+    ///   sell (token -> USDG): out * 10**scalePow * BPS >= amountIn * answer * (BPS - band)
+    ///   buy  (USDG -> token): out * answer * BPS >= amountIn * 10**scalePow * (BPS - band)
+    ///
+    /// The rule the state table encodes: you can never ENTER something the
+    /// contract cannot price, and you can always LEAVE. A banded-out exit leg
+    /// never traps anyone — the stock is in the user's own wallet and
+    /// closePosition needs no oracle, no whitelist and no unpaused contract.
+    ///
+    /// USDG is taken as exactly $1.00. It is the unit of account here; a USDG
+    /// depeg is a chain-wide event this contract cannot hedge and must not
+    /// pretend to.
+    function _checkBand(SwapLeg calldata leg, uint256 out, bool managed, bool seqOk) internal view {
+        bool isBuy = leg.tokenIn == address(usdg);
+        address token = isBuy ? leg.tokenOut : leg.tokenIn;
+        Feed memory f = feedOf[token];
+
+        if (f.aggregator == address(0)) {
+            if (managed || isBuy) revert FeedRequired(token);
+            return; // UNPRICEABLE: selling out always works.
+        }
+
+        (bool ok, uint256 answer, uint256 updatedAt) = _readFeed(f.aggregator);
+        uint256 age = block.timestamp > updatedAt ? block.timestamp - updatedAt : 0;
+        if (!ok || age > MAX_FEED_AGE) {
+            if (managed || isBuy) revert FeedRequired(token);
+            return;
+        }
+
+        bool fresh = seqOk && age <= f.heartbeat;
+        // Staleness is a MODE SWITCH, not a gate: equity feeds hold price across
+        // weekends, and rejecting on age would brick 2/7 of the week for a product
+        // that trades 24/7. The manager lockout is the half that matters — a stale
+        // price is exactly when a fair-looking fill is most wrong.
+        if (!fresh && managed) revert StaleFeedForManaged(token, updatedAt);
+        uint256 band = fresh ? bandBps : staleBandBps;
+
+        uint256 scale = 10 ** uint256(f.scalePow);
+        uint256 lhs = isBuy ? out * answer : out * scale;
+        uint256 rhs = (isBuy ? leg.amountIn * scale : leg.amountIn * answer) * (BPS - band);
+        if (lhs * BPS < rhs) {
+            // One division, revert path only: gives the server the exact floor it missed.
+            revert PriceBandBreached(token, out, rhs / (BPS * (isBuy ? answer : scale)));
+        }
+    }
+
+    /// @dev Oracle value of `amount` of `token` in USDG raw units. Manager rail
+    /// only, where a live feed is already mandatory, so it may revert on an
+    /// unpriceable token.
+    function _usdgValueOf(address token, uint256 amount) internal view returns (uint256) {
+        Feed memory f = feedOf[token];
+        if (f.aggregator == address(0)) revert FeedRequired(token);
+        (bool ok, uint256 answer,) = _readFeed(f.aggregator);
+        if (!ok) revert FeedRequired(token);
+        return (amount * answer) / (10 ** uint256(f.scalePow));
+    }
+
+    /// @dev Two manager bounds in one pass, neither denominated in anything the
+    /// manager supplies: (a) per-token fraction of the position SNAPSHOT, no
+    /// oracle involved; (b) the oracle VALUE of everything being sold. Runs
+    /// BEFORE any leg executes, so the snapshot is the true pre-call position.
+    /// One feed read per DISTINCT sold token, not per leg.
+    function _preflightManagedRebalance(Position storage p, SwapLeg[] calldata legs, uint16 fractionBps)
+        internal
+        view
+        returns (uint256 valueSoldUsdg)
+    {
+        address[] memory seen = new address[](legs.length);
+        uint256[] memory sold = new uint256[](legs.length);
+        uint256 count;
+        for (uint256 i = 0; i < legs.length; i++) {
+            if (legs[i].tokenOut != address(usdg)) continue; // only sell legs move the position out
+            address t = legs[i].tokenIn;
+            uint256 k = count;
+            for (uint256 j = 0; j < count; j++) {
+                if (seen[j] == t) {
+                    k = j;
+                    break;
+                }
+            }
+            if (k == count) {
+                seen[count] = t;
+                count++;
+            }
+            sold[k] += legs[i].amountIn;
+        }
+        for (uint256 i = 0; i < count; i++) {
+            uint256 cap = (p.amountOf[seen[i]] * fractionBps) / BPS;
+            if (sold[i] > cap) revert RebalanceFractionExceeded(seen[i], sold[i], cap);
+            valueSoldUsdg += _usdgValueOf(seen[i], sold[i]);
+        }
+    }
+
+    /// @dev Swap-and-pop a fully-sold token out of the position's enumeration.
+    /// Without it the list only ever grows, so a position could hold more distinct
+    /// tokens than MAX_LEGS and make the fee-bearing full exit unexpressible in
+    /// one call — pushing users onto the zero-fee closePosition hatch.
+    function _untrack(Position storage p, address token) internal {
+        uint256 len = p.tokens.length;
+        for (uint256 i = 0; i < len; i++) {
+            if (p.tokens[i] == token) {
+                p.tokens[i] = p.tokens[len - 1];
+                p.tokens.pop();
+                break;
+            }
+        }
+        p.tracked[token] = false;
     }
 
     function _creditToken(Position storage p, address token, uint256 amount) internal {

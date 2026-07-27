@@ -2,6 +2,8 @@ import hre from "hardhat";
 import { expect } from "chai";
 import { encodeFunctionData, getAddress } from "viem";
 
+const FEED_TIMELOCK = 48 * 3600;
+
 // FUND-SAFETY PoC suite for GroveManager — now a REGRESSION suite for the fix.
 // The original PoCs proved that managedBuy / managedRebalance enforced spend caps +
 // cooldown but NOT per-leg slippage or output recipient, so a malicious/compromised
@@ -26,12 +28,52 @@ describe("GroveManager — fund-safety PoCs", function () {
   let publicClient: any;
   let owner: any, user1: any, managerW: any, guardianW: any, treasuryW: any, attacker: any;
   let gm: any, usdg: any, aapl: any, tsla: any, nvda: any;
+
+  /// token -> { agg, price6 } for every registered feed, so travel() and
+  /// setPrice() can keep the oracle consistent with the world. GroveManager now
+  /// bands every fill against Chainlink; a fixture whose oracle is frozen while
+  /// the router moves is modelling something that cannot happen on chain.
+  let feeds: Record<string, { agg: any; price6: bigint }> = {};
+
+  async function refreshFeeds() {
+    for (const k of Object.keys(feeds)) {
+      await feeds[k].agg.write.setAnswer([(feeds[k].price6 * 100n) as any]);
+    }
+  }
+
+  /// Raw time travel with NO feed refresh — used while registering feeds, and by
+  /// any test that deliberately wants a stale or dead one.
+  async function travelOnly(seconds: number) {
+    await hre.network.provider.send("evm_increaseTime", [seconds]);
+    await hre.network.provider.send("evm_mine", []);
+  }
+
+  /// Register feeds at the SAME prices the mock router fills at, so an honest
+  /// leg lands mid-band. Feed decimals 8, matching the real 4663 equity feeds:
+  /// answer = price6 * 1e8 / 1e6. Batched through ONE 48h window — registering
+  /// one at a time ages the first past MAX_FEED_AGE before the last lands.
+  async function registerFeeds(pairs: Array<[any, bigint]>, heartbeat = 3600) {
+    const aggs: any[] = [];
+    for (const [token, price6] of pairs) {
+      const agg = await hre.viem.deployContract("MockAggregator", [8, (price6 * 100n) as any]);
+      await gm.write.proposeFeed([token.address, agg.address, heartbeat]);
+      aggs.push(agg);
+    }
+    await travelOnly(FEED_TIMELOCK + 1);
+    for (let i = 0; i < pairs.length; i++) {
+      await gm.write.applyFeed([pairs[i][0].address]);
+      await aggs[i].write.setAnswer([(pairs[i][1] * 100n) as any]);
+      feeds[pairs[i][0].address.toLowerCase()] = { agg: aggs[i], price6: pairs[i][1] };
+    }
+    return aggs;
+  }
   let router: any, redirect: any;
   let treasury: `0x${string}`;
 
   async function travel(seconds: number) {
     await hre.network.provider.send("evm_increaseTime", [seconds]);
     await hre.network.provider.send("evm_mine", []);
+    await refreshFeeds();
   }
 
   async function expectRevert(p: Promise<unknown>, err?: string) {
@@ -66,6 +108,7 @@ describe("GroveManager — fund-safety PoCs", function () {
     [owner, user1, managerW, guardianW, treasuryW, attacker] = await hre.viem.getWalletClients();
     treasury = treasuryW.account.address;
 
+    feeds = {};
     usdg = await hre.viem.deployContract("MockERC20", ["USDG", "USDG", 6]);
     aapl = await hre.viem.deployContract("MockERC20", ["Apple", "AAPL", 18]);
     tsla = await hre.viem.deployContract("MockERC20", ["Tesla", "TSLA", 18]);
@@ -100,6 +143,14 @@ describe("GroveManager — fund-safety PoCs", function () {
     await router.write.setRate([tsla.address, usdg.address, sellRate(U(20))]);
     // Same fair rate on the redirect router (so the "value" is real, only the recipient is wrong).
     await redirect.write.setRate([usdg.address, aapl.address, buyRate(U(10))]);
+
+    // Oracles agree with the router, so honest fills sit mid-band. nvda is in
+    // the composition too, so it needs a feed even where no test buys it.
+    await registerFeeds([
+      [aapl, U(10)],
+      [tsla, U(20)],
+      [nvda, U(25)],
+    ]);
     await redirect.write.setRecipient([attacker.account.address]);
 
     await usdg.write.mint([user1.account.address, U(10_000)]);
@@ -111,7 +162,7 @@ describe("GroveManager — fund-safety PoCs", function () {
 
   it("PoC-1 (fixed): the managedBuy redirect drain now REVERTS; the user's USDG stays put", async () => {
     // User opts in with a generous budget and the minimum 1h cooldown.
-    await gm.write.enableAuto([0n, U(1000), U(5000), HOUR], { account: user1.account });
+    await gm.write.enableAuto([0n, U(1000), U(5000), HOUR, 10_000], { account: user1.account });
 
     const userUsdgBefore = await bal(usdg, user1.account.address);
     const attackerAaplBefore = await bal(aapl, attacker.account.address);
@@ -123,17 +174,20 @@ describe("GroveManager — fund-safety PoCs", function () {
       tokenIn: usdg.address,
       tokenOut: aapl.address,
       amountIn: U(1000),
-      minOut: 0n,
+      minOut: 1n,
       callTarget: redirect.address,
       approvalTarget: redirect.address,
       data: swapData(redirect, usdg.address, aapl.address, U(1000)),
     };
 
-    // Hardened contract: managed legs must carry minOut > 0, so this reverts before
-    // any funds move.
+    // Hardened contract: the leg carries a real (if tiny) minOut, and the contract
+    // forwards only its OWN measured delta. A router that sends the output to a
+    // third party leaves out == 0, which cannot clear even a 1-wei floor. This is
+    // the stronger statement: the drain fails on the MEASUREMENT, not merely on a
+    // missing minOut the manager could have supplied.
     await expectRevert(
       gm.write.managedBuy([user1.account.address, 0n, [evilLeg], FOREVER], { account: managerW.account }),
-      "ManagerMinOutRequired"
+      "OutputBelowMin"
     );
 
     // Even if the manager sets a token minOut (1 wei) to dodge that check, the
@@ -168,7 +222,7 @@ describe("GroveManager — fund-safety PoCs", function () {
     expect(await bal(aapl, user1.account.address)).to.equal(S(100));
 
     // User opts into auto with a TIGHT total cap (only 1 USDG of manager BUY budget).
-    await gm.write.enableAuto([0n, U(1), U(1), HOUR], { account: user1.account });
+    await gm.write.enableAuto([0n, U(1), U(1), HOUR, 10_000], { account: user1.account });
 
     // The original exploit: sell the user's AAPL for USDG on the honest router (into
     // the transient pool), then "buy" it back through the redirect venue with
@@ -178,22 +232,22 @@ describe("GroveManager — fund-safety PoCs", function () {
     const attackerBefore = await bal(aapl, attacker.account.address);
     const rebLegs = [
       { // sell 100 AAPL -> 1000 USDG into the pool (honest router)
-        tokenIn: aapl.address, tokenOut: usdg.address, amountIn: S(100), minOut: 0n,
+        tokenIn: aapl.address, tokenOut: usdg.address, amountIn: S(100), minOut: 1n,
         callTarget: router.address, approvalTarget: router.address,
         data: swapData(router, aapl.address, usdg.address, S(100)),
       },
       { // "buy" 100 AAPL with the 1000 USDG pool, output redirected to attacker
-        tokenIn: usdg.address, tokenOut: aapl.address, amountIn: U(1000), minOut: 0n,
+        tokenIn: usdg.address, tokenOut: aapl.address, amountIn: U(1000), minOut: 1n,
         callTarget: redirect.address, approvalTarget: redirect.address,
         data: swapData(redirect, usdg.address, aapl.address, U(1000)),
       },
     ];
 
-    // Hardened contract: managed rebalance legs must carry minOut > 0, so the
-    // minOut=0 legs revert before anything executes.
+    // Same on the rebalance rail: a redirected sell leg delivers nothing to the
+    // contract, so the measured delta cannot clear the floor.
     await expectRevert(
       gm.write.managedRebalance([user1.account.address, 0n, rebLegs, FOREVER], { account: managerW.account }),
-      "ManagerMinOutRequired"
+      "OutputBelowMin"
     );
 
     // And even if the manager sets a token minOut (1 wei) to dodge that check, the

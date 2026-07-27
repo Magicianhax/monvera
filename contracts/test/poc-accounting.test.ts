@@ -2,6 +2,8 @@ import hre from "hardhat";
 import { expect } from "chai";
 import { encodeFunctionData, getAddress, parseEventLogs } from "viem";
 
+const FEED_TIMELOCK = 48 * 3600;
+
 // ACCOUNTING + FEE-MATH adversarial PoC suite for GroveManager — now a REGRESSION
 // suite for the fix. The original PoCs probed pooled-basis front-loading (withdraw
 // 100% of pooled basis against a sale of only the winner, abandoning the flats
@@ -25,12 +27,52 @@ describe("GroveManager — accounting/fee PoC", function () {
   let publicClient: any;
   let owner: any, user1: any, user2: any, managerW: any, guardianW: any, treasuryW: any, stranger: any;
   let gm: any, usdg: any, aapl: any, tsla: any, nvda: any, goog: any;
+
+  /// token -> { agg, price6 } for every registered feed, so travel() and
+  /// setPrice() can keep the oracle consistent with the world. GroveManager now
+  /// bands every fill against Chainlink; a fixture whose oracle is frozen while
+  /// the router moves is modelling something that cannot happen on chain.
+  let feeds: Record<string, { agg: any; price6: bigint }> = {};
+
+  async function refreshFeeds() {
+    for (const k of Object.keys(feeds)) {
+      await feeds[k].agg.write.setAnswer([(feeds[k].price6 * 100n) as any]);
+    }
+  }
+
+  /// Raw time travel with NO feed refresh — used while registering feeds, and by
+  /// any test that deliberately wants a stale or dead one.
+  async function travelOnly(seconds: number) {
+    await hre.network.provider.send("evm_increaseTime", [seconds]);
+    await hre.network.provider.send("evm_mine", []);
+  }
+
+  /// Register feeds at the SAME prices the mock router fills at, so an honest
+  /// leg lands mid-band. Feed decimals 8, matching the real 4663 equity feeds:
+  /// answer = price6 * 1e8 / 1e6. Batched through ONE 48h window — registering
+  /// one at a time ages the first past MAX_FEED_AGE before the last lands.
+  async function registerFeeds(pairs: Array<[any, bigint]>, heartbeat = 3600) {
+    const aggs: any[] = [];
+    for (const [token, price6] of pairs) {
+      const agg = await hre.viem.deployContract("MockAggregator", [8, (price6 * 100n) as any]);
+      await gm.write.proposeFeed([token.address, agg.address, heartbeat]);
+      aggs.push(agg);
+    }
+    await travelOnly(FEED_TIMELOCK + 1);
+    for (let i = 0; i < pairs.length; i++) {
+      await gm.write.applyFeed([pairs[i][0].address]);
+      await aggs[i].write.setAnswer([(pairs[i][1] * 100n) as any]);
+      feeds[pairs[i][0].address.toLowerCase()] = { agg: aggs[i], price6: pairs[i][1] };
+    }
+    return aggs;
+  }
   let router: any, router2: any, puller: any;
   let treasury: `0x${string}`;
 
   async function travel(seconds: number) {
     await hre.network.provider.send("evm_increaseTime", [seconds]);
     await hre.network.provider.send("evm_mine", []);
+    await refreshFeeds();
   }
   async function events(hash: `0x${string}`, eventName: string, abi?: any) {
     const receipt = await publicClient.waitForTransactionReceipt({ hash });
@@ -69,6 +111,13 @@ describe("GroveManager — accounting/fee PoC", function () {
   async function setPrice(stock: any, price6: bigint) {
     await router.write.setRate([usdg.address, stock.address, buyRate(price6)]);
     await router.write.setRate([stock.address, usdg.address, sellRate(price6)]);
+    const key = stock.address.toLowerCase();
+    if (feeds[key]) {
+      // Keep the oracle with the market: a router repriced without its
+      // feed is a 100%-deviation fill the band correctly rejects.
+      feeds[key].price6 = price6;
+      await feeds[key].agg.write.setAnswer([(price6 * 100n) as any]);
+    }
   }
   async function groveStats(id = 0n) {
     const g = await gm.read.groves([id]);
@@ -92,6 +141,7 @@ describe("GroveManager — accounting/fee PoC", function () {
     [owner, user1, user2, managerW, guardianW, treasuryW, stranger] = await hre.viem.getWalletClients();
     treasury = treasuryW.account.address;
 
+    feeds = {};
     usdg = await hre.viem.deployContract("MockERC20", ["USDG", "USDG", 6]);
     aapl = await hre.viem.deployContract("MockERC20", ["Apple", "AAPL", 18]);
     tsla = await hre.viem.deployContract("MockERC20", ["Tesla", "TSLA", 18]);
@@ -116,6 +166,13 @@ describe("GroveManager — accounting/fee PoC", function () {
     await setPrice(aapl, U(10));
     await setPrice(tsla, U(20));
     await setPrice(nvda, U(25));
+
+    // Oracles agree with the router, so honest fills sit mid-band.
+    await registerFeeds([
+      [aapl, U(10)],
+      [tsla, U(20)],
+      [nvda, U(25)],
+    ]);
     for (const u of [user1, user2]) {
       await usdg.write.mint([u.account.address, U(10_000)]);
       await usdg.write.approve([gm.address, 2n ** 255n], { account: u.account });
@@ -129,7 +186,7 @@ describe("GroveManager — accounting/fee PoC", function () {
   // fee on a genuine, in-contract-realized profit is HALVED vs the honest exit.
   it("FINDING 1 (fixed): front-loading pooled basis onto the winner now reverts; honest liquidation pays 40", async () => {
     // Buy an equal-basis basket: 100 USDG into each of AAPL/TSLA/NVDA (basis 300).
-    await gm.write.buy([0n, [legBuy(aapl, U(100), 0n), legBuy(tsla, U(100), 0n), legBuy(nvda, U(100), 0n)], FOREVER], { account: user1.account });
+    await gm.write.buy([0n, [legBuy(aapl, U(100), 1n), legBuy(tsla, U(100), 1n), legBuy(nvda, U(100), 1n)], FOREVER], { account: user1.account });
     // AAPL moons 5x ($10 -> $50); TSLA & NVDA stay flat (at their cost).
     await setPrice(aapl, U(50));
     // Holdings: 10 AAPL (now $500), 5 TSLA ($100), 4 NVDA ($100). Total value 700, basis 300.
@@ -139,7 +196,7 @@ describe("GroveManager — accounting/fee PoC", function () {
     // abandoning TSLA/NVDA fee-free. Hardened contract requires a full liquidation ->
     // reverts because TSLA and NVDA are still held.
     await expectRevert(
-      gm.write.exit([0n, [legSell(aapl, S(10), 0n)], 10000, FOREVER], { account: user1.account }),
+      gm.write.exit([0n, [legSell(aapl, S(10), 1n)], 10000, FOREVER], { account: user1.account }),
       "IncompleteFullExit"
     );
     // Nothing happened.
@@ -150,7 +207,7 @@ describe("GroveManager — accounting/fee PoC", function () {
     // The only accepted 10000 exit is the honest full liquidation: sell everything,
     // proceeds 700, basisWithdrawn 300, fee = 10% * 400 = 40.
     const hash = await gm.write.exit(
-      [0n, [legSell(aapl, S(10), 0n), legSell(tsla, S(5), 0n), legSell(nvda, S(4), 0n)], 10000, FOREVER],
+      [0n, [legSell(aapl, S(10), 1n), legSell(tsla, S(5), 1n), legSell(nvda, S(4), 1n)], 10000, FOREVER],
       { account: user1.account }
     );
     const ev = (await events(hash, "Exited"))[0];
@@ -164,14 +221,14 @@ describe("GroveManager — accounting/fee PoC", function () {
   // Extreme form: drive the in-contract profit fee to ZERO while selling a winner,
   // by keeping that exit's proceeds <= pooled basis (return-of-capital framing).
   it("FINDING 1b (fixed): the ZERO-fee full-basis-on-a-partial-sale variant also reverts", async () => {
-    await gm.write.buy([0n, [legBuy(aapl, U(100), 0n), legBuy(tsla, U(100), 0n), legBuy(nvda, U(100), 0n)], FOREVER], { account: user1.account });
+    await gm.write.buy([0n, [legBuy(aapl, U(100), 1n), legBuy(tsla, U(100), 1n), legBuy(nvda, U(100), 1n)], FOREVER], { account: user1.account });
     await setPrice(aapl, U(30)); // AAPL 3x -> 10 AAPL worth $300 == pooled basis
     const treasuryBefore = await bal(usdg, treasury);
     // Sell all 10 AAPL for exactly $300 with fractionBps 10000 while keeping TSLA/NVDA:
     // on the unpatched contract proceeds 300 == basisWithdrawn 300 -> fee 0. Now the
     // full-liquidation requirement rejects it (TSLA/NVDA still held).
     await expectRevert(
-      gm.write.exit([0n, [legSell(aapl, S(10), 0n)], 10000, FOREVER], { account: user1.account }),
+      gm.write.exit([0n, [legSell(aapl, S(10), 1n)], 10000, FOREVER], { account: user1.account }),
       "IncompleteFullExit"
     );
     expect((await bal(usdg, treasury)) - treasuryBefore).to.equal(0n);
@@ -189,18 +246,18 @@ describe("GroveManager — accounting/fee PoC", function () {
     await setPrice(aapl, U(10));
     // A 1-raw-unit buy (0.000001 USDG) is now rejected by the 11-USDG floor.
     await expectRevert(
-      gm.write.buy([0n, [legBuy(aapl, 1n, 0n)], FOREVER], { account: user1.account }),
+      gm.write.buy([0n, [legBuy(aapl, 1n, 1n)], FOREVER], { account: user1.account }),
       "BuyLegTooSmall"
     );
     await expectRevert(
-      gm.write.buy([0n, [legBuy(aapl, 1n, 0n)], FOREVER], { account: user2.account }),
+      gm.write.buy([0n, [legBuy(aapl, 1n, 1n)], FOREVER], { account: user2.account }),
       "BuyLegTooSmall"
     );
     const g = await groveStats();
     expect(g.users).to.equal(0n); // no phantom "active users"
     expect(g.basis).to.equal(0n);
     // A real buy at the floor works and counts exactly once.
-    await gm.write.buy([0n, [legBuy(aapl, U(11), 0n)], FOREVER], { account: user1.account });
+    await gm.write.buy([0n, [legBuy(aapl, U(11), 1n)], FOREVER], { account: user1.account });
     expect((await groveStats()).users).to.equal(1n);
   });
 
@@ -210,14 +267,14 @@ describe("GroveManager — accounting/fee PoC", function () {
   // never underflows.
   it("CONTROL: totalCostBasis == sum(per-user basis) and count is exact through stress", async () => {
     // u1 full basket (300), u2 aapl-only (100 -> but at $10 = 10 sh)
-    await gm.write.buy([0n, [legBuy(aapl, U(100), 0n), legBuy(tsla, U(100), 0n), legBuy(nvda, U(100), 0n)], FOREVER], { account: user1.account });
-    await gm.write.buy([0n, [legBuy(aapl, U(100), 0n)], FOREVER], { account: user2.account });
+    await gm.write.buy([0n, [legBuy(aapl, U(100), 1n), legBuy(tsla, U(100), 1n), legBuy(nvda, U(100), 1n)], FOREVER], { account: user1.account });
+    await gm.write.buy([0n, [legBuy(aapl, U(100), 1n)], FOREVER], { account: user2.account });
     // u1 partial exit 30% (partial exits may still sell a subset; basis is retained)
     await setPrice(aapl, U(20));
-    await gm.write.exit([0n, [legSell(aapl, S(3), 0n)], 3000, FOREVER], { account: user1.account });
+    await gm.write.exit([0n, [legSell(aapl, S(3), 1n)], 3000, FOREVER], { account: user1.account });
     // u2 full exit — under the fix a 10000 exit must liquidate the whole position, so
     // u2 sells all 10 AAPL (their only holding).
-    await gm.write.exit([0n, [legSell(aapl, S(10), 0n)], 10000, FOREVER], { account: user2.account });
+    await gm.write.exit([0n, [legSell(aapl, S(10), 1n)], 10000, FOREVER], { account: user2.account });
 
     const p1 = (await position(user1)).costBasis;
     const p2 = (await position(user2)).costBasis;
