@@ -48,3 +48,7 @@ next-env.d.ts
 .wrangler
 .dev.vars*
 !.dev.vars.example
+
+# Committed on purpose: production build constants, all public-by-construction
+# (NEXT_PUBLIC_* ships in the client bundle). Keyed values stay in CI secrets.
+!.env.production
