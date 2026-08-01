@@ -1,0 +1,7 @@
+/* VeraScreen — desktop-only affordances. The class is attached conditionally
+   (useDesktopLayout().active), so nothing here can touch the phone layout. */
+
+/* Record rows trade the chevron for a hover wash on desktop. */
+.recRow:hover {
+  background: var(--surface-2);
+}
