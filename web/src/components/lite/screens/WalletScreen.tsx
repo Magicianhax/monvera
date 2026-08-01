@@ -279,16 +279,24 @@ export function WalletScreen({
                           <div className="tnum" style={{ fontWeight: 500, fontSize: 16 }}>
                             {hide
                               ? DOTS
-                              : h.valueUsd !== undefined || h.settlingUsd !== undefined
-                                ? usd((h.valueUsd ?? 0) + (h.settlingUsd ?? 0))
+                              : h.valueUsd !== undefined || h.settlingUsd !== undefined || h.smartUsd !== undefined
+                                ? usd((h.valueUsd ?? 0) + (h.settlingUsd ?? 0) + (h.smartUsd ?? 0))
                                 : "—"}
                           </div>
                           <div className="tnum" style={{ fontSize: 12, color: "var(--ink-2)", marginTop: 2 }}>
-                            {hide ? DOTS : `${tokenQty(h.raw, dec)} ${h.asset.symbol}`}
+                            {hide ? DOTS : `${tokenQty(h.raw + (h.smartRaw ?? BigInt(0)), dec)} ${h.asset.symbol}`}
                           </div>
                           {!hide && (h.settlingUsd ?? 0) > 0 && (
                             <div className="tnum" style={{ fontSize: 11.5, color: "var(--primary)", marginTop: 2 }}>
                               {usd(h.settlingUsd!)} settling…
+                            </div>
+                          )}
+                          {/* Grove-held shares live at the smart account, so they
+                              are not sellable from here — say so rather than let
+                              a sell fail later. */}
+                          {!hide && (h.smartUsd ?? 0) > 0 && (
+                            <div className="tnum" style={{ fontSize: 11.5, color: "var(--primary)", marginTop: 2 }}>
+                              {usd(h.smartUsd!)} in a Grove
                             </div>
                           )}
                         </div>

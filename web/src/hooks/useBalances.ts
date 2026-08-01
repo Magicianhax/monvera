@@ -17,6 +17,7 @@ import { USDG, STOCKS, ALL_ASSETS, type Asset } from "@/lib/tokens";
 import { MONVERA } from "@/lib/monveraToken";
 import { fromUnits } from "@/lib/format";
 import { useDemo } from "@/components/demo/DemoProvider";
+import { useSmartAccountAddress } from "@/hooks/useSmartAccountAddress";
 
 // Shared freshness policy for money reads: poll on a calm interval AND refetch
 // when the user returns to the tab / reconnects / re-mounts a screen, so a
@@ -51,6 +52,14 @@ export interface Holding {
       shown as "settling", NOT sellable (raw excludes them). */
   settlingQty?: number;
   settlingUsd?: number;
+  /** Shares held at the user's SMART ACCOUNT instead of their EOA — today that
+      means bought through a Grove. Counted in totals, shown as "in a Grove",
+      and NOT sellable through the normal flows: `raw` excludes them on purpose,
+      because every sell path signs from the EOA and would revert. Exit a Grove
+      to convert these back to USDG. */
+  smartQty?: number;
+  smartRaw?: bigint;
+  smartUsd?: number;
 }
 
 export interface Portfolio {
@@ -95,6 +104,9 @@ interface PortfolioApiHolding {
   spark: number[] | null;
   settlingQty?: number;
   settlingUsd?: number | null;
+  smartQty?: number;
+  smartRaw?: string;
+  smartUsd?: number | null;
 }
 
 interface PortfolioApiResponse {
@@ -104,16 +116,23 @@ interface PortfolioApiResponse {
   holdings: PortfolioApiHolding[];
 }
 
-/** The user's holdings, valued server-side. See /api/portfolio. */
+/** The user's holdings, valued server-side. See /api/portfolio.
+ *
+ *  The smart account address is resolved HERE rather than passed in, so every
+ *  caller (wallet, home, portfolio, chat context, asset detail) picks up
+ *  Grove-held shares without changing a single call site. Grove buys deliver to
+ *  the smart account, so a portfolio that only looked at the EOA would show the
+ *  user less money than they have. */
 export function usePortfolio(address?: string) {
   const demo = useDemo();
+  const smart = useSmartAccountAddress();
   const query = useQuery({
-    queryKey: ["portfolio", address],
+    queryKey: ["portfolio", address, smart],
     enabled: !demo && Boolean(address),
     refetchInterval: 30_000,
     ...LIVE_BALANCE_OPTS,
     queryFn: async (): Promise<Portfolio> => {
-      const res = await fetch(`/api/portfolio?address=${address}`);
+      const res = await fetch(`/api/portfolio?address=${address}${smart ? `&smart=${smart}` : ""}`);
       const json = await res.json();
       if (!res.ok) {
         throw new Error(typeof json?.error === "string" ? json.error : "Couldn't load portfolio.");
@@ -133,6 +152,9 @@ export function usePortfolio(address?: string) {
           spark: h.spark ?? undefined,
           settlingQty: h.settlingQty ?? undefined,
           settlingUsd: h.settlingUsd ?? undefined,
+          smartQty: h.smartQty ?? undefined,
+          smartRaw: h.smartRaw !== undefined ? BigInt(h.smartRaw) : undefined,
+          smartUsd: h.smartUsd ?? undefined,
         });
       }
       return {

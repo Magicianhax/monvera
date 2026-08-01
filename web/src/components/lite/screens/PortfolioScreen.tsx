@@ -401,19 +401,26 @@ export function PortfolioScreen({
             >
               <HoldingRow
                 asset={tile}
-                sub={`${tokenQty(h.raw, h.asset.decimals ?? 18)} ${h.asset.symbol}`}
+                sub={`${tokenQty(h.raw + (h.smartRaw ?? BigInt(0)), h.asset.decimals ?? 18)} ${h.asset.symbol}`}
                 showSpark
                 onClick={() => go(h.asset.symbol === "MONVERA" ? "token" : "asset", { symbol: h.asset.symbol })}
                 right={
                   <div className="tnum" style={{ textAlign: "right" }}>
                     <div style={{ fontWeight: 600, fontSize: 16 }}>
-                      {h.valueUsd !== undefined || h.settlingUsd !== undefined
-                        ? usd((h.valueUsd ?? 0) + (h.settlingUsd ?? 0))
-                        : tokenQty(h.raw, h.asset.decimals ?? 18)}
+                      {h.valueUsd !== undefined || h.settlingUsd !== undefined || h.smartUsd !== undefined
+                        ? usd((h.valueUsd ?? 0) + (h.settlingUsd ?? 0) + (h.smartUsd ?? 0))
+                        : tokenQty(h.raw + (h.smartRaw ?? BigInt(0)), h.asset.decimals ?? 18)}
                     </div>
                     {(h.settlingUsd ?? 0) > 0 && (
                       <div style={{ fontSize: 11.5, fontWeight: 600, marginTop: 2, color: "var(--primary)" }}>
                         {usd(h.settlingUsd!)} settling…
+                      </div>
+                    )}
+                    {/* Held at the smart account via a Grove — counted, but not
+                        sellable from the normal flows. */}
+                    {(h.smartUsd ?? 0) > 0 && (
+                      <div style={{ fontSize: 11.5, fontWeight: 600, marginTop: 2, color: "var(--primary)" }}>
+                        {usd(h.smartUsd!)} in a Grove
                       </div>
                     )}
                     {day !== undefined && (
