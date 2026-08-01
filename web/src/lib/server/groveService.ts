@@ -59,8 +59,9 @@ const GROVE_MANAGER = (process.env.NEXT_PUBLIC_GROVE_MANAGER ||
 // can follow the events: GroveCreated, Bought, Exited, Rebalanced,
 // CompositionUpdated, PositionClosed.
 //
-// createGrove assigns groveId = groveCount++ (0-based), and the deploy script
-// creates groves in registry order — so on-chain groveId = index in GROVES.
+// The groveId comes from each grove's explicit `onChainId`, never from its
+// position in GROVES. Position only *looks* like the id, and reading the wrong
+// slot would render one basket's users and cost basis under another's name.
 const GROVE_MANAGER_ABI = [
   {
     type: "function",
@@ -83,14 +84,15 @@ const GROVE_MANAGER_ABI = [
 const USDG_PER_USD = 1e6; // USDG is 6dp
 
 async function readGroveStats(def: GroveDef): Promise<GroveStats> {
-  if (!GROVE_MANAGER) return PREVIEW_STATS;
+  // No contract, or this grove was never created on-chain — preview either way.
+  if (!GROVE_MANAGER || def.onChainId === undefined) return PREVIEW_STATS;
   try {
     const [, , , activeUserCount, totalCostBasisUsdg, , , cumulativeFeesUsdg] =
       await publicClient.readContract({
         address: GROVE_MANAGER,
         abi: GROVE_MANAGER_ABI,
         functionName: "groves",
-        args: [BigInt(GROVES.findIndex((g) => g.id === def.id))],
+        args: [BigInt(def.onChainId)],
       });
     return {
       deployed: true,

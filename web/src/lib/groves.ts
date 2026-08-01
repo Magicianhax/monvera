@@ -52,8 +52,21 @@ export interface GroveDef {
    *  a visibly bigger share of the buy, so this is the recommended floor. */
   recommendedUsd: number;
   rebalancePolicy: string;
-  /** False until the GroveManager contract is live — pages ship in preview. */
+  /** Whether this grove is open for business. Kept as editorial intent only —
+   *  the SOURCE OF TRUTH for "can I buy this" is `onChainId !== undefined`,
+   *  because that is the contract's own answer. Never gate a buy on this. */
   launched: boolean;
+  /** This grove's groveId in the GroveManager contract. Undefined = not created
+   *  on-chain yet, so the page shows preview stats.
+   *
+   *  This is deliberately EXPLICIT rather than "index in GROVES". The array
+   *  position looks like the groveId (createGrove assigns 0, 1, 2...) and it is
+   *  wrong the moment on-chain and registry order diverge — which happened on
+   *  2026-07-27, when grove 0 was created from a composition that matched no
+   *  registry entry and the positional mapping silently pointed "tayyib" at it.
+   *  Set it from what scripts/grove-create.js prints, and let
+   *  scripts/grove-verify.js prove it still holds. */
+  onChainId?: number;
   /** Optional raster cover art. Unset, every surface renders the grove's
    *  code-native SVG motif (components/GroveCover). To override: drop art into
    *  web/public/groves/<id>.jpg and set this to "/groves/<id>.jpg" — cards and
@@ -107,11 +120,11 @@ export const GROVES: GroveDef[] = [
     methodology:
       "**Screen.** AAOIFI sector screen (no banks, insurance, gambling, alcohol, weapons, adult content), then ratio screens: interest-bearing debt under 33% of market cap, interest-bearing securities under 33%, impure income under 5%. Screened, not certified.\n\n" +
       "**Weighting.** Market-cap informed with a 20% single-name cap; excess redistributes down the list.\n\n" +
-      "**Rebalancing.** The screen re-runs quarterly. Between screens the basket is checked hourly and trades only on drift or risk events. A per-holding impure-income estimate is published so holders can purify that sliver.",
+      "**Rebalancing.** None automatic today: your basket holds exactly what you bought until you change it. The screen re-runs quarterly, and when a screen drops a name we publish it here rather than moving your holdings for you. A per-holding impure-income estimate is published so holders can purify that sliver.",
     feeBps: 1000,
     minBuyUsd: 20,
     recommendedUsd: RECOMMENDED_BUY_USD,
-    rebalancePolicy: "checked hourly, trades only on drift or risk events",
+    rebalancePolicy: "no automatic rebalancing yet — the basket holds exactly what you bought",
     launched: false,
   },
   {
@@ -136,12 +149,13 @@ export const GROVES: GroveDef[] = [
     methodology:
       "**Selection.** The seven largest US technology platforms, each held directly, plus the Nasdaq-100 tracker as the largest single position.\n\n" +
       "**Weighting.** Near-equal across the seven; the index anchor sized above them so no single company decides the basket.\n\n" +
-      "**Rebalancing.** Near-zero by design — checked hourly, trades only on drift or risk events.",
+      "**Rebalancing.** None automatic today: your basket holds exactly what you bought until you change it. Near-zero turnover is the intent, and automated drift management is not live yet.",
     feeBps: 1000,
     minBuyUsd: 20,
     recommendedUsd: RECOMMENDED_BUY_USD,
-    rebalancePolicy: "checked hourly, trades only on drift or risk events",
-    launched: false,
+    rebalancePolicy: "no automatic rebalancing yet — the basket holds exactly what you bought",
+    launched: true,
+    onChainId: 0,
   },
   {
     id: "silic",
@@ -173,11 +187,11 @@ export const GROVES: GroveDef[] = [
     methodology:
       "**Selection.** The semiconductor value chain end to end — design, manufacture, equipment, memory, integration, optics — plus one index tracker.\n\n" +
       "**Weighting.** Sized by role in the chain: irreplaceable monopolies largest, high-beta assemblers smallest.\n\n" +
-      "**Rebalancing.** Checked hourly, trades only on drift or risk events. Chips are cyclical; the basket does not pretend otherwise.",
+      "**Rebalancing.** None automatic today: your basket holds exactly what you bought until you change it. Chips are cyclical; the basket does not pretend otherwise.",
     feeBps: 1000,
     minBuyUsd: 20,
     recommendedUsd: RECOMMENDED_BUY_USD,
-    rebalancePolicy: "checked hourly, trades only on drift or risk events",
+    rebalancePolicy: "no automatic rebalancing yet — the basket holds exactly what you bought",
     launched: false,
   },
   {
@@ -205,11 +219,11 @@ export const GROVES: GroveDef[] = [
     methodology:
       "**Selection.** Listed companies whose business IS crypto infrastructure — exchange, stablecoin issuance, mining, and the datacenter capacity underneath — limited to names a venue can fill on-chain today.\n\n" +
       "**Weighting.** Fixed weights, heaviest on the businesses with the most durable revenue, no name above 20%.\n\n" +
-      "**Rebalancing.** Checked hourly, trades only on drift or risk events. Expect crypto-sized drawdowns.",
+      "**Rebalancing.** None automatic today: your basket holds exactly what you bought until you change it. Expect crypto-sized drawdowns.",
     feeBps: 1000,
     minBuyUsd: 20,
     recommendedUsd: RECOMMENDED_BUY_USD,
-    rebalancePolicy: "checked hourly, trades only on drift or risk events",
+    rebalancePolicy: "no automatic rebalancing yet — the basket holds exactly what you bought",
     launched: false,
   },
 ];
