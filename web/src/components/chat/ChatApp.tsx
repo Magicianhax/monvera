@@ -12,7 +12,7 @@ import { useTheme } from "@/hooks/useTheme";
 import { useSmartAccount } from "@/hooks/useSmartAccount";
 import { useVeraChat } from "@/hooks/useVeraChat";
 import { groveById } from "@/lib/groves";
-import { CHAT_THEME_CSS, CHAT_STYLE_CSS, CANVAS_META, ChatOrb, ChatMark, PIcon, type CanvasType, type ChatNav } from "./chatKit";
+import { CHAT_THEME_CSS, CHAT_STYLE_CSS, CANVAS_META, ChatOrb, ChatMark, PIcon, type CanvasType, type ChatNav , type StakingPrefill } from "./chatKit";
 import { useColorStyle } from "@/hooks/useColorStyle";
 import { useNotifications } from "@/hooks/useNotifications";
 import { useWatchlistSync } from "@/hooks/useWatchlistSync";
@@ -89,6 +89,7 @@ export function ChatApp() {
   const [grovesView, setGrovesView] = useState<{ id: string | null; auto: boolean } | null>(null);
   // Staking — same full-page takeover pattern as Groves.
   const [stakingOpen, setStakingOpen] = useState(false);
+  const [stakingPrefill, setStakingPrefill] = useState<StakingPrefill | null>(null);
 
   // True while the mount-time effects below are normalizing the arrival URL —
   // the first URL sync after that must replace, not push (see the sync effect).
@@ -190,7 +191,7 @@ export function ChatApp() {
     openSell: (symbol) => setOrder({ symbol, side: "sell" }),
     askVera: (text) => { setHome("chat"); setGrovesView(null); setStakingOpen(false); setPendingAsk(text); },
     openGroves: (id, opts) => { dismissCanvas(); setStakingOpen(false); setGrovesView({ id: id ?? null, auto: !!opts?.auto }); },
-    openStaking: () => { dismissCanvas(); setGrovesView(null); setStakingOpen(true); },
+    openStaking: (prefill) => { dismissCanvas(); setGrovesView(null); if (prefill) setStakingPrefill(prefill); setStakingOpen(true); },
     openSend: () => setPayMode("send"),
     openReceive: () => setPayMode("receive"),
     openSettings: () => setSettingsOpen(true),
@@ -313,7 +314,7 @@ export function ChatApp() {
       {/* ── center (Groves takes the whole surface over; back restores it) ── */}
       <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
         {stakingOpen
-          ? <StakingPage nav={nav} onBack={() => setStakingOpen(false)} />
+          ? <StakingPage nav={nav} prefill={stakingPrefill} onBack={() => setStakingOpen(false)} />
           : grovesView
           ? <GrovesPage groveId={grovesView.id} autoManage={grovesView.auto} nav={nav} onOpen={(id) => setGrovesView({ id, auto: false })} onBack={() => setGrovesView(grovesView.id ? { id: null, auto: false } : null)} />
           : home === "menu" ? <HomeMenu nav={nav} /> : <ChatCenter nav={nav} chat={chat} narrowed={!!canvas} pendingAsk={pendingAsk} consumeAsk={consumeAsk} />}

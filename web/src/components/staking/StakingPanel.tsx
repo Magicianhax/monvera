@@ -12,7 +12,7 @@
 // Every money action goes through ConfirmDialog first: the user reads exactly
 // what the transaction does, in plain words, BEFORE any wallet signs.
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { formatUnits } from "viem";
 import { PIcon } from "@/components/chat/chatKit";
@@ -119,11 +119,15 @@ export const STAKING_CSS = `
   .mvs-wrap{padding-left:16px!important;padding-right:16px!important}
   .mvs-sections{gap:32px!important}
 }
+@keyframes mvspulse{0%,100%{opacity:.35}50%{opacity:1}}
 @media (prefers-reduced-motion:reduce){
   .mvs .mvbtn,.mvs .mvinput,.mvs .mvrow,.mvbackdrop,.mvdialog{transition-duration:1ms}
   .mvs .mvbtn:active:not(:disabled){transform:none}
   .mvdialog{transform:none}
-  .mvspin{animation:none;opacity:.55}
+  /* Gentler, not frozen: a static ring reads as a hang. Rotation becomes an
+     opacity pulse so in-flight still looks in-flight. (In-app, the chat theme
+     applies the same treatment via its own reduced-motion exception.) */
+  .mvspin{animation:mvspulse 1.6s ease-in-out infinite}
 }
 .mvs details.mvfq{border-top:1px solid var(--line)}
 .mvs details.mvfq:first-of-type{border-top:none}
@@ -400,7 +404,56 @@ interface Plan {
   run: () => void;
 }
 
-function ConfirmDialog({ plan, wallet, onClose }: { plan: Plan; wallet: StakingWallet; onClose: () => void }) {
+/** The live slice of useStaking the dialog needs to narrate a transaction. */
+interface TxState {
+  busy: StakingAction | null;
+  step: string | null;
+  error: string | null;
+  lastTx: `0x${string}` | null;
+  clearError: () => void;
+}
+
+// What each action's success screen says. Kept separate from Plan so the
+// confirm copy (future tense) and the done copy (past tense) can't blur.
+const DONE_COPY: Record<StakingAction, { title: string; note: string }> = {
+  stake: { title: "Staked", note: "Your $MONVERA is in the contract and already counting stake-time." },
+  unstake: { title: "Unstake requested", note: "The cooldown is running. Withdraw when it ends, or cancel to put it back to work." },
+  cancel: { title: "Unstake cancelled", note: "The full amount is staked again and counting stake-time." },
+  withdraw: { title: "Withdrawn", note: "The tokens are back in your wallet." },
+  claim: { title: "Claimed", note: "Season rewards are in your wallet." },
+  mint: { title: "Test tokens minted", note: "They are in your wallet." },
+};
+
+const TX_EXPLORER = "https://robinhoodchain.blockscout.com/tx/";
+
+function ConfirmDialog({ plan, wallet, state: st, onClose }: { plan: Plan; wallet: StakingWallet; state: TxState; onClose: () => void }) {
+  // The dialog LIVES THROUGH the transaction instead of closing on confirm.
+  // Closing at confirm was the old behavior, and it left the user staring at
+  // an unchanged page while a real transaction ran (or failed) with nothing
+  // but a 12px inline caption to say so. Phases: confirm -> working -> done |
+  // failed. While working, every close path is blocked: a signature prompt or
+  // an in-flight transaction must never be orphaned by a stray scrim click.
+  const [phase, setPhase] = useState<"confirm" | "working" | "done" | "failed">("confirm");
+  const startedRef = useRef(false);
+
+  useEffect(() => {
+    if (phase !== "working") return;
+    if (st.busy) {
+      startedRef.current = true;
+      return;
+    }
+    // busy has not flipped on yet (state batching) — wait for it, so a
+    // just-clicked dialog cannot flash straight to the success screen.
+    if (!startedRef.current) return;
+    setPhase(st.error ? "failed" : "done");
+  }, [phase, st.busy, st.error]);
+
+  const working = phase === "working";
+  const close = () => {
+    if (working) return;
+    if (phase === "failed") st.clearError();
+    onClose();
+  };
   // PORTALLED TO document.body ON PURPOSE. The panel root carries
   // `container-type: inline-size` (see .mvs-sections in STAKING_CSS), and a
   // container query container is a containing block for fixed-position
@@ -417,7 +470,7 @@ function ConfirmDialog({ plan, wallet, onClose }: { plan: Plan; wallet: StakingW
       role="dialog"
       aria-modal="true"
       aria-label={plan.title}
-      onClick={onClose}
+      onClick={close}
       className="mvs mvbackdrop"
       style={{
         position: "fixed", inset: 0, zIndex: Z.modal, background: "rgba(4,10,7,.72)",
@@ -434,6 +487,48 @@ function ConfirmDialog({ plan, wallet, onClose }: { plan: Plan; wallet: StakingW
         // what is about to be signed. Layering keeps the look and the contrast.
         style={{ ...panel, background: "var(--panel), var(--bg)", borderRadius: 10, width: "100%", maxWidth: 420, padding: 22 }}
       >
+        {phase === "working" ? (
+          // ── in flight: spinner + the hook's live step text ──
+          <div style={{ textAlign: "center", padding: "18px 0 10px" }} role="status" aria-live="polite">
+            <span className="mvspin" style={{ display: "inline-block", width: 40, height: 40, borderRadius: "50%", border: "3px solid var(--line)", borderTopColor: "var(--primary)" }} />
+            <div style={{ fontSize: 17, fontWeight: 800, letterSpacing: "-.02em", marginTop: 16 }}>{plan.title}</div>
+            <div style={{ fontSize: 13, color: "var(--ink-2)", marginTop: 6, minHeight: 20 }}>{st.step ?? "Working…"}</div>
+            <div style={{ fontSize: 11.5, color: "var(--ink-3)", marginTop: 14 }}>Keep this window open. This usually takes a few seconds.</div>
+          </div>
+        ) : phase === "done" ? (
+          // ── success ──
+          <div style={{ textAlign: "center", padding: "14px 0 4px" }}>
+            <span style={{ display: "inline-grid", placeItems: "center", width: 52, height: 52, borderRadius: "50%", background: "var(--primary)" }} aria-hidden>
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M5 12.5l4.6 4.6L19 7.7" stroke="#fff" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" /></svg>
+            </span>
+            <div style={{ fontSize: 20, fontWeight: 800, letterSpacing: "-.02em", marginTop: 12 }}>{DONE_COPY[plan.action].title}</div>
+            {plan.amount && (
+              <div className="tnum" style={{ fontSize: 15, fontWeight: 700, marginTop: 6 }}>
+                {plan.amount} <span style={{ fontSize: 12, color: "var(--ink-3)", fontWeight: 600 }}>$MONVERA</span>
+              </div>
+            )}
+            <p style={{ fontSize: 13, color: "var(--ink-2)", lineHeight: 1.55, margin: "8px auto 0", maxWidth: 300 }}>{DONE_COPY[plan.action].note}</p>
+            {st.lastTx && (
+              <a href={`${TX_EXPLORER}${st.lastTx}`} target="_blank" rel="noopener noreferrer" style={{ display: "inline-block", marginTop: 10, fontSize: 12.5, fontWeight: 600, color: "var(--ink-2)", textDecoration: "underline", textUnderlineOffset: 3 }}>
+                View transaction
+              </a>
+            )}
+            <button className="mvbtn mvbtn-primary" onClick={close} style={{ ...btn("primary"), width: "100%", marginTop: 16 }}>Done</button>
+          </div>
+        ) : phase === "failed" ? (
+          // ── failure: the hook's explained error, nothing generic ──
+          <div style={{ textAlign: "center", padding: "14px 0 4px" }}>
+            <span style={{ display: "inline-grid", placeItems: "center", width: 52, height: 52, borderRadius: "50%", background: "color-mix(in srgb, var(--neg, #d9544a) 18%, transparent)", color: "var(--neg, #d9544a)", fontSize: 24, fontWeight: 800 }} aria-hidden>
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" /></svg>
+            </span>
+            <div style={{ fontSize: 20, fontWeight: 800, letterSpacing: "-.02em", marginTop: 12 }}>That didn&rsquo;t go through</div>
+            <p style={{ fontSize: 13, color: "var(--ink-2)", lineHeight: 1.55, margin: "8px auto 0", maxWidth: 320 }}>
+              {st.error ?? "Something interrupted the transaction."} Nothing was moved unless a transaction link appears on the explorer.
+            </p>
+            <button className="mvbtn mvbtn-quiet" onClick={close} style={{ ...btn("quiet"), width: "100%", marginTop: 16 }}>Close</button>
+          </div>
+        ) : (
+        <>
         <div style={{ fontSize: 20, fontWeight: 800, letterSpacing: "-.02em", textWrap: "balance" }}>{plan.title}</div>
 
         {plan.amount ? (
@@ -463,9 +558,11 @@ function ConfirmDialog({ plan, wallet, onClose }: { plan: Plan; wallet: StakingW
         </div>
 
         <div style={{ display: "flex", gap: 8 }}>
-          <button className="mvbtn mvbtn-quiet" onClick={onClose} style={{ ...btn("quiet"), flex: "none" }}>Cancel</button>
-          <button className="mvbtn mvbtn-primary" onClick={() => { plan.run(); onClose(); }} style={{ ...btn("primary"), flex: 1 }}>{plan.cta}</button>
+          <button className="mvbtn mvbtn-quiet" onClick={close} style={{ ...btn("quiet"), flex: "none" }}>Cancel</button>
+          <button className="mvbtn mvbtn-primary" onClick={() => { plan.run(); setPhase("working"); }} style={{ ...btn("primary"), flex: 1 }}>{plan.cta}</button>
         </div>
+        </>
+        )}
       </div>
     </div>
   );
@@ -486,15 +583,26 @@ function ConfirmDialog({ plan, wallet, onClose }: { plan: Plan; wallet: StakingW
 export function StakingPanel({
   wallet,
   connectSlot,
+  prefill = null,
 }: {
   wallet: StakingWallet;
   /** Public page: the connect control. Omitted in-app (already signed in). */
   connectSlot?: React.ReactNode;
+  /** Chat hand-off: Vera pre-fills side + amount, then the confirm dialog
+   *  opens itself once balances are readable. The user still reviews and
+   *  signs; chat never moves tokens. */
+  prefill?: { action: "stake" | "unstake"; amount?: string; nonce: number } | null;
 }) {
   const s = useStaking(wallet);
-  const [amount, setAmount] = useState("");
-  const [mode, setMode] = useState<"stake" | "unstake">("stake");
+  // A chat prefill arrives via key-remount (see StakingPage), so it is simply
+  // this instance's INITIAL state — no prop-to-state syncing.
+  const [amount, setAmount] = useState(prefill?.amount ?? "");
+  const [mode, setMode] = useState<"stake" | "unstake">(prefill?.action ?? "stake");
   const [plan, setPlan] = useState<Plan | null>(null);
+  // True while a prefilled amount still wants the confirm dialog opened; it
+  // waits on the balance snapshot because guard() refuses to assert balances
+  // it has not read.
+  const [pendingOpen, setPendingOpen] = useState(Boolean(prefill?.amount));
   const [localError, setLocalError] = useState<string | null>(null);
   const snap = s.snapshot;
 
@@ -638,6 +746,22 @@ export function StakingPanel({
     }
     setPlan(kind === "stake" ? plans.stake() : plans.unstake());
   };
+
+  // ── chat hand-off: auto-open the confirm dialog once balances are readable ──
+  // Deferred a tick so no state is set synchronously inside the effect (the
+  // cascade the react-hooks rule guards against). Bails out silently if a
+  // dialog is already open, the panel is busy, or no wallet is connected — the
+  // prefilled fields stay put and the user proceeds by hand. A bare prefill
+  // with no amount never auto-opens; it just lands with the side selected.
+  useEffect(() => {
+    if (!pendingOpen || !snap) return;
+    const t = setTimeout(() => {
+      setPendingOpen(false);
+      if (!plan && !s.busy && s.address) guard(mode);
+    }, 0);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingOpen, snap]);
 
   /** Fill the amount with `pct`% of a base balance (wallet for stake, staked for
    *  unstake). Computed in WEI, not in display tokens: flooring to whole tokens
@@ -922,7 +1046,7 @@ export function StakingPanel({
         </div>
       </section>
 
-      {plan && <ConfirmDialog plan={plan} wallet={wallet} onClose={() => setPlan(null)} />}
+      {plan && <ConfirmDialog plan={plan} wallet={wallet} state={{ busy: s.busy, step: s.step, error: s.error, lastTx: s.lastTx, clearError: s.clearError }} onClose={() => setPlan(null)} />}
     </div>
   );
 }

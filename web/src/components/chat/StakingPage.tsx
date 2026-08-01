@@ -3,12 +3,12 @@
 // StakingPage — the in-app staking surface (full-page takeover, GrovesPage
 // shell). The panel itself is shared with the public /stake page; only the
 // wallet adapter differs (here: the Privy embedded EOA the user signed in with).
-import { PIcon, type ChatNav } from "./chatKit";
+import { PIcon, type ChatNav, type StakingPrefill } from "./chatKit";
 import { StakingPanel } from "@/components/staking/StakingPanel";
 import { usePrivyStakingWallet } from "@/hooks/useStakingWallet";
 import { STAKING_TESTNET } from "@/lib/staking";
 
-export function StakingPage({ nav, onBack, mobile = false }: { nav: ChatNav; onBack: () => void; mobile?: boolean }) {
+export function StakingPage({ nav, onBack, mobile = false, prefill = null }: { nav: ChatNav; onBack: () => void; mobile?: boolean; prefill?: StakingPrefill | null }) {
   const wallet = usePrivyStakingWallet();
   return (
     <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
@@ -34,7 +34,9 @@ export function StakingPage({ nav, onBack, mobile = false }: { nav: ChatNav; onB
         <div style={{ maxWidth: 980, margin: "0 auto" }}>
           {/* Sizing is container-driven now (@container in STAKING_CSS), so the
               panel adapts to this column without a `compact` flag. */}
-          <StakingPanel wallet={wallet} />
+          {/* key: a fresh prefill remounts the panel, so its INITIAL state carries
+              the handed-off side and amount — no prop-to-state syncing effects. */}
+          <StakingPanel key={prefill ? `chat-${prefill.nonce}` : "base"} wallet={wallet} prefill={prefill} />
         </div>
       </div>
     </div>

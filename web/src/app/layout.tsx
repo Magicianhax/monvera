@@ -197,6 +197,12 @@ export default function RootLayout({
     <html
       lang="en"
       className={`${geist.variable} ${roboto.variable} ${hanken.variable} ${fraunces.variable} ${jetbrains.variable} h-full antialiased`}
+      // Browser extensions stamp attributes onto <html> before React hydrates
+      // (seen: data-jetski-tab-id), which React reports as a hydration mismatch
+      // it "won't patch up". Nothing we render differs between server and
+      // client here, so the warning is pure noise that buries real mismatches.
+      // Scoped to this element only — it does not suppress warnings in the tree.
+      suppressHydrationWarning
     >
       <body className="min-h-full antialiased">
         <script

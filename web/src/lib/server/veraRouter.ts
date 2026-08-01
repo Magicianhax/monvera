@@ -203,6 +203,15 @@ const TurnSchema = z.discriminatedUnion("intent", [
     action: z.enum(["enable", "disable"]),
     message: z.string().max(200).optional(),
   }),
+  z.object({
+    intent: z.literal("staking"),
+    action: z.enum(["stake", "unstake"]),
+    amountMonvera: z.number().positive().max(1_000_000_000).optional()
+      .describe("A $MONVERA TOKEN amount, ONLY if the user stated one."),
+    amountUsd: z.number().positive().max(1_000_000).optional()
+      .describe("Dollars, ONLY if the user gave a dollar amount. Never set both fields."),
+    message: z.string().max(300).optional(),
+  }),
 ]);
 export type VeraTurn = z.infer<typeof TurnSchema>;
 
@@ -228,7 +237,8 @@ export type VeraResult =
   | { intent: "order"; symbol: string; side: "buy" | "sell"; amountUsd?: number; message: string }
   | { intent: "token_order"; side: "buy" | "sell"; amountUsd: number; message: string }
   | { intent: "autopilot"; amountUsd: number; cadence: "daily" | "weekly" | "biweekly" | "monthly"; risk: "careful" | "balanced" | "bolder"; message: string }
-  | { intent: "grove_list"; message: string; groves: { id: string; name: string; ticker: string; thesis: string; minBuyUsd: number; returnPct: number | null; spyPct: number | null }[] };
+  | { intent: "grove_list"; message: string; groves: { id: string; name: string; ticker: string; thesis: string; minBuyUsd: number; returnPct: number | null; spyPct: number | null }[] }
+  | { intent: "staking"; action: "stake" | "unstake"; amountMonvera?: number; message: string };
 
 const SYMBOLS = new Set(BUYABLE.map((a: { symbol: string }) => a.symbol));
 
@@ -401,6 +411,7 @@ async function systemPrompt(ctx: VeraContext): Promise<string> {
     '- Asks about THEIR OWN history — what they have bought, their past invests, their transfers → {"intent":"my_activity"}.',
     '- Asks about a THEME or sector basket ("what\'s in your AI theme", "show me themes") → {"intent":"themes","slug": optional}. Asks about your named STRATEGIES / model portfolios ("what\'s your steadiest strategy") → {"intent":"strategies"}.',
     '- Asks about GROVES — my curated strategy baskets ($TAYYIB shariah-screened, $TITAN mag-7, $SILIC chips, $RAILS crypto equities): "what groves/baskets do you have" → {"intent":"grove_list"}. Asks what\'s IN one or about one → {"intent":"grove_info","groveId":"tayyib"|"titan"|"silic"|"rails"}. Wants to BUY one → {"intent":"grove_buy","groveId":...,"amountUsd": only if they said a number}. Wants auto-manage on/off for one → {"intent":"grove_auto","groveId":...,"action":"enable"|"disable"}.',
+    '- Wants to STAKE or UNSTAKE $MONVERA ("stake my monvera", "stake 5000", "stake $50 worth") → {"intent":"staking","action":"stake"|"unstake","amountMonvera": a TOKEN amount if they gave one, "amountUsd": dollars if they gave dollars, never both}. I convert dollars at the live price and open the staking screen with their numbers filled in; they review and sign there. Questions about staking mechanics, the cooldown, or season rewards → "reply" from context.',
     '- Asks about their WATCHLIST, or to watch/unwatch a stock → {"intent":"watchlist","action":"list"|"add"|"remove","symbol":...}.',
     '- Asks about the $MONVERA BUYBACK, treasury, or revenue → {"intent":"buyback"}.',
     '- Asks whether a stock is BUYABLE / has liquidity right now → {"intent":"liquidity","symbol":...}.',
@@ -956,6 +967,51 @@ export async function routeVera(ctx: VeraContext): Promise<VeraResult> {
         intent: "reply",
         message: ["My named strategies: fixed rules, walk-forward tested, no hand-picking.", ...lines, "Tell me which one and how much, and I'll build it for you."].join("\n"),
         suggestions: payload.strategies.slice(0, 3).map((st) => `Invest $50 in ${st.name}`),
+      };
+    }
+    case "staking": {
+      // Chat never stakes by itself. This opens the staking screen with the
+      // user's numbers filled in; the confirm dialog there owns validation,
+      // the signature, and the progress/success/failure lifecycle.
+      let n = turn.amountMonvera;
+      let converted: string | null = null;
+      if (n === undefined && turn.amountUsd !== undefined) {
+        // Dollars arrive as tokens: the same cached MONVERA/VIRTUAL pool spot
+        // the portfolio prices with, floored to whole tokens so the figure the
+        // user signs never claims more than their dollars buy.
+        const spot = await getMonveraSpot();
+        if (!spot) {
+          return {
+            intent: "reply",
+            message: "I could not get a live $MONVERA price just now, so I will not guess the conversion. Tell me a token amount, or try the dollar amount again in a moment.",
+            suggestions: [`${turn.action === "stake" ? "Stake" : "Unstake"} 10000 MONVERA`],
+          };
+        }
+        n = Math.floor(turn.amountUsd / spot.priceUsd);
+        if (n < 1) {
+          return {
+            intent: "reply",
+            message: `$${turn.amountUsd} is less than one $MONVERA at the current price. Give me a bigger amount.`,
+          };
+        }
+        converted = `$${turn.amountUsd.toLocaleString("en-US")} is about ${n.toLocaleString("en-US")} $MONVERA at the current price.`;
+      }
+      const amt = n !== undefined ? `${n.toLocaleString("en-US")} $MONVERA` : null;
+      const base =
+          turn.action === "stake"
+            ? amt
+              ? `Opening staking with ${amt} filled in. Review it there; nothing moves until you confirm and sign.`
+              : "Opening staking. Pick the amount there; nothing moves until you confirm and sign."
+            : amt
+              ? `Opening staking with ${amt} set to unstake. The cooldown starts only after you confirm and sign.`
+              : "Opening staking on the unstake side. Pick the amount there; the cooldown starts only after you confirm and sign.";
+      return {
+        intent: "staking",
+        action: turn.action,
+        amountMonvera: n,
+        // A converted figure always names the conversion, even when the model
+        // supplied its own message — the number being signed must be explained.
+        message: converted ? `${converted} ${base}` : (turn.message ?? base),
       };
     }
     case "grove_list": {

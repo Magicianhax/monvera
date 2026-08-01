@@ -57,6 +57,10 @@ const GREET = "Hey — I'm Vera. Here's where your money stands right now. Tell 
 
 type NudgeTone = "balanced" | "safer" | "bolder" | "simpler";
 const NUDGES: [NudgeTone, string][] = [["balanced", "Balanced"], ["safer", "Safer"], ["bolder", "Bolder"], ["simpler", "Simpler"]];
+// Monotonic nonce for staking prefills — each chat ask must retrigger the
+// panel even if side and amount repeat. Module scope keeps it out of render.
+let stakingPrefillNonce = 0;
+
 const NUDGE_HINT: Record<NudgeTone, string> = {
   balanced: " — keep it balanced between growth and safety",
   safer: " — make it safer and steadier",
@@ -518,7 +522,8 @@ ${seller.error.slice(0, 160)}`, payload: { suggestions: ["Try again"] } }).catch
         | { intent: "order"; symbol: string; side: "buy" | "sell"; amountUsd?: number; message: string }
         | { intent: "token_order"; side: "buy" | "sell"; amountUsd: number; message: string }
         | { intent: "autopilot"; amountUsd: number; cadence: "daily" | "weekly" | "biweekly" | "monthly"; risk: "careful" | "balanced" | "bolder"; message: string }
-        | { intent: "grove_list"; message: string; groves: GroveListItem[] };
+        | { intent: "grove_list"; message: string; groves: GroveListItem[] }
+        | { intent: "staking"; action: "stake" | "unstake"; amountMonvera?: number; message: string };
       stopThinking();
 
       if (turn.intent === "plan") {
@@ -549,6 +554,16 @@ ${seller.error.slice(0, 160)}`, payload: { suggestions: ["Try again"] } }).catch
         if (turn.side === "buy") nav.openBuy(turn.symbol); else nav.openSell(turn.symbol);
       } else if (turn.intent === "token_order") {
         post({ threadId, role: "vera", content: turn.message, payload: { tokenOrder: { side: turn.side, amountUsd: turn.amountUsd } } });
+      } else if (turn.intent === "staking") {
+        // Vera sets the table only: side + amount land pre-filled in the
+        // staking screen, whose confirm dialog owns review, signature, and the
+        // progress popup. Chat never moves tokens.
+        post({ threadId, role: "vera", content: turn.message });
+        nav.openStaking({
+          action: turn.action,
+          amount: turn.amountMonvera !== undefined ? String(turn.amountMonvera) : undefined,
+          nonce: ++stakingPrefillNonce,
+        });
       } else if (turn.intent === "grove_list") {
         // The shelf persists in the thread — each card asks for that Grove's
         // composition; a grove_buy comes back as a normal plan card.

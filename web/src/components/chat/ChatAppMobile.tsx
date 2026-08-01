@@ -14,7 +14,7 @@ import { useSmartAccount } from "@/hooks/useSmartAccount";
 import { useMonveraPrice } from "@/hooks/useMonveraToken";
 import { useVeraChat } from "@/hooks/useVeraChat";
 import { groveById } from "@/lib/groves";
-import { CHAT_THEME_CSS, CHAT_STYLE_CSS, CANVAS_META, ChatOrb, ChatMark, PIcon, priceStr, type CanvasType, type ChatNav } from "./chatKit";
+import { CHAT_THEME_CSS, CHAT_STYLE_CSS, CANVAS_META, ChatOrb, ChatMark, PIcon, priceStr, type CanvasType, type ChatNav , type StakingPrefill } from "./chatKit";
 import { useColorStyle } from "@/hooks/useColorStyle";
 import { useNotifications } from "@/hooks/useNotifications";
 import { useWatchlistSync } from "@/hooks/useWatchlistSync";
@@ -82,6 +82,7 @@ export function ChatAppMobile() {
   // below the canvas sheet so holdings tapped inside it open on top).
   const [grovesView, setGrovesView] = useState<{ id: string | null; auto: boolean } | null>(null);
   const [stakingOpen, setStakingOpen] = useState(false);
+  const [stakingPrefill, setStakingPrefill] = useState<StakingPrefill | null>(null);
   const [grovesClosing, setGrovesClosing] = useState(false);
   const grovesTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const closeGroves = () => {
@@ -203,7 +204,7 @@ export function ChatAppMobile() {
       setDrawer(false);
       dismissSheet();
     },
-    openStaking: () => { closeGroves(); setStakingOpen(true); setDrawer(false); dismissSheet(); },
+    openStaking: (prefill) => { closeGroves(); if (prefill) setStakingPrefill(prefill); setStakingOpen(true); setDrawer(false); dismissSheet(); },
     openSend: () => setPayMode("send"),
     openReceive: () => setPayMode("receive"),
     openSettings: () => setSettingsOpen(true),
@@ -339,7 +340,7 @@ export function ChatAppMobile() {
       {/* full-screen Staking page — same layer as Groves */}
       {stakingOpen && (
         <div className="sheet aur" style={{ position: "absolute", inset: 0, zIndex: 60, background: "var(--bg)", display: "flex", flexDirection: "column" }}>
-          <StakingPage mobile nav={nav} onBack={() => setStakingOpen(false)} />
+          <StakingPage mobile nav={nav} prefill={stakingPrefill} onBack={() => setStakingOpen(false)} />
         </div>
       )}
 

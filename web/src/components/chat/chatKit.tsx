@@ -279,7 +279,16 @@ export const CHAT_THEME_CSS = `
 .mvc .stag>*>*:nth-child(5),.mvm .stag>*>*:nth-child(5){animation-delay:.15s}
 .mvc .stag>*>*:nth-child(n+6),.mvm .stag>*>*:nth-child(n+6){animation-delay:.19s}
 @media (prefers-reduced-transparency:reduce){.mvc [style*="var(--panel);"],.mvm [style*="var(--panel);"]{background:var(--bg)!important;backdrop-filter:none!important}}
-@media (prefers-reduced-motion:reduce){.mvc *,.mvm *{animation:none!important}.mvc button{transition:none}}
+@keyframes mvcpulse-soft{0%,100%{opacity:.35}50%{opacity:1}}
+@media (prefers-reduced-motion:reduce){
+.mvc *,.mvm *{animation:none!important}.mvc button{transition:none}
+/* Reduced motion is gentler, not zero: a frozen spinner reads as a hang, so
+   anything that spins keeps signalling activity via an opacity pulse instead.
+   The [style*=] hook matches the inline animation the spinners are applied
+   with (same serialized-style trick as the glass selector above); .mvspin
+   covers the staking panel, which lives inside this scope in-app. */
+.mvc [style*="mvcspin"],.mvm [style*="mvcspin"],.mvc .mvspin,.mvm .mvspin{animation:mvcpulse-soft 1.6s ease-in-out infinite!important}
+}
 `;
 
 // ── color styles: the classic app's 6 palettes, applied to the chat scope ──
@@ -295,6 +304,14 @@ export const CHAT_STYLE_CSS = COLOR_STYLES.filter((s) => s.key !== "emerald")
   )
   .join("\n");
 
+/** What Vera pre-fills when chat opens staking: which side, and optionally the
+ *  amount as the input string. `nonce` retriggers the panel on every ask. */
+export interface StakingPrefill {
+  action: "stake" | "unstake";
+  amount?: string;
+  nonce: number;
+}
+
 export interface ChatNav {
   openCanvas: (type: CanvasType, symbol?: string) => void;
   closeCanvas: () => void;
@@ -308,7 +325,7 @@ export interface ChatNav {
    *  `auto` lands on the (gated) auto-manage section of the detail page. */
   openGroves: (id?: string, opts?: { auto?: boolean }) => void;
   /** Open the $MONVERA staking page (full-page takeover, like Groves). */
-  openStaking: () => void;
+  openStaking: (prefill?: StakingPrefill) => void;
   openSend: () => void;
   openReceive: () => void;
   openSettings: () => void;
