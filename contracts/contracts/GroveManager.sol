@@ -109,6 +109,10 @@ contract GroveManager is Ownable2Step, ReentrancyGuard {
     /// @dev Composition changes and swap-target ADDITIONS wait this long. Removal of
     /// a swap target is instant — you never want to wait 48h to cut a bad venue.
     uint256 public constant TIMELOCK = 48 hours;
+    /// @dev How long after deployment `bootstrap` may seed the initial venue set
+    /// and feeds without waiting out TIMELOCK. Short by design: it only needs to
+    /// cover the deploy run itself, and it closes permanently once passed.
+    uint256 public constant BOOTSTRAP_WINDOW = 2 hours;
     /// @dev Floor on the user-chosen manager cooldown.
     uint256 public constant MIN_COOLDOWN = 1 hours;
     /// @dev Minimum USDG a single buy leg may spend. An on-chain dust/Sybil floor
@@ -150,6 +154,9 @@ contract GroveManager is Ownable2Step, ReentrancyGuard {
     IERC20 public immutable usdg;
     /// @notice Where exit fees go. Fixed at deploy; the owner cannot redirect it.
     address public immutable treasury;
+    /// @dev Last timestamp at which `bootstrap` may be called. Immutable, so the
+    /// window cannot be reopened by anyone, including the owner.
+    uint256 public immutable bootstrapDeadline;
 
     // ---------------------------------------------------------------- types
 
@@ -339,6 +346,7 @@ contract GroveManager is Ownable2Step, ReentrancyGuard {
     error NothingPending();
     error SwapCallFailed(address target);
     error ZeroAddress();
+    error BootstrapClosed(uint256 deadline);
 
     // ---------------------------------------------------------------- setup
 
@@ -348,6 +356,53 @@ contract GroveManager is Ownable2Step, ReentrancyGuard {
         if (usdg_ == address(0) || treasury_ == address(0)) revert ZeroAddress();
         usdg = IERC20(usdg_);
         treasury = treasury_;
+        bootstrapDeadline = block.timestamp + BOOTSTRAP_WINDOW;
+    }
+
+    /// @notice Seed the FIRST venue whitelist and price feeds with no timelock,
+    /// during a short window that opens at deployment and then closes forever.
+    ///
+    /// The 48h timelock exists so an owner cannot whitelist a hostile venue and
+    /// drain positions before anyone can react. That threat needs positions to
+    /// exist. At deployment there are no groves, no users and no funds, so the
+    /// initial set carries no such risk — it is part of the deployment a user
+    /// chooses to trust, not a change made underneath them. Every LATER add
+    /// still waits the full 48h.
+    ///
+    /// The guard is `bootstrapDeadline`: immutable, set in the constructor, and
+    /// checked here. So this cannot be reached once the window passes even if
+    /// the owner key is later compromised. It is intentionally callable more
+    /// than once inside the window — seeding may need more than one transaction,
+    /// and a partial seed must be completable without redeploying.
+    ///
+    /// Feeds go through the same `_validatedFeed` checks as `proposeFeed`.
+    function bootstrap(
+        address[] calldata callTargets,
+        address[] calldata approvalTargets,
+        address[] calldata feedTokens,
+        address[] calldata feedAggregators,
+        uint32[] calldata heartbeats
+    ) external onlyOwner {
+        if (block.timestamp > bootstrapDeadline) revert BootstrapClosed(bootstrapDeadline);
+        if (feedTokens.length != feedAggregators.length || feedTokens.length != heartbeats.length) {
+            revert BadFeed();
+        }
+
+        for (uint256 i = 0; i < callTargets.length; i++) {
+            if (callTargets[i] == address(0)) revert ZeroAddress();
+            callTargetAllowed[callTargets[i]] = true;
+            emit SwapTargetAdded(callTargets[i], false);
+        }
+        for (uint256 i = 0; i < approvalTargets.length; i++) {
+            if (approvalTargets[i] == address(0)) revert ZeroAddress();
+            approvalTargetAllowed[approvalTargets[i]] = true;
+            emit SwapTargetAdded(approvalTargets[i], true);
+        }
+        for (uint256 i = 0; i < feedTokens.length; i++) {
+            Feed memory f = _validatedFeed(feedTokens[i], feedAggregators[i], heartbeats[i]);
+            feedOf[feedTokens[i]] = f;
+            emit FeedSet(feedTokens[i], f.aggregator, f.heartbeat);
+        }
     }
 
     modifier onlyManager() {
@@ -457,13 +512,7 @@ contract GroveManager is Ownable2Step, ReentrancyGuard {
     /// cannot swap in a lying aggregator and drain through a compromised manager
     /// in the same block.
     function proposeFeed(address token, address aggregator, uint32 heartbeat) external onlyOwner {
-        if (token == address(0) || aggregator == address(0) || heartbeat == 0) revert BadFeed();
-        uint8 td = IERC20Metadata(token).decimals();
-        uint8 fd = AggregatorV3Interface(aggregator).decimals();
-        if (td > 18 || fd > 18 || uint256(td) + uint256(fd) < 6) revert BadFeed();
-        (bool ok,,) = _readFeed(aggregator); // must answer NOW, or it is a dead address
-        if (!ok) revert BadFeed();
-        _pendingFeed[token] = Feed({aggregator: aggregator, heartbeat: heartbeat, scalePow: uint8(td + fd - 6)});
+        _pendingFeed[token] = _validatedFeed(token, aggregator, heartbeat);
         uint64 eta = uint64(block.timestamp + TIMELOCK);
         pendingFeedEta[token] = eta;
         emit FeedProposed(token, aggregator, heartbeat, eta);
@@ -478,6 +527,19 @@ contract GroveManager is Ownable2Step, ReentrancyGuard {
         delete _pendingFeed[token];
         delete pendingFeedEta[token];
         emit FeedSet(token, f.aggregator, f.heartbeat);
+    }
+
+    /// Shared by proposeFeed and bootstrap so a feed can never reach storage by
+    /// one path having skipped a check the other makes. A feed that does not
+    /// answer RIGHT NOW is a dead address and is refused outright.
+    function _validatedFeed(address token, address aggregator, uint32 heartbeat) internal view returns (Feed memory) {
+        if (token == address(0) || aggregator == address(0) || heartbeat == 0) revert BadFeed();
+        uint8 td = IERC20Metadata(token).decimals();
+        uint8 fd = AggregatorV3Interface(aggregator).decimals();
+        if (td > 18 || fd > 18 || uint256(td) + uint256(fd) < 6) revert BadFeed();
+        (bool ok,,) = _readFeed(aggregator);
+        if (!ok) revert BadFeed();
+        return Feed({aggregator: aggregator, heartbeat: heartbeat, scalePow: uint8(td + fd - 6)});
     }
 
     /// @notice Instant, on purpose. Dropping a feed only ever makes things

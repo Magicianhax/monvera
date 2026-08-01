@@ -1,49 +1,44 @@
 const hre = require("hardhat");
-const { defineChain } = require("viem");
+const { robinhood, GROVE_MANAGER, VENUES } = require("./lib/constants");
+const { readGroveRegistry } = require("./lib/registry");
 
-// Day 2: activate everything deploy-grove-mainnet.js queued, once the 48h
-// timelock has matured. Safe to re-run — it reports what is already live and
-// skips it, and refuses anything still pending rather than reverting the batch.
+// Day 2: activate everything the propose scripts queued, once the 48h timelock
+// has matured. Safe to re-run — it reports what is already live and skips it,
+// and refuses anything still pending rather than reverting the batch.
 //
-// Run: npx hardhat run scripts/grove-apply.js --network robinhood
+// Venues and tokens come from lib/constants and the registry, never a local
+// copy: an earlier version of this script kept its own 7-token list, which
+// would have silently skipped a component added to the grove afterwards and
+// left it UNPRICEABLE.
+//
+// Select groves with GROVE_IDS (comma-separated); default is every grove that
+// has an onChainId.
+//
+//   npx hardhat run scripts/grove-apply.js --network robinhood
 
-const robinhood = defineChain({
-  id: 4663,
-  name: "Robinhood Chain",
-  nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
-  rpcUrls: { default: { http: [process.env.ROBINHOOD_RPC_URL || "https://rpc.mainnet.chain.robinhood.com"] } },
-});
-
-const GM = process.env.GROVE_MANAGER_ADDRESS || "0x8b707a85b79fbe3a14ce96862bc7f31c05cbbfe6";
-
-const VENUES = [
-  { addr: "0x8876789976dEcBfCbBbe364623C63652db8C0904", asApproval: false, label: "UniversalRouter (call)" },
-  { addr: "0x000000000022D473030F116dDEE9F6B43aC78BA3", asApproval: true, label: "Permit2 (approve)" },
-  { addr: "0x6131B5fae19EA4f9D964eAc0408E4408b66337b5", asApproval: false, label: "Kyber router (call)" },
-  { addr: "0x6131B5fae19EA4f9D964eAc0408E4408b66337b5", asApproval: true, label: "Kyber router (approve)" },
-];
-
-const TOKENS = [
-  ["AAPL", "0xaF3D76f1834A1d425780943C99Ea8A608f8a93f9"],
-  ["MSFT", "0xe93237C50D904957Cf27E7B1133b510C669c2e74"],
-  ["NVDA", "0xd0601CE157Db5bdC3162BbaC2a2C8aF5320D9EEC"],
-  ["GOOGL", "0x2e0847E8910a9732eB3fb1bb4b70a580ADAD4FE3"],
-  ["AMZN", "0x12f190a9F9d7D37a250758b26824B97CE941bF54"],
-  ["META", "0xc0D6457C16Cc70d6790Dd43521C899C87ce02f35"],
-  ["TSLA", "0x322F0929c4625eD5bAd873c95208D54E1c003b2d"],
-];
+const ZERO = "0x0000000000000000000000000000000000000000";
 
 async function main() {
   const publicClient = await hre.viem.getPublicClient({ chain: robinhood });
   const [owner] = await hre.viem.getWalletClients({ chain: robinhood });
-  const gm = await hre.viem.getContractAt("GroveManager", GM, {
+  const gm = await hre.viem.getContractAt("GroveManager", GROVE_MANAGER, {
     client: { public: publicClient, wallet: owner },
   });
   const mined = (h) => publicClient.waitForTransactionReceipt({ hash: h });
   const now = Math.floor(Date.now() / 1000);
 
-  console.log(`\nGroveManager ${GM}`);
-  console.log(`Owner        ${owner.account.address}\n`);
+  const wanted = (process.env.GROVE_IDS || "").split(",").map((s) => s.trim()).filter(Boolean);
+  const registry = readGroveRegistry();
+  const groves = wanted.length
+    ? registry.filter((g) => wanted.includes(g.id))
+    : registry.filter((g) => g.onChainId !== undefined);
+  if (!groves.length) throw new Error(`no groves selected (GROVE_IDS=${process.env.GROVE_IDS || "<unset>"})`);
+
+  console.log(`\nGroveManager ${GROVE_MANAGER}`);
+  console.log(`Owner        ${owner.account.address}`);
+  console.log(`Groves       ${groves.map((g) => g.id).join(", ")}\n`);
+
+  let pending = 0;
 
   console.log("swap targets");
   for (const v of VENUES) {
@@ -60,38 +55,48 @@ async function main() {
     if (eta === 0) {
       console.log(`  MISSING  ${v.label} — never proposed`);
     } else if (now < eta) {
-      console.log(`  PENDING  ${v.label} — ${Math.ceil((eta - now) / 60)} min left`);
+      console.log(`  PENDING  ${v.label} — ${((eta - now) / 3600).toFixed(1)}h left`);
+      pending++;
     } else {
       await mined(await gm.write.applySwapTarget([v.addr, v.asApproval]));
       console.log(`  APPLIED  ${v.label}`);
     }
   }
 
+  // One entry per token across the selected groves — a feed is per-token.
+  const tokens = new Map();
+  for (const g of groves) {
+    for (const c of g.components) if (!tokens.has(c.address.toLowerCase())) tokens.set(c.address.toLowerCase(), c);
+  }
+
   console.log("\nfeeds");
-  for (const [sym, token] of TOKENS) {
-    const f = await gm.read.feedOf([token]);
-    if (f[0] !== "0x0000000000000000000000000000000000000000") {
-      console.log(`  LIVE     ${sym.padEnd(6)} ${f[0]}  heartbeat=${f[1]}  scalePow=${f[2]}`);
+  for (const c of [...tokens.values()].sort((a, b) => a.symbol.localeCompare(b.symbol))) {
+    const f = await gm.read.feedOf([c.address]);
+    if (f[0] !== ZERO) {
+      console.log(`  LIVE     ${c.symbol.padEnd(6)} ${f[0]}  heartbeat=${f[1]}s  scalePow=${f[2]}`);
       continue;
     }
-    const eta = Number(await gm.read.pendingFeedEta([token]));
+    const eta = Number(await gm.read.pendingFeedEta([c.address]));
     if (eta === 0) {
-      console.log(`  MISSING  ${sym} — never proposed`);
+      console.log(`  MISSING  ${c.symbol.padEnd(6)} never proposed — run grove-propose-feeds.js`);
     } else if (now < eta) {
-      console.log(`  PENDING  ${sym} — ${Math.ceil((eta - now) / 60)} min left`);
+      console.log(`  PENDING  ${c.symbol.padEnd(6)} ${((eta - now) / 3600).toFixed(1)}h left`);
+      pending++;
     } else {
-      await mined(await gm.write.applyFeed([token]));
-      const g = await gm.read.feedOf([token]);
-      console.log(`  APPLIED  ${sym.padEnd(6)} ${g[0]}  heartbeat=${g[1]}  scalePow=${g[2]}`);
+      await mined(await gm.write.applyFeed([c.address]));
+      const g2 = await gm.read.feedOf([c.address]);
+      console.log(`  APPLIED  ${c.symbol.padEnd(6)} ${g2[0]}  heartbeat=${g2[1]}s  scalePow=${g2[2]}`);
     }
   }
 
-  console.log(`\nbandBps ${await gm.read.bandBps()}  staleBandBps ${await gm.read.staleBandBps()}`);
-  console.log(`manager ${await gm.read.manager()}`);
+  console.log(`\nbands ${await gm.read.bandBps()}/${await gm.read.staleBandBps()} bps`);
+  console.log(`manager  ${await gm.read.manager()}`);
   console.log(`guardian ${await gm.read.guardian()}`);
+  if (pending) console.log(`\n${pending} item(s) still in timelock — re-run later, then scripts/grove-verify.js.`);
+  else console.log(`\nAll applied. Run scripts/grove-verify.js to confirm.`);
 }
 
 main().catch((e) => {
-  console.error(e);
+  console.error(e.message || e);
   process.exitCode = 1;
 });

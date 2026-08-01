@@ -1,8 +1,9 @@
 const hre = require("hardhat");
-const { defineChain, getAddress } = require("viem");
+const { getAddress } = require("viem");
 const { privateKeyToAccount } = require("viem/accounts");
 const { readFileSync } = require("node:fs");
 const { resolve } = require("node:path");
+const { robinhood, GROVE_MANAGER } = require("./lib/constants");
 
 // Wire GroveManager's two operational roles. Both setters are instant (no
 // timelock) on purpose: disabling a compromised manager must never wait 48h.
@@ -20,14 +21,7 @@ const { resolve } = require("node:path");
 //
 // Run: npx hardhat run scripts/grove-set-roles.js --network robinhood
 
-const robinhood = defineChain({
-  id: 4663,
-  name: "Robinhood Chain",
-  nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
-  rpcUrls: { default: { http: [process.env.ROBINHOOD_RPC_URL || "https://rpc.mainnet.chain.robinhood.com"] } },
-});
-
-const GM = process.env.GROVE_MANAGER_ADDRESS || "0x8b707a85b79fbe3a14ce96862bc7f31c05cbbfe6";
+const GM = GROVE_MANAGER;
 const GUARDIAN = "0xca0c8c28EC2f352649B3b9D2b8C673E6254142D6"; // staking cold key
 // Resolved relative to this repo, never an absolute local path: this file is
 // committed and main-public may become public. Override with GROVE_ENV_FILE.
