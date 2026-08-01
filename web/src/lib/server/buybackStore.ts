@@ -23,7 +23,7 @@ import "server-only";
 //   availableToBuy = buybackBudget - totalSpent
 import { createPublicClient, http, parseAbiItem, getAddress, formatUnits, type Address } from "viem";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
-import { chain, RPC_URL } from "@/lib/chain";
+import { chain, PUBLIC_RPC_URL } from "@/lib/chain";
 import { SERVER_RPC_URL } from "@/lib/server/rpc";
 import { MONVERA, VIRTUAL } from "@/lib/monveraToken";
 import { USDG } from "@/lib/tokens";
@@ -39,7 +39,9 @@ const client = createPublicClient({ chain, transport: http(SERVER_RPC_URL, { ret
 // The public RPC serves topic-filtered scans over millions of blocks in well
 // under a second (measured: 2M blocks in ~640ms). Point reads (receipts,
 // blocks, balances) stay on `client`, which Alchemy handles fine.
-const logsClient = createPublicClient({ chain, transport: http(RPC_URL, { retryCount: 1, timeout: 20_000 }) });
+// PUBLIC_RPC_URL literal, not RPC_URL — see executorLogs.ts; a keyed logs
+// client re-arms the exact 10-block-cap wedge documented above.
+const logsClient = createPublicClient({ chain, transport: http(PUBLIC_RPC_URL, { retryCount: 1, timeout: 20_000 }) });
 const TRANSFER = parseAbiItem("event Transfer(address indexed from, address indexed to, uint256 value)");
 const TRANSFER_TOPIC = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
 const BAL_ABI = [

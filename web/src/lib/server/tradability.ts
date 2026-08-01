@@ -34,8 +34,12 @@ const cache = new Map<string, { ok: boolean; at: number }>();
 async function probeVenues(sellToken: Address, buyToken: Address, sellRaw: bigint, sellDec: number, retry = true): Promise<bigint | null> {
   let out: bigint | null = null;
   if (venueEnabled("uniswap")) {
-    out = await uniV4Quote(sellToken, buyToken, sellRaw, PROBE_TAKER).then((q) => q?.buyAmount ?? null).catch(() => null);
-    if (out === null) out = await uniV4Price(sellToken, buyToken, sellRaw).catch(() => null);
+    // A null QUOTE is a real answer (no route) — re-asking the price quoter
+    // doubled the cron's call volume for names that will answer null again.
+    // The price fallback now runs only when the quote builder THREW.
+    out = await uniV4Quote(sellToken, buyToken, sellRaw, PROBE_TAKER)
+      .then((q) => q?.buyAmount ?? null)
+      .catch(() => uniV4Price(sellToken, buyToken, sellRaw).catch(() => null));
   }
   if (out === null && venueEnabled("lifi")) {
     out = await lifiExecQuote(sellToken, buyToken, sellRaw, PROBE_TAKER, PROBE_TAKER).then((q) => q?.buyAmount ?? null).catch(() => null);

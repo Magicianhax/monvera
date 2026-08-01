@@ -44,7 +44,10 @@ export default {
         headers: { authorization: `Bearer ${secret}` },
       });
     // every 15 min: price alerts; on the hour: autopilot; Mondays 13:00 UTC: weekly digest.
-    ctx.waitUntil(hit("/api/cron/alerts"));
+    // Each job fires ONLY on its own schedule: unconditional waitUntils ran the
+    // alerts sweep and the chart warm loop on every trigger — the hourly and
+    // weekly crons each re-fired them, tripling background RPC for nothing.
+    if (cron === "*/15 * * * *") ctx.waitUntil(hit("/api/cron/alerts"));
     if (cron === "0 * * * *") {
       ctx.waitUntil(hit("/api/cron/autopilot"));
       // Hourly two-way liquidity sweep — feeds /api/tradability from KV.
@@ -56,7 +59,9 @@ export default {
     // Keep the $MONVERA chart warm: the route persists every successful series
     // to KV for 24h, so even occasional upstream luck keeps all ranges served.
     // Sequential with gaps — a burst would guarantee the upstream 429.
-    ctx.waitUntil(
+    // Hourly only: running this on the 15-minute trigger too meant concurrent
+    // warm loops racing the same upstream and quadruple the fetch volume.
+    if (cron === "0 * * * *") ctx.waitUntil(
       (async () => {
         for (const range of ["5m", "1h", "4h", "1d", "7d"]) {
           try {

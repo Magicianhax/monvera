@@ -33,6 +33,11 @@ const cfg =
 
 export const CHAIN_ID: number = cfg.id;
 export const RPC_URL = process.env.NEXT_PUBLIC_RPC_URL || cfg.rpc;
+// The chain's own public endpoint, as a LITERAL — for log-scan clients, which
+// must never inherit a keyed URL through env. Alchemy refuses eth_getLogs at
+// every span on this account's tier but BILLS each refused attempt; a logs
+// client that silently became keyed burned ~$15 of compute units in days.
+export const PUBLIC_RPC_URL = cfg.rpc;
 export const EXPLORER_URL = process.env.NEXT_PUBLIC_EXPLORER_URL || cfg.explorer;
 
 // Canonical Multicall3 — verified deployed at this deterministic address on both

@@ -137,9 +137,19 @@ export async function fetchStakeEvents(
   // season builder's weightOf/totalWeight reconciliation is the hard backstop;
   // this just avoids relying on it for the common case.)
   const SUSPECT_CAP = 9_000;
+  // Never open with a window wider than the actual remaining range, and never
+  // spend more than a handful of getLogs per invocation. The halving loop was
+  // built for an endpoint that eventually accepts a span; against one that
+  // refuses EVERY span it degenerated into ~20 refused-but-billed calls per
+  // refresh (and tens of thousands when Blockscout had returned nothing).
+  const MAX_TAIL_CALLS = 8;
+  let tailCalls = 0;
   let step = initialStep;
+  const remaining = toBlock - start + BigInt(1);
+  if (step > remaining) step = remaining;
   try {
     while (start <= toBlock) {
+      if (++tailCalls > MAX_TAIL_CALLS) throw new Error(`tail scan budget exhausted (${MAX_TAIL_CALLS} getLogs)`);
       const end = start + step - BigInt(1) > toBlock ? toBlock : start + step - BigInt(1);
       try {
         const logs = await client.getLogs({ address, events: EVENTS, fromBlock: start, toBlock: end });

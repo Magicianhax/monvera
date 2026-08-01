@@ -35,13 +35,16 @@ const READ_RPC = process.env.NEXT_PUBLIC_RPC_URL || PUBLIC_RPC;
  *      included, so it cannot serve history either.
  *  Blockscout therefore owns all history (see fetch.ts) and the RPC only serves
  *  the cheap calls: eth_blockNumber, eth_getBlockByNumber, eth_call. */
-const LOGS_RPC = process.env.STAKING_LOGS_RPC_URL || READ_RPC;
+// Never READ_RPC here: that inherits NEXT_PUBLIC_RPC_URL, which can be (and
+// was) a keyed Alchemy URL — every refused getLogs still billed.
+const LOGS_RPC = process.env.STAKING_LOGS_RPC_URL || PUBLIC_RPC;
 
 export const stakingChain = defineChain({
   id: 4663,
   name: "Robinhood Chain",
   nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
   rpcUrls: { default: { http: [READ_RPC] } },
+  contracts: { multicall3: { address: "0xcA11bde05977b3631167028862bE2a173976CA11" } },
 });
 
 export const STAKING_ADDRESSES = {
@@ -114,5 +117,8 @@ export const stakingLogsClient = createPublicClient({
 /** Read client for the staking chain — separate from the app's 4663 client. */
 export const stakingClient = createPublicClient({
   chain: stakingChain,
+  // Batched: the snapshot reads 7 values per poll; multicall folds them into
+  // one eth_call, cutting the heaviest browser poller by ~75%.
+  batch: { multicall: { wait: 16 } },
   transport: http(stakingChain.rpcUrls.default.http[0], { timeout: 8_000, retryCount: 1 }),
 });

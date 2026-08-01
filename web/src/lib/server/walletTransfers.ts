@@ -14,6 +14,7 @@ import { EXPLORER_URL } from "@/lib/chain";
 import { USDG, ALL_ASSETS } from "@/lib/tokens";
 import { MONVERA } from "@/lib/monveraToken";
 import type { WalletTx } from "@/lib/walletTx";
+import { kvCached } from "@/lib/server/kvCache";
 
 const ALCHEMY_KEY = process.env.ALCHEMY_API_KEY;
 const ALCHEMY_URL = ALCHEMY_KEY ? `https://robinhood-mainnet.g.alchemy.com/v2/${ALCHEMY_KEY}` : null;
@@ -152,9 +153,19 @@ async function viaBlockscout(address: string): Promise<WalletTx[]> {
 }
 
 /** Incoming + outgoing transfers for `address`, newest first. Alchemy first,
- *  Blockscout fallback (used whenever Alchemy is unset or rate-limited). */
+ *  Blockscout fallback (used whenever Alchemy is unset or rate-limited).
+ *
+ *  KV-cached 15s per address: the wallet screen polls this and each Alchemy
+ *  getAssetTransfers pair bills ~300 CU. Per-isolate memory does not help on
+ *  Workers (isolates recycle constantly); KV makes the fleet share one fetch
+ *  per window. Fifteen seconds of staleness on a transfer list is invisible.
+ */
 export async function getWalletTransfers(address: string): Promise<WalletTx[]> {
   if (!isAddress(address)) return [];
+  return kvCached(`wallet-tx:${address.toLowerCase()}`, 15_000, () => loadWalletTransfers(address));
+}
+
+async function loadWalletTransfers(address: string): Promise<WalletTx[]> {
   if (ALCHEMY_URL) {
     try {
       return await viaAlchemy(address);

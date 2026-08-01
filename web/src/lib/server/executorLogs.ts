@@ -14,7 +14,7 @@ import "server-only";
 // empty result (no pointless whole-chain scans).
 import { createPublicClient, http, decodeEventLog, encodeEventTopics, padHex, zeroAddress } from "viem";
 import type { AbiEvent } from "viem";
-import { chain, EXPLORER_URL, RPC_URL } from "@/lib/chain";
+import { chain, EXPLORER_URL, PUBLIC_RPC_URL } from "@/lib/chain";
 import { kvCached as cached } from "@/lib/server/kvCache";
 import { SERVER_RPC_URL } from "@/lib/server/rpc";
 import {
@@ -46,7 +46,10 @@ const CHUNK_CONCURRENCY = 5;
 // LOG SCANS stay on the public RPC — Alchemy's free tier caps eth_getLogs at a
 // 10-block range, which no scan strategy survives.
 const client = createPublicClient({ chain, transport: http(SERVER_RPC_URL) });
-const logsClient = createPublicClient({ chain, transport: http(RPC_URL) });
+// PUBLIC_RPC_URL literal, not RPC_URL: RPC_URL inherits NEXT_PUBLIC_RPC_URL,
+// which silently became a keyed Alchemy URL — and Alchemy refuses these scans
+// while billing every attempt.
+const logsClient = createPublicClient({ chain, transport: http(PUBLIC_RPC_URL) });
 
 // Cross-isolate cache (memory + Cloudflare KV, lib/server/kvCache). Isolates
 // recycle constantly and a cold one used to repay the FULL record scan (~60s

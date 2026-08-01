@@ -30,6 +30,9 @@
   // scan from block 0 is millions of chunks. A public block number, so config
   // rather than a secret.
   "vars": {
+    // Log scans MUST use the chain's public endpoint: Alchemy refuses
+    // eth_getLogs at every span on this account but bills each refused try.
+    "STAKING_LOGS_RPC_URL": "https://rpc.mainnet.chain.robinhood.com",
     "SEASON_DEPLOY_BLOCK": "17820981",
     // Season 1 day-0, 2026-07-24T00:00:00Z. Public, not a secret.
     "SEASON_START": "1784851200"
