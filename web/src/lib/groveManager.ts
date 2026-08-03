@@ -184,6 +184,16 @@ export interface AutoCaps {
   maxRebalanceFractionBps: number;
 }
 
+/** House defaults for auto-manage consent — what the buy screen's default-on
+ *  toggle signs, and what the Auto-manage panel pre-fills. One place, so the
+ *  copy that promises these numbers can never drift from what gets signed. */
+export const DEFAULT_AUTO_CAPS: AutoCaps = {
+  maxPerBuyUsdg: BigInt(250_000_000), // $250 per action
+  maxTotalUsdg: BigInt(3_000_000_000), // $3,000 lifetime (12 actions)
+  minSecondsBetween: BigInt(604_800), // weekly at most
+  maxRebalanceFractionBps: 2_000, // 20% of any single holding per rebalance
+};
+
 /**
  * The sponsored batch that switches auto-manage ON for one grove:
  *

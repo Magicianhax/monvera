@@ -21,8 +21,10 @@ import { getSmartAccountClient, sendSponsoredCalls } from "@/lib/aa";
 import { buildPermitCall } from "@/lib/permit";
 import { typedDataSigner } from "@/lib/arcusTrade";
 import {
+  DEFAULT_AUTO_CAPS,
   GROVE_MANAGER,
   GROVE_MANAGER_ABI,
+  buildEnableAutoCalls,
   buildGroveBuyCalls,
   type GroveBuyQuoteJson,
 } from "@/lib/groveManager";
@@ -36,6 +38,16 @@ export interface GroveBuySuccess {
   groveId: string;
   totalUsd: number;
   legs: { symbol: string; amountUsd: number; expectedOut: string }[];
+  /** True when this buy's UserOp also switched auto-manage on. */
+  autoEnabled?: boolean;
+}
+
+/** The buy screen's default-on toggle: consent + caps ride INSIDE the buy's
+ *  own signature (one UserOp), so a new depositor is auto-managed from the
+ *  first block unless they untick. `tokens` = the grove's full composition —
+ *  the standing approvals rebalance sell legs need later. */
+export interface AutoManageOpt {
+  tokens: Address[];
 }
 
 export interface UseGroveBuy {
@@ -47,7 +59,7 @@ export interface UseGroveBuy {
   /** Price a buy without sending anything. Safe to call on input change. */
   getQuote: (groveId: string, amountUsd: number) => Promise<GroveBuyQuoteJson | null>;
   /** Quote (or reuse a fresh quote) and execute. */
-  buy: (groveId: string, amountUsd: number) => Promise<void>;
+  buy: (groveId: string, amountUsd: number, autoManage?: AutoManageOpt) => Promise<void>;
   reset: () => void;
 }
 
@@ -154,7 +166,7 @@ export function useGroveBuy(): UseGroveBuy {
   }, []);
 
   const buy = useCallback(
-    async (groveId: string, amountUsd: number) => {
+    async (groveId: string, amountUsd: number, autoManage?: AutoManageOpt) => {
       setError(null);
       setSuccess(null);
       // Stock pools reprice in discrete oracle steps — when a leg dies on the
@@ -201,6 +213,25 @@ export function useGroveBuy(): UseGroveBuy {
           smartUsdg,
         );
 
+        // Default-on auto-manage rides in the SAME UserOp as the buy: consent,
+        // caps, and standing approvals land atomically with the basket, so
+        // every depositor is managed from the first block — unless they
+        // unticked, or already carry an AutoConfig (re-signing would RESET
+        // their lifetime budget without them asking).
+        let autoEnabled = false;
+        if (autoManage) {
+          const [alreadyOn] = await client.readContract({
+            address: GROVE_MANAGER as Address,
+            abi: GROVE_MANAGER_ABI,
+            functionName: "autoConfigs",
+            args: [smartAccount as Address, BigInt(q.onChainId)],
+          });
+          if (!alreadyOn) {
+            calls.push(...buildEnableAutoCalls(q.onChainId, DEFAULT_AUTO_CAPS, autoManage.tokens));
+            autoEnabled = true;
+          }
+        }
+
         // Deliberately NOT simulating buy() here. The approve is step 3 of this
         // same batch, so a standalone eth_call always reverts at the USDG pull
         // with InsufficientAllowance() — verified against the live contract —
@@ -226,6 +257,7 @@ export function useGroveBuy(): UseGroveBuy {
             amountUsd: Number(l.amountIn) / 1e6,
             expectedOut: l.expectedOut,
           })),
+          autoEnabled,
         });
         setPhase("done");
         // The basket (and any spent grove cash) just moved — refetch now.

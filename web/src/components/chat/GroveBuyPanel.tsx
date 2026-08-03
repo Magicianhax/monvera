@@ -12,6 +12,7 @@ import { useGroveBuy } from "@/hooks/useGroveBuy";
 import { usePortfolio, useUsdcBalance } from "@/hooks/useBalances";
 import { useActiveWallet } from "@/hooks/useActiveWallet";
 import type { GroveLive } from "@/hooks/useGroves";
+import { assetBySymbol } from "@/lib/tokens";
 import { toTile } from "@/lib/displayAssets";
 import { AssetTile } from "@/components/design";
 import { GroveModal, ModalCard, ModalSuccessIcon, ModalWorking, ReceiptRow, TrustCaption, ModalButtons, ModalDoneButton } from "./GroveModal";
@@ -31,6 +32,9 @@ export function GroveBuyPanel({ g, onClose }: { g: GroveLive; onClose: () => voi
   const { data: bal } = useUsdcBalance(wallet?.address);
   const { data: port } = usePortfolio(wallet?.address);
   const [amount, setAmount] = useState(String(Math.max(g.minBuyUsd, 100)));
+  // Auto-manage is on by default for a NEW buy: consent + caps ride inside
+  // the same signature. The tick is real — unticking buys unmanaged.
+  const [autoOn, setAutoOn] = useState(true);
   const { phase, busy, error, quote, success, getQuote, buy } = useGroveBuy();
 
   const cash = bal?.value ?? 0;
@@ -75,8 +79,12 @@ export function GroveBuyPanel({ g, onClose }: { g: GroveLive; onClose: () => voi
   const totalUsd = fresh ? Number(quote.totalInUsdg) / 1e6 : 0;
 
   const onBuy = useCallback(() => {
-    if (valid && !overCash) void buy(g.id, amountNum);
-  }, [valid, overCash, buy, g.id, amountNum]);
+    if (!valid || overCash) return;
+    const tokens = autoOn
+      ? g.components.map((c) => assetBySymbol(c.symbol)?.address as `0x${string}` | undefined).filter((a): a is `0x${string}` => !!a)
+      : [];
+    void buy(g.id, amountNum, autoOn ? { tokens } : undefined);
+  }, [valid, overCash, buy, g.id, amountNum, autoOn, g.components]);
 
   const phaseLabel = useMemo(
     () =>
@@ -111,6 +119,7 @@ export function GroveBuyPanel({ g, onClose }: { g: GroveLive; onClose: () => voi
           <p style={{ fontSize: 13, color: "var(--ink-2)", margin: "6px 0 12px", lineHeight: 1.55 }}>
             <span className="tnum">{usd(success.totalUsd)}</span> across {success.legs.length} {success.legs.length === 1 ? "holding" : "holdings"}, settled in your own wallet.
             The only fee is {g.feeBps / 100}% of profit when you exit.
+            {success.autoEnabled ? " Auto-manage is on — Vera keeps it aligned, inside your caps." : ""}
           </p>
           <a
             href={`https://robinhoodchain.blockscout.com/tx/${success.txHash}`}
@@ -190,6 +199,22 @@ export function GroveBuyPanel({ g, onClose }: { g: GroveLive; onClose: () => voi
               <ReceiptRow k="Entry fee" v="none" muted />
             </div>
           )}
+
+          {/* ── auto-manage, on by default, in the same signature ── */}
+          <label style={{ display: "flex", alignItems: "flex-start", gap: 9, margin: "12px 2px 0", cursor: busy ? "default" : "pointer" }}>
+            <input
+              type="checkbox"
+              checked={autoOn}
+              disabled={busy}
+              onChange={(e) => setAutoOn(e.target.checked)}
+              style={{ marginTop: 2, width: 15, height: 15, accentColor: "var(--primary)" }}
+            />
+            <span style={{ fontSize: 11.5, lineHeight: 1.55, color: "var(--ink-2)" }}>
+              <span style={{ fontWeight: 700, color: "var(--ink)" }}>Auto-manage</span> — Vera realigns the basket
+              when it genuinely drifts, inside caps this signature sets: $250 per action, weekly at most, never more
+              than 20% of a holding. Off any time, instantly.
+            </span>
+          </label>
 
           {error && (
             <div style={{ fontSize: 12.5, lineHeight: 1.55, color: "var(--neg)", marginTop: 10 }}>

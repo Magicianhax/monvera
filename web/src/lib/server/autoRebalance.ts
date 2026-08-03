@@ -7,8 +7,9 @@ import "server-only";
 //      only those still enabled, off cooldown, and with budget left,
 //   2. reads their position + live prices and asks the pure planner
 //      (rebalancePlan.ts) whether the basket has genuinely drifted,
-//   3. asks Vera whether NOW is the window (rebalanceJudgment.ts) — the model
-//      can only veto a plan the math justified, and every failure defers,
+//   3. asks Vera whether NOW is the window (rebalanceJudgment.ts) — ONE
+//      verdict per grove per pass, so every depositor moves together; the
+//      model can only veto plans the math justified, and every failure defers,
 //   4. quotes the legs on Kyber exactly like a grove buy (the CONTRACT is
 //      sender and recipient — it executes and measures every leg itself),
 //   5. SIMULATES managedRebalance as the manager — one call proves the oracle
@@ -31,7 +32,7 @@ import { priceAllWithFallback } from "./pricing";
 import { kyberQuote } from "./kyber";
 import { GROVE_MANAGER, GROVE_LEG_SLIPPAGE_BPS } from "./groveQuote";
 import { computeRebalancePlan, type PlanHolding, type PlanTarget } from "./rebalancePlan";
-import { judgeRebalance } from "./rebalanceJudgment";
+import { judgeRebalance, type JudgmentRow } from "./rebalanceJudgment";
 import { addNotification } from "./notifyStore";
 import { listRecentUsers } from "./userDirectory";
 
@@ -120,12 +121,20 @@ async function optedInCandidates(onChainId: number): Promise<Address[]> {
 
 const byAddress = new Map<string, Asset>(ALL_ASSETS.map((a) => [a.address.toLowerCase(), a]));
 
-async function rebalanceOne(
+/** A user whose basket has genuinely drifted, plan ready — awaiting the
+ *  grove-wide verdict before anything is quoted or sent. */
+interface PlannedUser {
+  user: Address;
+  plan: NonNullable<ReturnType<typeof computeRebalancePlan>>;
+  rows: JudgmentRow[];
+}
+
+/** Everything up to (and including) the pure plan. No venue, no writes. */
+async function planOne(
   def: GroveDef,
   user: Address,
-  manager: ReturnType<typeof privateKeyToAccount>,
   prices: Record<string, { priceUsd?: number } | undefined>,
-): Promise<Outcome> {
+): Promise<Outcome | PlannedUser> {
   const groveId = BigInt(def.onChainId!);
   const managerAddr = GROVE_MANAGER as Address;
   const skip = (reason: string): Outcome => ({ grove: def.id, user, action: "skipped", reason });
@@ -182,23 +191,28 @@ async function rebalanceOne(
   const plan = computeRebalancePlan(holdings, missing, { maxTurnoverUsd, maxFractionBps: Number(fractionBps) }, { driftTriggerBps: DRIFT_TRIGGER_BPS });
   if (!plan) return skip("no drift worth acting on");
 
-  // The math says the rebalance is justified; Vera decides whether NOW is the
-  // window (a drift mid-storm waits rather than churns). She can only veto —
-  // never initiate, enlarge, or redirect — and every failure defers.
   const totalUsd = holdings.reduce((s, x) => s + (Number(x.amountRaw) / 1e18) * x.priceUsd, 0);
   const touched = new Set([...plan.sells.map((s) => s.symbol), ...plan.buys.map((b) => b.symbol)]);
-  const verdict = await judgeRebalance({
-    groveName: def.name,
-    turnoverUsd: plan.turnoverUsd,
-    maxDeviationBps: plan.maxDeviationBps,
-    rows: [...touched].map((symbol) => {
-      const hh = holdings.find((x) => x.symbol === symbol);
-      const currentPct = hh ? (((Number(hh.amountRaw) / 1e18) * hh.priceUsd) / totalUsd) * 100 : 0;
-      const targetPct = (def.components.find((c) => c.symbol === symbol)?.weightBps ?? 0) / 100;
-      return { symbol, currentWeightPct: currentPct, targetWeightPct: targetPct, deviationPct: currentPct - targetPct };
-    }),
+  const rows: JudgmentRow[] = [...touched].map((symbol) => {
+    const hh = holdings.find((x) => x.symbol === symbol);
+    const currentPct = hh ? (((Number(hh.amountRaw) / 1e18) * hh.priceUsd) / totalUsd) * 100 : 0;
+    const targetPct = (def.components.find((c) => c.symbol === symbol)?.weightBps ?? 0) / 100;
+    return { symbol, currentWeightPct: currentPct, targetWeightPct: targetPct, deviationPct: currentPct - targetPct };
   });
-  if (verdict.action === "defer") return skip(`Vera deferred: ${verdict.reason}`);
+  return { user, plan, rows };
+}
+
+/** Quote, prove, send — runs only after the grove-wide verdict said "now". */
+async function executeOne(
+  def: GroveDef,
+  user: Address,
+  manager: ReturnType<typeof privateKeyToAccount>,
+  plan: PlannedUser["plan"],
+  veraReason: string,
+): Promise<Outcome> {
+  const groveId = BigInt(def.onChainId!);
+  const managerAddr = GROVE_MANAGER as Address;
+  const skip = (reason: string): Outcome => ({ grove: def.id, user, action: "skipped", reason });
 
   // ── quote the legs, sells first (they fund the pool the buys spend) ──
   type Leg = { tokenIn: Address; tokenOut: Address; amountIn: bigint; minOut: bigint; callTarget: Address; approvalTarget: Address; data: `0x${string}` };
@@ -257,7 +271,7 @@ async function rebalanceOne(
       console.error(`[auto-rebalance] reverted on-chain ${def.id}/${user}`, hash);
       return { grove: def.id, user, action: "failed", reason: "reverted on-chain", txHash: hash };
     }
-    return { grove: def.id, user, action: "rebalanced", reason: `drift ${plan.maxDeviationBps}bps`, txHash: hash, turnoverUsd: plan.turnoverUsd, veraReason: verdict.reason };
+    return { grove: def.id, user, action: "rebalanced", reason: `drift ${plan.maxDeviationBps}bps`, txHash: hash, turnoverUsd: plan.turnoverUsd, veraReason };
   } catch (err) {
     console.error(`[auto-rebalance] send failed ${def.id}/${user}`, err);
     return { grove: def.id, user, action: "failed", reason: err instanceof Error ? err.message.split("\n")[0] : String(err) };
@@ -296,6 +310,8 @@ export async function runAutoRebalance(): Promise<AutoRebalanceReport> {
       outcomes.push({ grove: def.id, user: "0x0" as Address, action: "skipped", reason: "candidate scan failed" });
       continue;
     }
+    // Phase 1: plan every eligible user — pure reads, no venue, no writes.
+    const planned: PlannedUser[] = [];
     for (const user of users) {
       if (budget <= 0) {
         console.warn(`[auto-rebalance] user budget hit (${MAX_USERS_PER_RUN}); remaining wait for the next run`);
@@ -303,10 +319,45 @@ export async function runAutoRebalance(): Promise<AutoRebalanceReport> {
       }
       budget--;
       try {
-        outcomes.push(await rebalanceOne(def, user, manager, prices));
+        const r = await planOne(def, user, prices);
+        if ("action" in r) outcomes.push(r);
+        else planned.push(r);
       } catch (err) {
-        console.error(`[auto-rebalance] unexpected failure ${def.id}/${user}`, err);
+        console.error(`[auto-rebalance] plan failed ${def.id}/${user}`, err);
         outcomes.push({ grove: def.id, user, action: "failed", reason: err instanceof Error ? err.message.split("\n")[0] : String(err) });
+      }
+    }
+    if (!planned.length) continue;
+
+    // Phase 2: ONE verdict per grove per window — every depositor's basket is
+    // the same strategy, so the timing call is grove-level and everyone moves
+    // together (or waits together). Vera can only veto the math; her worst
+    // failure mode is patience.
+    const agg = new Map<string, JudgmentRow>();
+    for (const p of planned) {
+      for (const row of p.rows) {
+        const prev = agg.get(row.symbol);
+        if (!prev || Math.abs(row.deviationPct) > Math.abs(prev.deviationPct)) agg.set(row.symbol, row);
+      }
+    }
+    const verdict = await judgeRebalance({
+      groveName: def.name,
+      turnoverUsd: planned.reduce((s, p) => s + p.plan.turnoverUsd, 0),
+      maxDeviationBps: Math.max(...planned.map((p) => p.plan.maxDeviationBps)),
+      rows: [...agg.values()],
+    });
+    if (verdict.action === "defer") {
+      for (const p of planned) outcomes.push({ grove: def.id, user: p.user, action: "skipped", reason: `Vera deferred: ${verdict.reason}` });
+      continue;
+    }
+
+    // Phase 3: execute — same window, same reasoning, one depositor at a time.
+    for (const p of planned) {
+      try {
+        outcomes.push(await executeOne(def, p.user, manager, p.plan, verdict.reason));
+      } catch (err) {
+        console.error(`[auto-rebalance] execute failed ${def.id}/${p.user}`, err);
+        outcomes.push({ grove: def.id, user: p.user, action: "failed", reason: err instanceof Error ? err.message.split("\n")[0] : String(err) });
       }
     }
   }
