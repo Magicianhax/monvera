@@ -47,14 +47,16 @@ export const MAX_LEGS = 20;
 /** How long the built calldata stays valid. Every leg shares one deadline. */
 const DEADLINE_SECONDS = 600;
 
-/** Router slippage bound for grove legs, wider than the 50bps ordinary trades
- *  use. These stock pools reprice on oracle pushes, so a quote can move >0.5%
- *  in the seconds before settlement — at 50bps a live buy reverted with
- *  Kyber's "Return amount is not enough" during simulation (2026-08-03), and
- *  in an atomic basket ONE tripped leg reverts every leg. The user's real
- *  price floor is unchanged: GroveManager checks each leg against its own
- *  Chainlink band (300bps fresh) on-chain. */
-export const GROVE_LEG_SLIPPAGE_BPS = 150;
+/** Router slippage bound for grove legs — deliberately equal to the
+ *  contract's own fresh-feed Chainlink band, because THAT is the user's real
+ *  price floor and it is enforced on-chain per leg. Anything tighter here is
+ *  a second, lower floor that kills honest buys: at 50bps a live $30 buy
+ *  died on Kyber's "Return amount is not enough" (2026-08-03), at 150bps a
+ *  $132 8-leg buy died twice the next day — these stock pools reprice in
+ *  discrete oracle steps, and in an atomic basket ONE stepped leg reverts
+ *  every leg. With the two floors aligned, Kyber's check can no longer fail
+ *  a trade the contract would have allowed. */
+export const GROVE_LEG_SLIPPAGE_BPS = 300;
 
 export interface GroveLegQuote {
   symbol: string;

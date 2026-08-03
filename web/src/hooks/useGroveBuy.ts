@@ -157,6 +157,11 @@ export function useGroveBuy(): UseGroveBuy {
     async (groveId: string, amountUsd: number) => {
       setError(null);
       setSuccess(null);
+      // Stock pools reprice in discrete oracle steps — when a leg dies on the
+      // venue's price floor mid-flight, one automatic fresh-quote attempt
+      // usually lands on the new price. One only: a second failure means the
+      // market is genuinely moving, and the user should see that.
+      for (let attempt = 0; attempt < 2; attempt++) {
       try {
         if (!GROVE_MANAGER) throw new Error("Groves are not live yet.");
         if (!wallet?.address) throw new Error("Connect your wallet first.");
@@ -225,12 +230,17 @@ export function useGroveBuy(): UseGroveBuy {
         setPhase("done");
         // The basket (and any spent grove cash) just moved — refetch now.
         refreshBalances();
+        return;
       } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        if (attempt === 0 && /return amount is not enough|52657475726e20616d6f756e74/i.test(msg)) continue;
         // Raw provider/bundler errors arrive as pages of calldata hex — a real
         // user saw one. explainError passes our own copy through untouched and
         // turns everything else into one honest sentence.
         setError(explainError(err));
         setPhase("error");
+        return;
+      }
       }
     },
     [wallet, getQuote, refreshBalances],

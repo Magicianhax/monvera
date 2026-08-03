@@ -28,6 +28,13 @@ export function isUserRejection(err: unknown): boolean {
 // Order matters: first match wins, so put specific patterns above general ones.
 const RULES: Rule[] = [
   {
+    // KyberSwap's router: the swap's output fell below the floor baked into
+    // its route while it settled. Inside a raw UserOp simulation error the
+    // string arrives hex-encoded, so match that form too ("Return amount…").
+    match: /return amount is not enough|52657475726e20616d6f756e74/i,
+    say: "The price moved more than the quote allowed while it settled, so it stopped before spending anything. Try again — the next quote is fresh.",
+  },
+  {
     // ERC-4337 validation-phase failures (AA2x: nonce race, signature check,
     // prefund). NOT sponsorship — mapping these to the paymaster copy sent a
     // user hunting a "sponsorship outage" that didn't exist (2026-08-04).
@@ -62,13 +69,6 @@ const RULES: Rule[] = [
   {
     match: /timeout|timed out|abort/i,
     say: "The network took too long to answer, so this was stopped before anything was placed.",
-  },
-  {
-    // KyberSwap's router: the swap's output fell below the floor baked into
-    // its route while it settled. Inside a raw UserOp simulation error the
-    // string arrives hex-encoded, so match that form too ("Return amount…").
-    match: /return amount is not enough|52657475726e20616d6f756e74/i,
-    say: "The price moved more than the quote allowed while it settled, so it stopped before spending anything. Try again — the next quote is fresh.",
   },
   {
     match: /revert|InvalidAction|execution reverted/i,
