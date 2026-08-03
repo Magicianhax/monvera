@@ -444,7 +444,7 @@ export function GroveDetailView({
             <Faq q="How is the basket chosen and weighted?" a={g.methodology.replace(/\*\*/g, "")} />
             <Faq
               q="Does it rebalance?"
-              a={`${g.rebalancePolicy.charAt(0).toUpperCase()}${g.rebalancePolicy.slice(1)}.\n\nThe contract supports automated management with caps you set yourself, and it needs your explicit opt-in. Every rebalance is its own transaction, and each one appears in the Rebalances panel on this page the moment it lands — if that list is empty, nothing has ever touched the basket.`}
+              a={`Not yet. ${g.rebalancePolicy.charAt(0).toUpperCase()}${g.rebalancePolicy.slice(1)}.\n\nThe contract supports automated management — hard caps you set yourself, your explicit opt-in — but nothing is driving it today, so no rebalance has ever run. When that changes it will be announced first. Every rebalance is its own transaction and appears in the Rebalances panel on this page the moment it lands.`}
             />
             <Faq
               q="How do I get my money out?"
