@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { APP_VIEW_SEGMENTS } from "@/components/chat/appUrl";
 
 // Two jobs, in order:
 //
@@ -63,23 +64,40 @@ export function middleware(req: NextRequest) {
   }
 
   // ── 1b. the app lives at app.monvera.best ──
-  // On the subdomain, "/" (and /app itself) serve the app page — query params
-  // (?tab=…) carry over so every in-app link works there. On the apex, /app*
-  // permanently redirects to the subdomain (once the flag is on).
+  // Every in-app view is a real path (appUrl.ts): /groves/titan, /portfolio,
+  // /staking, … all serve the /app shell via rewrite, so a shared link or a
+  // refresh lands on the page it names. Legacy links keep working end to end:
+  // ?tab=… carries through and the shell upgrades it to the path form, and
+  // /app/<view> on any host is canonicalized. On the apex, /app* permanently
+  // redirects to the subdomain (once the flag is on), subpath preserved.
   const host = req.nextUrl.hostname;
+  const pathname = req.nextUrl.pathname;
+  const firstSegment = pathname.split("/")[1] ?? "";
   if (host === "app.monvera.best") {
-    if (req.nextUrl.pathname === "/" || req.nextUrl.pathname === "/app") {
+    // Canonical home is the bare path — old /app links 301 to it.
+    if (pathname === "/app" || pathname.startsWith("/app/")) {
+      const url = req.nextUrl.clone();
+      url.pathname = pathname.slice("/app".length) || "/";
+      return NextResponse.redirect(url, 301);
+    }
+    if (pathname === "/" || APP_VIEW_SEGMENTS.has(firstSegment)) {
       const url = req.nextUrl.clone();
       url.pathname = "/app";
       return NextResponse.rewrite(url);
     }
   } else if (APEX_APP_REDIRECT && (host === "monvera.best" || host === "www.monvera.best")) {
-    if (req.nextUrl.pathname === "/app" || req.nextUrl.pathname.startsWith("/app/")) {
+    if (pathname === "/app" || pathname.startsWith("/app/")) {
       const url = req.nextUrl.clone();
       url.hostname = "app.monvera.best";
-      url.pathname = "/";
+      url.pathname = pathname.slice("/app".length) || "/";
       return NextResponse.redirect(url, 301);
     }
+  } else if (pathname.startsWith("/app/")) {
+    // Local dev (and any other host serving the shell at /app): the path form
+    // hangs off /app — /app/groves/titan serves the same shell page.
+    const url = req.nextUrl.clone();
+    url.pathname = "/app";
+    return NextResponse.rewrite(url);
   }
 
   return NextResponse.next();
