@@ -37,7 +37,12 @@
     "STAKING_LOGS_RPC_URL": "https://rpc.mainnet.chain.robinhood.com",
     "SEASON_DEPLOY_BLOCK": "17820981",
     // Season 1 day-0, 2026-07-24T00:00:00Z. Public, not a secret.
-    "SEASON_START": "1784851200"
+    "SEASON_START": "1784851200",
+    // Owner's user-directory id (user_directory.user_id): RED auto-manage
+    // alerts (gas floor, failed sends, unresolved receipts, scan failures)
+    // land in this account's notification inbox. Empty disables owner
+    // alerting (forks/previews must not page anyone).
+    "OWNER_USER_ID": "did:privy:cmr59h2j200ua0dkzgr7sj7r7"
   },
   "assets": {
     "directory": ".open-next/assets",

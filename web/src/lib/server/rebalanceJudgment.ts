@@ -13,7 +13,9 @@ import "server-only";
 // Fail-safe direction: rebalancing is never urgent, so every failure mode —
 // provider down, junk output, timeout — resolves to "defer" and the next
 // window looks again. A basket a few points off target for six more hours
-// costs nothing; churning through a live move does.
+// costs nothing; churning through a live move does. Those defers carry
+// source "outage" so the ledger never dresses a dead provider up as a
+// market opinion.
 import { z } from "zod";
 import { generateObject } from "ai";
 import { resolveModelChain } from "./aiModel";
@@ -37,8 +39,21 @@ export interface RebalanceBrief {
 
 export interface RebalanceVerdict {
   action: "proceed" | "defer";
-  /** One plain sentence, safe to show the user in their notification. */
+  /** One plain sentence. The ledger records it verbatim; user-facing
+   *  surfaces must go through displayReason(), which substitutes a neutral
+   *  sentence when the lint failed. */
   reason: string;
+  /** "model" = a real provider opinion. "outage" = brief build failed, every
+   *  provider failed, or the time budget ran out — infrastructure, not
+   *  judgment. Outage verdicts are always defers; the ledger classes them
+   *  defer-outage, never defer-market. */
+  source: "model" | "outage";
+  /** Deterministic wording check (lintVerdictReason): the reason cites a
+   *  figure, names a brief symbol, and makes no forward-looking claim.
+   *  Never blocks the verdict — false is recorded in the ledger and
+   *  displayReason() swaps in the fallback. Hand-written outage sentences
+   *  are safe verbatim, so they carry true. */
+  lintOk: boolean;
 }
 
 const VerdictSchema = z.object({
@@ -46,7 +61,9 @@ const VerdictSchema = z.object({
   reason: z
     .string()
     .max(240)
-    .describe("One plain sentence a user can read: why now, or why waiting is smarter. No hype, no jargon."),
+    .describe(
+      "One plain sentence a user can read: name a drifted symbol, cite one figure from the data, describe only what already happened. No hype, no jargon, no predictions.",
+    ),
 });
 
 const SYSTEM = [
@@ -57,17 +74,68 @@ const SYSTEM = [
   "Proceed when the drift looks settled: the moves that caused it have aged, today is calm for the names involved, and realigning now genuinely restores the strategy's intended shape.",
   "When uncertain, defer — waiting six hours costs nothing, churning costs spread.",
   "Answer with the verdict and ONE honest sentence of reason, in plain words a customer can read.",
+  "The reason must name at least one drifted holding by its exact symbol and cite at least one figure from the data you were given (a weight, a deviation, a day move).",
+  "Report only what has already happened. Never predict: no \"will\", no \"expect\", no \"should rise\" or \"should fall\", no price targets.",
 ].join("\n");
+
+// Numeral lint — deterministic wording checks run AFTER generation. Wording
+// is not worth a veto (timing is the model's call), so a failing reason never
+// blocks the verdict: it is recorded verbatim in the ledger and user surfaces
+// swap in a neutral sentence via displayReason(), so slop never reaches a
+// notification.
+//
+// Forward-looking language the reason may never contain: Vera reports what
+// the tape already did, never what it will do. A false positive only costs
+// the neutral fallback, so the list errs strict.
+const FORWARD_LOOKING: RegExp[] = [
+  /\bwill\b/i,
+  /\bwon['’]t\b/i,
+  /\bgoing to\b/i,
+  /\btomorrow\b/i,
+  /\bexpect\w*\b/i,
+  /\bpredict\w*\b/i,
+  /\bforecast\w*\b/i,
+  /\banticipat\w*\b/i,
+  /\bshould\s+(?:\w+\s+){0,2}(?:rise|rally|rebound|recover|climb|gain|surge|fall|drop|dip|slide|decline|sink)\b/i,
+  /\b(?:likely|poised|bound|due|about|set)\s+to\s+(?:\w+\s+){0,2}(?:rise|rally|rebound|recover|climb|gain|surge|fall|drop|dip|slide|decline|sink|move|run)\b/i,
+  /\bprice target\b/i,
+  /\btarget\s+(?:price|of\s+\$)/i,
+];
+
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/** True when the reason cites a figure (any digit), names at least one brief
+ *  symbol, and matches no forward-looking pattern. Wording quality only —
+ *  never gates the verdict itself. */
+export function lintVerdictReason(reason: string, briefSymbols: string[]): boolean {
+  if (!/\d/.test(reason)) return false;
+  const named = briefSymbols.some((sym) => new RegExp(`\\b${escapeRegExp(sym)}\\b`, "i").test(reason));
+  if (!named) return false;
+  return !FORWARD_LOOKING.some((p) => p.test(reason));
+}
+
+/** What a user sees. Lint-clean reasons pass through; a failing reason stays
+ *  in the ledger but is replaced here with a neutral sentence that claims
+ *  nothing the lint couldn't verify. */
+export function displayReason(verdict: RebalanceVerdict): string {
+  if (verdict.lintOk) return verdict.reason;
+  return verdict.action === "proceed"
+    ? "The market looked settled enough to realign."
+    : "Vera chose to wait for the next window.";
+}
 
 function fmt(n: number | null | undefined, suffix = "%"): string {
   return n == null || !Number.isFinite(n) ? "n/a" : `${n >= 0 ? "+" : ""}${n.toFixed(1)}${suffix}`;
 }
 
-/** Never throws. Every failure is a defer with an honest reason. */
+/** Never throws. Every failure is a defer with an honest reason and
+ *  source "outage"; only a real provider answer carries source "model". */
 export async function judgeRebalance(brief: RebalanceBrief): Promise<RebalanceVerdict> {
+  const symbols = brief.rows.map((r) => r.symbol);
   let prompt: string;
   try {
-    const symbols = brief.rows.map((r) => r.symbol);
     const [stats, day] = await Promise.all([
       universeStatsRows(symbols).catch(() => []),
       getDaySummary().catch(() => ({}) as Awaited<ReturnType<typeof getDaySummary>>),
@@ -91,7 +159,8 @@ export async function judgeRebalance(brief: RebalanceBrief): Promise<RebalanceVe
     ].join("\n");
   } catch (err) {
     console.error("[rebalance-judgment] brief build failed", err);
-    return { action: "defer", reason: "Market data was unavailable, so the rebalance waits for the next window." };
+    // Hand-written sentence, not model output — safe to show verbatim.
+    return { action: "defer", reason: "Market data was unavailable, so the rebalance waits for the next window.", source: "outage", lintOk: true };
   }
 
   const deadline = Date.now() + 25_000;
@@ -109,11 +178,11 @@ export async function judgeRebalance(brief: RebalanceBrief): Promise<RebalanceVe
         maxRetries: 1,
         abortSignal: AbortSignal.timeout(budget),
       });
-      return object;
+      return { ...object, source: "model", lintOk: lintVerdictReason(object.reason, symbols) };
     } catch (err) {
       lastErr = err;
     }
   }
   console.error("[rebalance-judgment] all providers failed", lastErr);
-  return { action: "defer", reason: "Vera couldn't complete her market check, so the rebalance waits for the next window." };
+  return { action: "defer", reason: "Vera couldn't complete her market check, so the rebalance waits for the next window.", source: "outage", lintOk: true };
 }

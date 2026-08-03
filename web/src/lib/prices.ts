@@ -40,6 +40,13 @@ export interface AssetPrice {
   priceUsd?: number;
   /** Where the price came from (for honesty in the UI / debugging). */
   source: "chainlink" | "arcus" | "market" | "none";
+  /**
+   * Chainlink round timestamp (unix seconds), set whenever a round was read —
+   * including rounds refused for staleness (source "none"). Callers gating on
+   * feed age must be able to tell a stale feed from a missing one. Absent when
+   * there is no feed, the feed never completed a round, or the read failed.
+   */
+  updatedAt?: number;
 }
 
 /** Price a single asset from its Chainlink feed. Best-effort; undefined when no live source. */
@@ -55,16 +62,21 @@ export async function priceAsset(
       abi: AGGREGATOR_V3_ABI,
       functionName: "latestRoundData",
     });
-    if (answer <= BigInt(0) || updatedAt === BigInt(0)) {
+    // updatedAt of 0 is the aggregator's "no round yet" sentinel, not a timestamp.
+    if (updatedAt === BigInt(0)) {
       return { symbol: asset.symbol, priceUsd: undefined, source: "none" };
     }
+    if (answer <= BigInt(0)) {
+      return { symbol: asset.symbol, priceUsd: undefined, source: "none", updatedAt: Number(updatedAt) };
+    }
     if (nowSeconds - Number(updatedAt) > MAX_STALENESS_SECONDS) {
-      return { symbol: asset.symbol, priceUsd: undefined, source: "none" };
+      return { symbol: asset.symbol, priceUsd: undefined, source: "none", updatedAt: Number(updatedAt) };
     }
     return {
       symbol: asset.symbol,
       priceUsd: Number(answer) / 10 ** FEED_DECIMALS,
       source: "chainlink",
+      updatedAt: Number(updatedAt),
     };
   } catch {
     return { symbol: asset.symbol, priceUsd: undefined, source: "none" };

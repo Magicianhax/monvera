@@ -43,18 +43,24 @@ export interface PriceAlert {
 interface NRow { id: number; kind: NotificationKind; title: string; body: string | null; symbol: string | null; tx_hash: string | null; created_at: number; read_at: number | null }
 interface ARow { id: number; user_id: string; symbol: string; direction: "above" | "below"; threshold: number; active: number; created_at: number; triggered_at: number | null }
 
-/** Append a notification. Failures never break the caller. */
+/** Append a notification. Failures never break the caller, but the return
+ *  value tells the truth: false means the user was NOT reached. Callers that
+ *  record delivery (the rebalance ledger's `notified` flag) must only record
+ *  it on true — a "notified" that never landed is the lie the auto-manage
+ *  metrics exist to catch. */
 export async function addNotification(
   userId: string,
   n: { kind: NotificationKind; title: string; body?: string; symbol?: string; txHash?: string; at: number },
-): Promise<void> {
+): Promise<boolean> {
   try {
     await db()
       .prepare("INSERT INTO notifications (user_id, kind, title, body, symbol, tx_hash, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)")
       .bind(userId, n.kind, n.title, n.body ?? null, n.symbol ?? null, n.txHash ?? null, n.at)
       .run();
+    return true;
   } catch (e) {
     console.error("[notify] add failed:", e instanceof Error ? e.message : e);
+    return false;
   }
 }
 
