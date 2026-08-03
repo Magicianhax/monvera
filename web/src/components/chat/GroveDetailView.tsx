@@ -213,6 +213,11 @@ export function GroveDetailView({
   const byWeight = useMemo(() => g.components.slice().sort((a, b) => b.weightBps - a.weightBps), [g.components]);
   const top5 = byWeight.slice(0, 5);
 
+  // Both breakdowns are collapsed by default. Their headers carry the answer
+  // most visits need (the total; the count and last date).
+  const [basketOpen, setBasketOpen] = useState(false);
+  const [rebalOpen, setRebalOpen] = useState(false);
+
   // Every on-chain touch of this grove — member rebalances + recipe changes.
   // null = still reading (or not on-chain yet); [] = the honest "never".
   const history = useGroveHistory(open ? g.id : null);
@@ -241,9 +246,11 @@ export function GroveDetailView({
           </div>
           <span className="tnum" style={{ fontSize: 12, fontWeight: 700, color: "var(--ink-3)" }}>{g.ticker}</span>
           <span style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: ".05em", textTransform: "uppercase", color: "var(--ink-3)", padding: "3px 9px", borderRadius: 999, border: "1px solid var(--line)" }}>{g.category}</span>
-          <span style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: ".05em", textTransform: "uppercase", color: "var(--ink-3)", padding: "3px 9px", borderRadius: 999, border: "1px solid var(--line)" }}>
-            {open ? "Open" : "Not open yet"}
-          </span>
+          {!open && (
+            <span style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: ".05em", textTransform: "uppercase", color: "var(--ink-3)", padding: "3px 9px", borderRadius: 999, border: "1px solid var(--line)" }}>
+              Opens soon
+            </span>
+          )}
         </div>
         <h1 className="serif" style={{ margin: "10px 0 0", fontSize: "clamp(26px, 5cqw, 34px)", fontWeight: 500, letterSpacing: "-.018em", lineHeight: 1.05 }}>
           {g.name}
@@ -253,21 +260,23 @@ export function GroveDetailView({
         </p>
       </div>
 
-      {/* ── 2 · stats band: one panel, five cells ── */}
+      {/* ── 2 · stats band: four grove-level facts. The user's own money lives
+             in ONE place, the rail's position card — never duplicated here. ── */}
       <div style={panel({ overflow: "hidden" })}>
         <div className="gvd-stats">
           <div>
-            <div style={label}>Your position</div>
-            <div className="serif" style={{ fontSize: 24, fontWeight: 500, marginTop: 5, letterSpacing: "-.01em" }}>
-              {held ? (unpriced ? "—" : usd(marketValue)) : "$0.00"}
+            <div style={label}>1y vs S&amp;P</div>
+            <div className="tnum" style={{ fontSize: 21, fontWeight: 600, marginTop: 6, color: bt ? dcol(bt.portfolio.returnPct) : "var(--ink)" }}>
+              {bt ? `${bt.portfolio.returnPct >= 0 ? "+" : "−"}${Math.abs(bt.portfolio.returnPct).toFixed(1)}%` : "—"}
             </div>
-            <div className="tnum" style={{ fontSize: 11, color: held && !unpriced ? dcol(pnl) : "var(--ink-3)", marginTop: 2 }}>
-              {held
-                ? unpriced
-                  ? "some holdings unpriced right now"
-                  : `${pnl >= 0 ? "+" : "−"}${usd(Math.abs(pnl))} unrealized`
-                : "nothing yet"}
+            <div className="tnum" style={{ fontSize: 11, color: "var(--ink-3)", marginTop: 2 }}>
+              {bt ? `S&P ${bt.benchmark.returnPct >= 0 ? "+" : "−"}${Math.abs(bt.benchmark.returnPct).toFixed(1)}% · history, not a promise` : "backtest pending"}
             </div>
+          </div>
+          <div>
+            <div style={label}>Investors</div>
+            <div className="tnum" style={{ fontSize: 21, fontWeight: 600, marginTop: 6 }}>{g.stats.users.toLocaleString("en-US")}</div>
+            <div style={{ fontSize: 11, color: "var(--ink-3)", marginTop: 2 }}>open positions, on-chain</div>
           </div>
           <div>
             <div style={label}>Total invested</div>
@@ -275,23 +284,9 @@ export function GroveDetailView({
             <div style={{ fontSize: 11, color: "var(--ink-3)", marginTop: 2 }}>cost basis, all holders</div>
           </div>
           <div>
-            <div style={label}>Investors</div>
-            <div className="tnum" style={{ fontSize: 21, fontWeight: 600, marginTop: 6 }}>{g.stats.users.toLocaleString("en-US")}</div>
-            <div style={{ fontSize: 11, color: "var(--ink-3)", marginTop: 2 }}>open positions</div>
-          </div>
-          <div>
-            <div style={label}>Fees paid, ever</div>
-            <div className="tnum" style={{ fontSize: 21, fontWeight: 600, marginTop: 6 }}>{usd(g.stats.feesUsd)}</div>
-            <div style={{ fontSize: 11, color: "var(--ink-3)", marginTop: 2 }}>all holders, exit only</div>
-          </div>
-          <div>
-            <div style={label}>1y vs S&amp;P</div>
-            <div className="tnum" style={{ fontSize: 21, fontWeight: 600, marginTop: 6, color: bt ? dcol(bt.portfolio.returnPct) : "var(--ink)" }}>
-              {bt ? `${bt.portfolio.returnPct >= 0 ? "+" : "−"}${Math.abs(bt.portfolio.returnPct).toFixed(1)}%` : "—"}
-            </div>
-            <div className="tnum" style={{ fontSize: 11, color: "var(--ink-3)", marginTop: 2 }}>
-              {bt ? `S&P ${bt.benchmark.returnPct >= 0 ? "+" : "−"}${Math.abs(bt.benchmark.returnPct).toFixed(1)}% · history` : "backtest pending"}
-            </div>
+            <div style={label}>The only fee</div>
+            <div className="tnum" style={{ fontSize: 21, fontWeight: 600, marginTop: 6 }}>{feePct}%</div>
+            <div style={{ fontSize: 11, color: "var(--ink-3)", marginTop: 2 }}>of profit, only at exit</div>
           </div>
         </div>
       </div>
@@ -360,30 +355,43 @@ export function GroveDetailView({
           })}
         </div>
 
-        {/* Rebalance history, between the recipe and the questions: the page's
-            "nothing touches your basket unasked" claim made falsifiable. Every
-            row links to its transaction; empty is the honest launch state and
-            renders as a sentence, never as a hidden section. */}
-        <div style={panel({ padding: "15px 18px 12px" })}>
-          <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
-            <div style={{ fontSize: 14, fontWeight: 700 }}>Rebalances</div>
-            <div className="tnum" style={{ marginLeft: "auto", fontSize: 11, color: "var(--ink-3)" }}>
-              straight from the chain
-            </div>
-          </div>
-          {!open ? (
+        {/* Rebalance history, collapsed to its one-line truth by default: the
+            summary IS the claim ("nothing has ever touched this basket", or
+            the count and last date). The receipts are one tap away, each row
+            linking to its transaction. */}
+        <div style={panel({ padding: rebalOpen ? "15px 18px 12px" : "15px 18px" })}>
+          <button
+            onClick={() => setRebalOpen((v) => !v)}
+            aria-expanded={rebalOpen}
+            style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", background: "none", border: "none", padding: 0, cursor: "pointer", textAlign: "left" }}
+          >
+            <span style={{ fontSize: 14, fontWeight: 700, color: "var(--ink)" }}>Rebalances</span>
+            <span className="tnum" style={{ marginLeft: "auto", fontSize: 11, color: "var(--ink-3)" }}>
+              {!open
+                ? "starts when the grove opens"
+                : historyRows === null
+                  ? "reading the chain…"
+                  : historyRows.length === 0
+                    ? "none yet, straight from the chain"
+                    : `${historyRows.length} on-chain · last ${fmtWhen(historyRows[0].at)}`}
+            </span>
+            <span style={{ color: "var(--ink-3)", display: "inline-flex" }}>
+              <PIcon name={rebalOpen ? "ph-caret-up" : "ph-caret-down"} size={13} />
+            </span>
+          </button>
+          {rebalOpen && (!open ? (
             <div style={{ fontSize: 12, color: "var(--ink-3)", lineHeight: 1.55, marginTop: 8 }}>
               Starts recording the moment this grove opens on-chain.
             </div>
           ) : history.isError ? (
             <div style={{ fontSize: 12, color: "var(--ink-3)", lineHeight: 1.55, marginTop: 8 }}>
-              Couldn&rsquo;t read the chain just now — the history is still there, this page just can&rsquo;t show it this minute.
+              Couldn&rsquo;t read the chain just now. The history is still there; this page just can&rsquo;t show it this minute.
             </div>
           ) : historyRows === null ? (
             <div style={{ fontSize: 12, color: "var(--ink-3)", marginTop: 8 }}>reading the chain&hellip;</div>
           ) : historyRows.length === 0 ? (
             <div style={{ fontSize: 12, color: "var(--ink-2)", lineHeight: 1.55, marginTop: 8 }}>
-              None yet — nothing has ever touched this basket. Every rebalance is its own transaction, and each one lands here the moment it happens.
+              Nothing has ever touched this basket. Every rebalance is its own transaction, and each one lands here the moment it happens.
             </div>
           ) : (
             <>
@@ -419,7 +427,7 @@ export function GroveDetailView({
                 </a>
               )}
             </>
-          )}
+          ))}
         </div>
 
       <div style={panel({ padding: "15px 18px 4px" })}>
@@ -447,12 +455,25 @@ export function GroveDetailView({
             )}
             <Faq q="How is the basket chosen and weighted?" a={g.methodology.replace(/\*\*/g, "")} />
             <Faq
+              q="Who actually holds my basket?"
+              a={
+                <div>
+                  <div style={{ marginBottom: 6 }}>
+                    You do. The stocks sit in your own account{smartAccount ? <> (<AddrChip addr={smartAccount} />)</> : null}, and only you can move
+                    them. We can pause new buys as a safety switch, and that is all: no function exists that lets
+                    us touch your holdings.
+                  </div>
+                  <div>Buying, holding, and exiting at a loss cost $0. The only fee is {feePct}% of profit, taken at exit, never from the principal.</div>
+                </div>
+              }
+            />
+            <Faq
               q="Does it rebalance?"
-              a={`Only if you switch it on. ${g.rebalancePolicy.charAt(0).toUpperCase()}${g.rebalancePolicy.slice(1)}.\n\nAuto-manage is off by default. Flip it on in the Auto-manage panel on this page and Vera checks the basket every six hours, realigning it only when it has genuinely drifted — and only after reading the market first, so a drift driven by a still-moving name waits instead of churning. Every action stays inside caps the contract enforces: your per-action budget, a lifetime budget, your cadence, and at most 20% of any single holding per rebalance. Switching it off is instant.\n\nEvery rebalance is its own transaction and appears in the Rebalances panel on this page the moment it lands — if that list is empty, nothing has ever touched the basket.`}
+              a={`Only if you switch it on, in the Auto-manage card on this page. ${g.rebalancePolicy.charAt(0).toUpperCase()}${g.rebalancePolicy.slice(1)}.\n\nWhen it is on, Vera checks the basket every six hours and realigns it only when it has genuinely drifted, inside caps the contract enforces. Every rebalance is its own transaction in the Rebalances list above; an empty list means nothing has ever touched the basket.`}
             />
             <Faq
               q="How do I get my money out?"
-              a={"Press Exit and choose how much: a quarter, half, three quarters, or everything. It sells in one transaction and returns USDG to your account.\n\nSelling everything closes the position and sells every holding to zero. The fee applies only to profit above what you paid, and is zero at a loss."}
+              a={"Press Exit and choose how much: a quarter, half, three quarters, or everything. It sells in one transaction and returns cash to your account.\n\nSelling everything closes the position. The fee applies only to profit above what you paid, and is zero at a loss."}
             />
             <Faq
               q="What are the risks?"
@@ -469,112 +490,124 @@ export function GroveDetailView({
         </div>
         </div>
 
-        {/* right: your basket (when held), then manage, then terms */}
+        {/* right rail: exactly two cards. The money card is the ONE place the
+            user's own numbers and both actions live; auto-manage is the one
+            standing decision. Everything else on the page is about the grove. */}
         <div className="gvd-right" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-          {/* YOUR basket, broken out on its own: what you actually hold, what
-              each slice is worth, and its share of YOUR position — which can
-              differ from the published weights (small buys concentrate into
-              the largest names). The composition list answers "what is this
-              grove"; this panel answers "what is mine". */}
-          {held && (
-            <div style={panel({ padding: "15px 18px 12px" })}>
-              <div style={label}>Your basket</div>
-              <div style={{ marginTop: 8 }}>
-                {[...heldBySymbol.entries()]
-                  .map(([sym, qty]) => {
-                    const px = priceOf.get(sym);
-                    return { sym, qty, usdVal: px != null ? qty * px : null };
-                  })
-                  .sort((a, b) => (b.usdVal ?? 0) - (a.usdVal ?? 0))
-                  .map((r, i) => (
-                    <div key={r.sym} style={{ display: "flex", alignItems: "center", gap: 9, padding: "7px 0", borderTop: i === 0 ? "none" : "1px solid var(--line-2)" }}>
-                      <AssetTile asset={toTile(r.sym)} size={24} radius={8} />
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: 12.5, fontWeight: 700 }}>{r.sym}</div>
-                        <div className="tnum" style={{ fontSize: 10.5, color: "var(--ink-3)" }}>{r.qty.toFixed(6)}</div>
-                      </div>
-                      <div style={{ textAlign: "right", flex: "none" }}>
-                        <div className="tnum" style={{ fontSize: 12.5, fontWeight: 650 }}>{r.usdVal != null ? usd(r.usdVal) : "—"}</div>
-                        <div className="tnum" style={{ fontSize: 10.5, color: "var(--ink-3)" }}>
-                          {r.usdVal != null && marketValue > 0 && !unpriced ? Math.round((r.usdVal / marketValue) * 100) + "% of yours" : ""}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-              </div>
-              <div style={{ display: "flex", justifyContent: "space-between", paddingTop: 9, marginTop: 2, borderTop: "1px solid var(--line)", fontSize: 12 }}>
-                <span style={{ color: "var(--ink-3)", fontWeight: 600 }}>Total</span>
-                <span className="tnum" style={{ fontWeight: 700 }}>{unpriced ? "—" : usd(marketValue)}</span>
-              </div>
-              {heldBySymbol.size < g.components.length && (
-                <div style={{ fontSize: 10.5, color: "var(--ink-3)", lineHeight: 1.5, marginTop: 7 }}>
-                  {g.components.length - heldBySymbol.size} of the grove&rsquo;s names aren&rsquo;t in your position — small buys take the largest weights first. Buying more adds them.
+          <div style={panel({ padding: "16px 18px" })}>
+            {held ? (
+              <>
+                <div style={label}>Your position</div>
+                <div className="serif" style={{ fontSize: 27, fontWeight: 500, marginTop: 5, letterSpacing: "-.01em" }}>
+                  {unpriced ? "—" : usd(marketValue)}
                 </div>
+                <div className="tnum" style={{ fontSize: 11.5, color: unpriced ? "var(--ink-3)" : dcol(pnl), marginTop: 2 }}>
+                  {unpriced ? "some holdings unpriced right now" : `${pnl >= 0 ? "+" : "−"}${usd(Math.abs(pnl))} since you bought`}
+                </div>
+                <div style={{ margin: "8px 0 2px" }}>
+                  <Row k="You put in" v={usd(basis)} />
+                  {!unpriced && (
+                    <Row k="Fee if you exit now" v={feeNow > 0 ? usd(feeNow) : "$0.00"} sub={feeNow > 0 ? `${feePct}% of profit` : "no profit, no fee"} />
+                  )}
+                </div>
+              </>
+            ) : (
+              <>
+                <div style={label}>Start</div>
+                <p style={{ margin: "8px 0 2px", fontSize: 12.5, lineHeight: 1.55, color: "var(--ink-2)" }}>
+                  From {usd0(g.minBuyUsd)}. No entry fee, gas on us. The only fee is {feePct}% of profit when
+                  you exit.
+                </p>
+              </>
+            )}
+            <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+              <button
+                onClick={onBuy}
+                disabled={!open}
+                style={{
+                  flex: 1,
+                  height: 46,
+                  borderRadius: 13,
+                  fontSize: 14,
+                  fontWeight: 700,
+                  // The page's one green.
+                  background: open ? "linear-gradient(180deg,var(--primary-2),var(--primary))" : "var(--line)",
+                  border: "1px solid color-mix(in srgb,var(--primary) 70%,#000 8%)",
+                  color: open ? "#fff" : "var(--ink-3)",
+                  cursor: open ? "pointer" : "default",
+                }}
+              >
+                Buy
+              </button>
+              {held && (
+                <button
+                  onClick={onExit}
+                  style={{ flex: 1, height: 46, borderRadius: 13, fontSize: 13.5, fontWeight: 600, border: "1px solid var(--line)", background: "transparent", color: "var(--ink)", cursor: "pointer" }}
+                >
+                  Exit
+                </button>
               )}
             </div>
-          )}
-
-          <div style={panel({ padding: "15px 18px 16px" })}>
-            <div style={label}>Manage</div>
-            {held && (
-              <div style={{ margin: "6px 0 4px" }}>
-                <Row k="Cost basis" v={usd(basis)} />
-                <Row k="Value now" v={unpriced ? "—" : usd(marketValue)} sub={unpriced ? "some holdings unpriced right now" : undefined} />
-                {!unpriced && (
-                  <Row k="Profit / loss" v={`${pnl >= 0 ? "+" : "−"}${usd(Math.abs(pnl))}`} color={dcol(pnl)} strong />
+            {held ? (
+              <>
+                {/* The per-name breakdown, one tap away. Most visits only need
+                    the headline above. */}
+                <button
+                  onClick={() => setBasketOpen((v) => !v)}
+                  aria-expanded={basketOpen}
+                  style={{ display: "flex", alignItems: "center", gap: 6, width: "100%", marginTop: 12, paddingTop: 10, border: "none", borderTop: "1px solid var(--line-2)", background: "none", cursor: "pointer", textAlign: "left" }}
+                >
+                  <span style={{ fontSize: 11.5, fontWeight: 700, color: "var(--ink-2)" }}>
+                    Your {heldBySymbol.size} {heldBySymbol.size === 1 ? "holding" : "holdings"}
+                  </span>
+                  <span style={{ marginLeft: "auto", color: "var(--ink-3)", display: "inline-flex" }}>
+                    <PIcon name={basketOpen ? "ph-caret-up" : "ph-caret-down"} size={13} />
+                  </span>
+                </button>
+                {basketOpen && (
+                  <>
+                    <div style={{ marginTop: 4 }}>
+                      {[...heldBySymbol.entries()]
+                        .map(([sym, qty]) => {
+                          const px = priceOf.get(sym);
+                          return { sym, qty, usdVal: px != null ? qty * px : null };
+                        })
+                        .sort((a, b) => (b.usdVal ?? 0) - (a.usdVal ?? 0))
+                        .map((r, i) => (
+                          <div key={r.sym} style={{ display: "flex", alignItems: "center", gap: 9, padding: "7px 0", borderTop: i === 0 ? "none" : "1px solid var(--line-2)" }}>
+                            <AssetTile asset={toTile(r.sym)} size={24} radius={8} />
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ fontSize: 12.5, fontWeight: 700 }}>{r.sym}</div>
+                              <div className="tnum" style={{ fontSize: 10.5, color: "var(--ink-3)" }}>{r.qty.toFixed(6)}</div>
+                            </div>
+                            <div style={{ textAlign: "right", flex: "none" }}>
+                              <div className="tnum" style={{ fontSize: 12.5, fontWeight: 650 }}>{r.usdVal != null ? usd(r.usdVal) : "—"}</div>
+                              <div className="tnum" style={{ fontSize: 10.5, color: "var(--ink-3)" }}>
+                                {r.usdVal != null && marketValue > 0 && !unpriced ? Math.round((r.usdVal / marketValue) * 100) + "% of yours" : ""}
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                    </div>
+                    {heldBySymbol.size < g.components.length && (
+                      <div style={{ fontSize: 10.5, color: "var(--ink-3)", lineHeight: 1.5, marginTop: 5 }}>
+                        {g.components.length - heldBySymbol.size} of the grove&rsquo;s names aren&rsquo;t in your position yet. Small buys take the largest weights first; buying more adds them.
+                      </div>
+                    )}
+                  </>
                 )}
-                {!unpriced && (
-                  <Row k="Fee if you exit now" v={feeNow > 0 ? usd(feeNow) : "$0.00"} sub={feeNow > 0 ? `${feePct}% of profit` : "no profit, no fee"} />
-                )}
+                <div className="tnum" style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 5, fontSize: 10.5, color: "var(--ink-3)", marginTop: 10 }}>
+                  in your own account{smartAccount ? <AddrChip addr={smartAccount} /> : null}
+                </div>
+              </>
+            ) : (
+              <div className="tnum" style={{ fontSize: 10.5, color: "var(--ink-3)", textAlign: "center", marginTop: 8 }}>
+                {open ? `All ${g.components.length} names from ${usd0(fullDiversificationUsd(g))}` : "Buys open when the contract is live"}
               </div>
             )}
-            <button
-              onClick={onBuy}
-              disabled={!open}
-              style={{
-                width: "100%",
-                height: 46,
-                marginTop: held ? 8 : 10,
-                borderRadius: 13,
-                fontSize: 14,
-                fontWeight: 700,
-                // The page's one green.
-                background: open ? "linear-gradient(180deg,var(--primary-2),var(--primary))" : "var(--line)",
-                border: "1px solid color-mix(in srgb,var(--primary) 70%,#000 8%)",
-                color: open ? "#fff" : "var(--ink-3)",
-                cursor: open ? "pointer" : "default",
-              }}
-            >
-              Buy
-            </button>
-            <button
-              onClick={onExit}
-              disabled={!held}
-              style={{ width: "100%", height: 42, marginTop: 8, borderRadius: 13, fontSize: 13.5, fontWeight: 600, border: "1px solid var(--line)", background: "transparent", color: held ? "var(--ink)" : "var(--ink-3)", cursor: held ? "pointer" : "default" }}
-            >
-              Exit
-            </button>
-            <div className="tnum" style={{ fontSize: 10.5, color: "var(--ink-3)", textAlign: "center", marginTop: 7 }}>
-              {held ? "One transaction each way, gas covered" : open ? `From ${usd0(g.minBuyUsd)} · all ${g.components.length} names from ${usd0(fullDiversificationUsd(g))}` : "Buys open when the contract is live"}
-            </div>
           </div>
 
           <GroveAutoPanel g={g} held={held} autoFocus={autoFocus} positionUsd={held && !unpriced ? marketValue : undefined} />
-
-          <div style={panel({ padding: "15px 18px 8px" })}>
-            <div style={label}>Terms and custody</div>
-            <div style={{ marginTop: 6 }}>
-              <Row k="Buy, hold, exit at a loss" v="$0" />
-              <Row k="Exit in profit" v={`${feePct}% of the profit`} sub="never the principal" strong />
-              <Row
-                k="Your basket sits at"
-                v={smartAccount ? <AddrChip addr={smartAccount} /> : "your own account"}
-                sub="only you can move it"
-              />
-              <Row k="We can pause new buys" v="yes" sub="a safety switch, nothing more" />
-              <Row k="We can touch your holdings" v="no" sub="no such function exists" />
-            </div>
-          </div>
         </div>
       </div>
 

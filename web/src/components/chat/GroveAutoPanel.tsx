@@ -50,6 +50,9 @@ export function GroveAutoPanel({ g, held, autoFocus, positionUsd }: { g: GroveLi
   const perAction = perActionEdit ?? (positionUsd && positionUsd > 0 ? defaultAutoPerActionUsd(positionUsd) : 250);
   const [cadence, setCadence] = useState<number>(604_800);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  // The off-state matches the buy screen's weight: one button over plain
+  // facts; the caps form appears only for the few who want to change them.
+  const [adjusting, setAdjusting] = useState(false);
   const [renewOpen, setRenewOpen] = useState(false);
   const [revoking, setRevoking] = useState(false);
 
@@ -121,7 +124,7 @@ export function GroveAutoPanel({ g, held, autoFocus, positionUsd }: { g: GroveLi
         </p>
       ) : !held && !enabled ? (
         <p style={{ margin: "8px 0 0", fontSize: 12, lineHeight: 1.55, color: "var(--ink-3)" }}>
-          Vera realigns a drifted basket back to the published weights — inside hard caps you set, every action a
+          Vera realigns a drifted basket back to the published weights, inside hard caps you set. Every action is a
           transaction in the Rebalances list. Buy this grove first; auto-manage works on an existing basket.
         </p>
       ) : enabled && state.data ? (
@@ -140,7 +143,7 @@ export function GroveAutoPanel({ g, held, autoFocus, positionUsd }: { g: GroveLi
           {exhausted ? (
             <>
               <div style={{ marginTop: 10, padding: "9px 12px", borderRadius: 11, border: "1px solid var(--line)", background: "var(--panel-2)", fontSize: 12, lineHeight: 1.55, color: "var(--ink-2)" }}>
-                <span style={{ fontWeight: 700, color: "var(--ink)" }}>Budget spent — renew to continue.</span>{" "}
+                <span style={{ fontWeight: 700, color: "var(--ink)" }}>Budget spent. Renew to continue.</span>{" "}
                 Vera moved {usd(state.data.movedUsd)} under this consent and won&apos;t act again until you renew it.
               </div>
               <button
@@ -153,7 +156,7 @@ export function GroveAutoPanel({ g, held, autoFocus, positionUsd }: { g: GroveLi
             </>
           ) : lowWater ? (
             <div style={{ fontSize: 11.5, color: "var(--ink-3)", lineHeight: 1.5, marginTop: 8 }}>
-              Budget running down — {usd(remainingUsd)} of {usd(state.data.maxTotalUsd)} left.
+              Budget running down: {usd(remainingUsd)} of {usd(state.data.maxTotalUsd)} left.
             </div>
           ) : null}
           <button
@@ -164,7 +167,7 @@ export function GroveAutoPanel({ g, held, autoFocus, positionUsd }: { g: GroveLi
             {revoking && auto.busy ? "Turning off…" : "Turn off auto-manage"}
           </button>
           <div style={{ fontSize: 10.5, color: "var(--ink-3)", textAlign: "center", marginTop: 6 }}>
-            Instant — no cooldown, works even while the contract is paused.
+            Instant. No cooldown, works even while the contract is paused.
           </div>
           {revoking && auto.error && (
             <div style={{ fontSize: 11.5, color: "var(--neg)", marginTop: 8, lineHeight: 1.5 }}>{auto.error}</div>
@@ -172,45 +175,59 @@ export function GroveAutoPanel({ g, held, autoFocus, positionUsd }: { g: GroveLi
         </>
       ) : (
         <>
-          <p style={{ margin: "8px 0 10px", fontSize: 12, lineHeight: 1.55, color: "var(--ink-2)" }}>
-            Every six hours Vera checks this basket against its published weights. She acts during US market
-            hours on weekdays — the contract refuses stale oracle prices outside them — which today means one
-            acting window per weekday; the other checks record drift and wait. She acts only on genuine drift,
-            and only after reading the market first: a drift mid-storm waits rather than churns. Every action is
-            a transaction in the Rebalances list, and every cap below is enforced by the contract, not by us.
+          {/* New buys carry this consent inside the buy signature; this card
+              exists for baskets from before that, changed minds, and renewals
+              — so it matches the buy screen's weight: one button over plain
+              facts, the form only behind "Adjust". */}
+          <p style={{ margin: "8px 0 6px", fontSize: 12, lineHeight: 1.55, color: "var(--ink-2)" }}>
+            Every six hours Vera checks this basket against its published weights; she acts during US market
+            hours on weekdays, only on genuine drift, and only after reading the market first: a drift
+            mid-storm waits rather than churns. Every action is a transaction in the Rebalances list, and every
+            cap below is enforced by the contract, not by us.
           </p>
-          <div style={{ display: "flex", gap: 8 }}>
-            <label style={{ flex: 1 }}>
-              <span style={{ display: "block", fontSize: 10.5, color: "var(--ink-3)", marginBottom: 4 }}>Per action, at most</span>
-              <div style={{ display: "flex", alignItems: "center", gap: 4, height: 38, padding: "0 10px", borderRadius: 11, border: "1px solid var(--line)", background: "var(--panel-2)" }}>
-                <span className="tnum" style={{ fontSize: 13, color: "var(--ink-3)" }}>$</span>
-                <input
-                  className="tnum"
-                  type="number"
-                  min={50}
-                  value={perAction}
-                  onChange={(e) => setPerActionEdit(Number(e.target.value))}
-                  style={{ width: "100%", border: "none", outline: "none", background: "transparent", fontSize: 13.5, fontWeight: 650, color: "var(--ink)" }}
-                />
+          {!adjusting ? (
+            <div style={{ marginTop: 2 }}>
+              <ReceiptRow k="Per action, at most" v={usd(perAction)} />
+              <ReceiptRow k="At most" v={cadenceLabel(cadence)} />
+              <ReceiptRow k="Per holding, per rebalance" v={`${FRACTION_BPS / 100}% max`} muted />
+              <ReceiptRow k="Lifetime budget" v={`${capOk ? usd(lifetime) : "—"} (${LIFETIME_MULTIPLE}× per action)`} muted />
+            </div>
+          ) : (
+            <>
+              <div style={{ display: "flex", gap: 8 }}>
+                <label style={{ flex: 1 }}>
+                  <span style={{ display: "block", fontSize: 10.5, color: "var(--ink-3)", marginBottom: 4 }}>Per action, at most</span>
+                  <div style={{ display: "flex", alignItems: "center", gap: 4, height: 38, padding: "0 10px", borderRadius: 11, border: "1px solid var(--line)", background: "var(--panel-2)" }}>
+                    <span className="tnum" style={{ fontSize: 13, color: "var(--ink-3)" }}>$</span>
+                    <input
+                      className="tnum"
+                      type="number"
+                      min={50}
+                      value={perAction}
+                      onChange={(e) => setPerActionEdit(Number(e.target.value))}
+                      style={{ width: "100%", border: "none", outline: "none", background: "transparent", fontSize: 13.5, fontWeight: 650, color: "var(--ink)" }}
+                    />
+                  </div>
+                </label>
+                <label style={{ flex: 1 }}>
+                  <span style={{ display: "block", fontSize: 10.5, color: "var(--ink-3)", marginBottom: 4 }}>At most</span>
+                  <select
+                    value={cadence}
+                    onChange={(e) => setCadence(Number(e.target.value))}
+                    style={{ width: "100%", height: 38, padding: "0 8px", borderRadius: 11, border: "1px solid var(--line)", background: "var(--panel-2)", fontSize: 13, fontWeight: 600, color: "var(--ink)" }}
+                  >
+                    {CADENCES.map((c) => (
+                      <option key={c.seconds} value={c.seconds}>{c.label}</option>
+                    ))}
+                  </select>
+                </label>
               </div>
-            </label>
-            <label style={{ flex: 1 }}>
-              <span style={{ display: "block", fontSize: 10.5, color: "var(--ink-3)", marginBottom: 4 }}>At most</span>
-              <select
-                value={cadence}
-                onChange={(e) => setCadence(Number(e.target.value))}
-                style={{ width: "100%", height: 38, padding: "0 8px", borderRadius: 11, border: "1px solid var(--line)", background: "var(--panel-2)", fontSize: 13, fontWeight: 600, color: "var(--ink)" }}
-              >
-                {CADENCES.map((c) => (
-                  <option key={c.seconds} value={c.seconds}>{c.label}</option>
-                ))}
-              </select>
-            </label>
-          </div>
-          <div style={{ fontSize: 10.5, color: "var(--ink-3)", lineHeight: 1.6, marginTop: 8 }}>
-            Also fixed: at most {FRACTION_BPS / 100}% of any single holding per rebalance, and a lifetime budget of{" "}
-            {capOk ? usd(lifetime) : "—"} ({LIFETIME_MULTIPLE}× per action). Turn it off any time, instantly.
-          </div>
+              <div style={{ fontSize: 10.5, color: "var(--ink-3)", lineHeight: 1.6, marginTop: 8 }}>
+                Also fixed: at most {FRACTION_BPS / 100}% of any single holding per rebalance, and a lifetime budget of{" "}
+                {capOk ? usd(lifetime) : "—"} ({LIFETIME_MULTIPLE}× per action). Turn it off any time, instantly.
+              </div>
+            </>
+          )}
           <button
             onClick={startEnable}
             disabled={!capOk}
@@ -218,6 +235,14 @@ export function GroveAutoPanel({ g, held, autoFocus, positionUsd }: { g: GroveLi
           >
             Turn on auto-manage
           </button>
+          {!adjusting && (
+            <button
+              onClick={() => setAdjusting(true)}
+              style={{ display: "block", width: "100%", marginTop: 7, background: "none", border: "none", fontSize: 11, fontWeight: 600, color: "var(--ink-3)", cursor: "pointer", textAlign: "center" }}
+            >
+              Adjust the caps
+            </button>
+          )}
           {!capOk && <div style={{ fontSize: 11, color: "var(--ink-3)", marginTop: 6, textAlign: "center" }}>Below $50, most actions fall under our $15 minimum move.</div>}
         </>
       )}
@@ -235,11 +260,11 @@ export function GroveAutoPanel({ g, held, autoFocus, positionUsd }: { g: GroveLi
               <ModalDoneButton />
             </>
           ) : auto.busy ? (
-            <ModalWorking title="Switching auto-manage on" step="One signature — consent and caps, recorded on-chain" />
+            <ModalWorking title="Switching auto-manage on" step="One signature: consent and caps, recorded on-chain" />
           ) : (
             <>
               <p style={{ margin: "2px 0 8px", fontSize: 12.5, lineHeight: 1.55, color: "var(--ink-2)" }}>
-                You are consenting to manager rebalances of your {g.name} basket, inside these caps — each one
+                You are consenting to manager rebalances of your {g.name} basket, inside these caps, each one
                 enforced by the contract on every action:
               </p>
               <ReceiptRow k="Per action, at most" v={usd(perAction)} strong />
@@ -248,7 +273,7 @@ export function GroveAutoPanel({ g, held, autoFocus, positionUsd }: { g: GroveLi
               <ReceiptRow k="Lifetime budget" v={usd(lifetime)} />
               <ReceiptRow k="Withdrawing consent" v="instant, any time" muted />
               {auto.error && <div style={{ fontSize: 11.5, color: "var(--neg)", margin: "8px 0 0", lineHeight: 1.5 }}>{auto.error}</div>}
-              <TrustCaption>Only you can revoke — and selling always stays yours.</TrustCaption>
+              <TrustCaption>Only you can revoke, and selling always stays yours.</TrustCaption>
               <ModalButtons confirmLabel="Confirm and sign" onConfirm={confirmEnable} />
             </>
           )}
@@ -266,18 +291,18 @@ export function GroveAutoPanel({ g, held, autoFocus, positionUsd }: { g: GroveLi
               <ModalSuccessIcon />
               <div style={{ textAlign: "center", fontSize: 14.5, fontWeight: 700, marginTop: 10 }}>Budget renewed</div>
               <p style={{ margin: "6px 0 0", fontSize: 12.5, lineHeight: 1.55, color: "var(--ink-2)", textAlign: "center" }}>
-                Same caps, a fresh {usd(state.data.maxTotalUsd)} lifetime budget — the spent counter is back to
+                Same caps, a fresh {usd(state.data.maxTotalUsd)} lifetime budget. The spent counter is back to
                 zero, on-chain.
               </p>
               <ModalDoneButton />
             </>
           ) : auto.busy ? (
-            <ModalWorking title="Renewing auto-manage" step="One signature — same caps, a fresh lifetime budget" />
+            <ModalWorking title="Renewing auto-manage" step="One signature: same caps, a fresh lifetime budget" />
           ) : (
             <>
               <p style={{ margin: "2px 0 8px", fontSize: 12.5, lineHeight: 1.55, color: "var(--ink-2)" }}>
                 Vera moved {usd(state.data.movedUsd)} under the old budget. Renewing signs the same consent
-                again, with the same caps — and starts a fresh budget: the old one&apos;s spend resets to zero.
+                again, with the same caps, and starts a fresh budget: the old one&apos;s spend resets to zero.
               </p>
               <ReceiptRow k="Per action, at most" v={usd(state.data.maxPerActionUsd)} strong />
               <ReceiptRow k="At most" v={cadenceLabel(state.data.cooldownSeconds)} />
