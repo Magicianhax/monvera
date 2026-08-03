@@ -1,5 +1,5 @@
 import type { NextRequest } from "next/server";
-import { getGroves } from "@/lib/server/groveService";
+import { getGroves, grovesDegraded } from "@/lib/server/groveService";
 import { rateLimit, clientIp } from "@/lib/server/rateLimit";
 import { tooManyRequests, serverError } from "@/lib/server/respond";
 
@@ -15,8 +15,15 @@ export async function GET(req: NextRequest) {
   if (!limit.ok) return tooManyRequests(limit.retryAfter);
   try {
     const payload = await getGroves();
+    // A degraded payload (a launched grove whose stats read failed) must not
+    // be pinned at the edge — SWR once kept "opens soon" on screen minutes
+    // after the origin recovered.
     return Response.json(payload, {
-      headers: { "Cache-Control": "public, s-maxage=60, stale-while-revalidate=300" },
+      headers: {
+        "Cache-Control": grovesDegraded(payload.groves)
+          ? "no-store"
+          : "public, s-maxage=60, stale-while-revalidate=300",
+      },
     });
   } catch (err) {
     return serverError("groves", err);

@@ -12,7 +12,7 @@ import "server-only";
 import { createPublicClient, http, type Address } from "viem";
 import { GROVES, groveById, type GroveComponent, type GroveDef } from "@/lib/groves";
 import { assetBySymbol, MULTICALL3, type Asset } from "@/lib/tokens";
-import { chain } from "@/lib/chain";
+import { chain, PUBLIC_RPC_URL } from "@/lib/chain";
 import { SERVER_RPC_URL } from "./rpc";
 import { priceAllWithFallback } from "./pricing";
 import { backtestBasket, type BacktestResult } from "./quant";
@@ -83,28 +83,48 @@ const GROVE_MANAGER_ABI = [
 
 const USDG_PER_USD = 1e6; // USDG is 6dp
 
+// Fallback reader on the literal public endpoint: on 2026-08-03 the keyed
+// read failed on a deployment's isolates (silently, then) and every grove
+// shipped "opens soon" to production until a redeploy. One endpoint must
+// never be a single point of failure for the deployed flag.
+const fallbackClient = createPublicClient({
+  chain: {
+    id: chain.id,
+    name: chain.name,
+    nativeCurrency: chain.nativeCurrency,
+    rpcUrls: { default: { http: [PUBLIC_RPC_URL] } },
+    contracts: { multicall3: { address: MULTICALL3 } },
+  },
+  batch: { multicall: { wait: 16 } },
+  transport: http(PUBLIC_RPC_URL),
+});
+
 async function readGroveStats(def: GroveDef): Promise<GroveStats> {
   // No contract, or this grove was never created on-chain — preview either way.
   if (!GROVE_MANAGER || def.onChainId === undefined) return PREVIEW_STATS;
-  try {
-    const [, , , activeUserCount, totalCostBasisUsdg, , , cumulativeFeesUsdg] =
-      await publicClient.readContract({
-        address: GROVE_MANAGER,
-        abi: GROVE_MANAGER_ABI,
-        functionName: "groves",
-        args: [BigInt(def.onChainId)],
-      });
-    return {
-      deployed: true,
-      users: Number(activeUserCount),
-      managedUsd: Number(totalCostBasisUsdg) / USDG_PER_USD,
-      feesUsd: Number(cumulativeFeesUsdg) / USDG_PER_USD,
-    };
-  } catch {
-    // An RPC hiccup must not fake live zeros as real numbers — fall back to the
-    // preview shape so the UI shows its pending state, never a wrong figure.
-    return PREVIEW_STATS;
+  for (const [label, client] of [["keyed", publicClient], ["public", fallbackClient]] as const) {
+    try {
+      const [, , , activeUserCount, totalCostBasisUsdg, , , cumulativeFeesUsdg] =
+        await client.readContract({
+          address: GROVE_MANAGER,
+          abi: GROVE_MANAGER_ABI,
+          functionName: "groves",
+          args: [BigInt(def.onChainId)],
+        });
+      return {
+        deployed: true,
+        users: Number(activeUserCount),
+        managedUsd: Number(totalCostBasisUsdg) / USDG_PER_USD,
+        feesUsd: Number(cumulativeFeesUsdg) / USDG_PER_USD,
+      };
+    } catch (err) {
+      // Logged loud — a silent version of this catch hid the regression above.
+      console.error(`[grove-stats] ${def.id} via ${label}`, err);
+    }
   }
+  // Both endpoints failed. An RPC outage must not fake live zeros as real
+  // numbers — the preview shape shows a pending state, never a wrong figure.
+  return PREVIEW_STATS;
 }
 
 // ── assembled payload ────────────────────────────────────────────────────────
@@ -203,6 +223,15 @@ export function getGroves(): Promise<GrovesPayload> {
     });
   payloadCache = { at: Date.now(), value };
   return value;
+}
+
+/** True when a launched grove failed its stats read (deployed:false while the
+ *  registry says it is on-chain). Degraded payloads must never be edge-cached:
+ *  on 2026-08-03 stale-while-revalidate kept serving "opens soon" for every
+ *  grove minutes after the origin had recovered. */
+export function grovesDegraded(groves: GroveLive[]): boolean {
+  if (!GROVE_MANAGER) return false; // honest preview mode, cache freely
+  return groves.some((g) => g.onChainId !== undefined && !g.stats.deployed);
 }
 
 /** One grove with live data, or null when the id isn't in the registry. */

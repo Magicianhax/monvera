@@ -1,5 +1,5 @@
 import type { NextRequest } from "next/server";
-import { getGrove } from "@/lib/server/groveService";
+import { getGrove, grovesDegraded } from "@/lib/server/groveService";
 import { rateLimit, clientIp } from "@/lib/server/rateLimit";
 import { jsonError, tooManyRequests, serverError } from "@/lib/server/respond";
 
@@ -18,8 +18,13 @@ export async function GET(
     const { id } = await params;
     const grove = await getGrove(id.toLowerCase());
     if (!grove) return jsonError(404, "No such grove.");
+    // Same rule as the list: a failed stats read must not stick at the edge.
     return Response.json(grove, {
-      headers: { "Cache-Control": "public, s-maxage=60, stale-while-revalidate=300" },
+      headers: {
+        "Cache-Control": grovesDegraded([grove])
+          ? "no-store"
+          : "public, s-maxage=60, stale-while-revalidate=300",
+      },
     });
   } catch (err) {
     return serverError("groves-detail", err);
