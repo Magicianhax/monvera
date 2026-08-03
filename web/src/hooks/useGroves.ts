@@ -6,6 +6,7 @@
 // (type-only import — erased at compile time, so "server-only" never executes).
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { GroveLive, GrovesPayload } from "@/lib/server/groveService";
+import type { GroveHistory } from "@/lib/server/groveHistory";
 
 async function getJson<T>(url: string, fallbackError: string): Promise<T> {
   const res = await fetch(url);
@@ -38,4 +39,15 @@ export function useGroveLive(id: string | null) {
   });
 }
 
-export type { GroveLive, GrovesPayload };
+/** Every on-chain touch of a grove — member rebalances + recipe changes,
+ *  newest first. Empty is the honest launch state, so it renders, not hides. */
+export function useGroveHistory(id: string | null) {
+  return useQuery({
+    queryKey: ["grove-history", id],
+    enabled: !!id,
+    staleTime: 120_000,
+    queryFn: () => getJson<GroveHistory>(`/api/groves/${id}/history`, "Couldn't load this grove's history."),
+  });
+}
+
+export type { GroveLive, GrovesPayload, GroveHistory };

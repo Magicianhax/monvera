@@ -18,7 +18,7 @@
 // not running (rebalancing) the row says so instead of being hidden.
 import { useMemo, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
-import type { GroveLive } from "@/hooks/useGroves";
+import { useGroveHistory, type GroveHistory, type GroveLive } from "@/hooks/useGroves";
 import type { GrovePositionLive } from "@/hooks/useGrovePosition";
 import type { BacktestResult } from "@/lib/server/quant";
 import { GROVE_MANAGER } from "@/lib/groveManager";
@@ -87,6 +87,11 @@ function Row({ k, v, sub, strong, color }: { k: ReactNode; v: ReactNode; sub?: R
       </div>
     </div>
   );
+}
+
+/** "Jul 27, 2026" — block-stamp precision; "—" when no source carried one. */
+function fmtWhen(at: number | null) {
+  return at ? new Date(at * 1000).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "—";
 }
 
 function short(a: string) {
@@ -203,6 +208,12 @@ export function GroveDetailView({
 
   const byWeight = useMemo(() => g.components.slice().sort((a, b) => b.weightBps - a.weightBps), [g.components]);
   const top5 = byWeight.slice(0, 5);
+
+  // Every on-chain touch of this grove — member rebalances + recipe changes.
+  // null = still reading (or not on-chain yet); [] = the honest "never".
+  const history = useGroveHistory(open ? g.id : null);
+  const historyRows: GroveHistory["rows"] | null = history.data?.rows ?? null;
+  const lastRebalance = historyRows?.find((r) => r.kind === "rebalance") ?? null;
 
   return (
     <div className="gvd" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -345,6 +356,68 @@ export function GroveDetailView({
           })}
         </div>
 
+        {/* Rebalance history, between the recipe and the questions: the page's
+            "nothing touches your basket unasked" claim made falsifiable. Every
+            row links to its transaction; empty is the honest launch state and
+            renders as a sentence, never as a hidden section. */}
+        <div style={panel({ padding: "15px 18px 12px" })}>
+          <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
+            <div style={{ fontSize: 14, fontWeight: 700 }}>Rebalances</div>
+            <div className="tnum" style={{ marginLeft: "auto", fontSize: 11, color: "var(--ink-3)" }}>
+              straight from the chain
+            </div>
+          </div>
+          {!open ? (
+            <div style={{ fontSize: 12, color: "var(--ink-3)", lineHeight: 1.55, marginTop: 8 }}>
+              Starts recording the moment this grove opens on-chain.
+            </div>
+          ) : history.isError ? (
+            <div style={{ fontSize: 12, color: "var(--ink-3)", lineHeight: 1.55, marginTop: 8 }}>
+              Couldn&rsquo;t read the chain just now — the history is still there, this page just can&rsquo;t show it this minute.
+            </div>
+          ) : historyRows === null ? (
+            <div style={{ fontSize: 12, color: "var(--ink-3)", marginTop: 8 }}>reading the chain&hellip;</div>
+          ) : historyRows.length === 0 ? (
+            <div style={{ fontSize: 12, color: "var(--ink-2)", lineHeight: 1.55, marginTop: 8 }}>
+              None yet — nothing has ever touched this basket. Every rebalance is its own transaction, and each one lands here the moment it happens.
+            </div>
+          ) : (
+            <>
+              {historyRows.slice(0, 8).map((r, i) => (
+                <div key={`${r.txHash}-${r.kind}-${i}`} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderTop: i === 0 ? "none" : "1px solid var(--line-2)" }}>
+                  <span aria-hidden style={{ width: 28, height: 28, borderRadius: 9, flex: "none", display: "grid", placeItems: "center", background: "var(--panel-2)", border: "1px solid var(--line)", color: "var(--ink-2)" }}>
+                    <PIcon name={r.kind === "rebalance" ? "ph-arrows-clockwise" : "ph-sliders-horizontal"} size={14} />
+                  </span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 12.5, fontWeight: 650 }}>
+                      {r.kind === "rebalance" ? "Basket realigned" : `Recipe updated to v${r.version}`}
+                    </div>
+                    <div className="tnum" style={{ fontSize: 10.5, color: "var(--ink-3)" }}>
+                      {r.kind === "rebalance" ? (r.user ? `for ${short(r.user)}` : "") : r.names ? `${r.names} names` : ""}
+                    </div>
+                  </div>
+                  <div style={{ textAlign: "right", flex: "none" }}>
+                    <div className="tnum" style={{ fontSize: 11.5, color: "var(--ink-2)" }}>{fmtWhen(r.at)}</div>
+                    <a className="tnum" href={`${EXPLORER}/tx/${r.txHash}`} target="_blank" rel="noopener noreferrer" style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 10.5, color: "var(--ink-3)", textDecoration: "none" }}>
+                      transaction <PIcon name="ph-arrow-square-out" size={10} />
+                    </a>
+                  </div>
+                </div>
+              ))}
+              {historyRows.length > 8 && GROVE_MANAGER && (
+                <a
+                  href={`${EXPLORER}/address/${GROVE_MANAGER}?tab=logs`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ display: "block", fontSize: 11, color: "var(--ink-3)", paddingTop: 8, borderTop: "1px solid var(--line-2)", textDecoration: "none" }}
+                >
+                  and {historyRows.length - 8} more on the explorer
+                </a>
+              )}
+            </>
+          )}
+        </div>
+
       <div style={panel({ padding: "15px 18px 4px" })}>
           <div style={label}>Questions</div>
           <div style={{ marginTop: 6 }}>
@@ -371,7 +444,7 @@ export function GroveDetailView({
             <Faq q="How is the basket chosen and weighted?" a={g.methodology.replace(/\*\*/g, "")} />
             <Faq
               q="Does it rebalance?"
-              a={`Not yet. ${g.rebalancePolicy.charAt(0).toUpperCase()}${g.rebalancePolicy.slice(1)}.\n\nThe contract supports automated management with caps you set yourself, but nothing is driving it today, so no rebalance has ever run. When that changes it will be announced first, and it will need your explicit opt-in.`}
+              a={`${g.rebalancePolicy.charAt(0).toUpperCase()}${g.rebalancePolicy.slice(1)}.\n\nThe contract supports automated management with caps you set yourself, and it needs your explicit opt-in. Every rebalance is its own transaction, and each one appears in the Rebalances panel on this page the moment it lands — if that list is empty, nothing has ever touched the basket.`}
             />
             <Faq
               q="How do I get my money out?"
@@ -511,7 +584,8 @@ export function GroveDetailView({
           <PIcon name="ph-lock-simple" size={13} /> composition changes wait 48h on-chain
         </span>
         <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
-          <PIcon name="ph-clock" size={13} /> last rebalance: never, no automation runs
+          <PIcon name="ph-clock" size={13} />{" "}
+          {lastRebalance ? `last rebalance: ${fmtWhen(lastRebalance.at)}` : "last rebalance: never yet"}
         </span>
       </div>
     </div>
