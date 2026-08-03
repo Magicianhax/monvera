@@ -21,7 +21,7 @@ import { getSmartAccountClient, sendSponsoredCalls } from "@/lib/aa";
 import { buildPermitCall } from "@/lib/permit";
 import { typedDataSigner } from "@/lib/arcusTrade";
 import {
-  DEFAULT_AUTO_CAPS,
+  defaultAutoCaps,
   GROVE_MANAGER,
   GROVE_MANAGER_ABI,
   buildEnableAutoCalls,
@@ -227,7 +227,7 @@ export function useGroveBuy(): UseGroveBuy {
             args: [smartAccount as Address, BigInt(q.onChainId)],
           });
           if (!alreadyOn) {
-            calls.push(...buildEnableAutoCalls(q.onChainId, DEFAULT_AUTO_CAPS, autoManage.tokens));
+            calls.push(...buildEnableAutoCalls(q.onChainId, defaultAutoCaps(Number(q.totalInUsdg) / 1e6), autoManage.tokens));
             autoEnabled = true;
           }
         }

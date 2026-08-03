@@ -11,6 +11,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { GroveLive } from "@/hooks/useGroves";
 import { useGroveAuto, useGroveAutoState } from "@/hooks/useGroveAuto";
+import { defaultAutoPerActionUsd } from "@/lib/groveManager";
 import { usd } from "./chatKit";
 import { GroveModal, ModalWorking, ModalSuccessIcon, ReceiptRow, ModalButtons, ModalDoneButton, TrustCaption } from "./GroveModal";
 
@@ -34,12 +35,16 @@ function cadenceLabel(seconds: number): string {
   return `every ${Math.round(seconds / 3600)}h`;
 }
 
-export function GroveAutoPanel({ g, held, autoFocus }: { g: GroveLive; held: boolean; autoFocus?: boolean }) {
+export function GroveAutoPanel({ g, held, autoFocus, positionUsd }: { g: GroveLive; held: boolean; autoFocus?: boolean; positionUsd?: number }) {
   const open = g.onChainId !== undefined;
   const state = useGroveAutoState(open ? g.onChainId : undefined);
   const auto = useGroveAuto(g.onChainId, useMemo(() => g.components.map((c) => c.symbol), [g.components]));
 
-  const [perAction, setPerAction] = useState(250);
+  // The suggested per-action budget scales with the position — a flat number
+  // was bigger than a small basket and useless for a large one. The user's
+  // own edit always wins.
+  const [perActionEdit, setPerActionEdit] = useState<number | null>(null);
+  const perAction = perActionEdit ?? (positionUsd && positionUsd > 0 ? defaultAutoPerActionUsd(positionUsd) : 250);
   const [cadence, setCadence] = useState<number>(604_800);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [revoking, setRevoking] = useState(false);
@@ -138,7 +143,7 @@ export function GroveAutoPanel({ g, held, autoFocus }: { g: GroveLive; held: boo
                   type="number"
                   min={20}
                   value={perAction}
-                  onChange={(e) => setPerAction(Number(e.target.value))}
+                  onChange={(e) => setPerActionEdit(Number(e.target.value))}
                   style={{ width: "100%", border: "none", outline: "none", background: "transparent", fontSize: 13.5, fontWeight: 650, color: "var(--ink)" }}
                 />
               </div>

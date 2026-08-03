@@ -13,6 +13,7 @@ import { usePortfolio, useUsdcBalance } from "@/hooks/useBalances";
 import { useActiveWallet } from "@/hooks/useActiveWallet";
 import type { GroveLive } from "@/hooks/useGroves";
 import { assetBySymbol } from "@/lib/tokens";
+import { defaultAutoPerActionUsd } from "@/lib/groveManager";
 import { toTile } from "@/lib/displayAssets";
 import { AssetTile } from "@/components/design";
 import { GroveModal, ModalCard, ModalSuccessIcon, ModalWorking, ReceiptRow, TrustCaption, ModalButtons, ModalDoneButton } from "./GroveModal";
@@ -211,8 +212,9 @@ export function GroveBuyPanel({ g, onClose }: { g: GroveLive; onClose: () => voi
             />
             <span style={{ fontSize: 11.5, lineHeight: 1.55, color: "var(--ink-2)" }}>
               <span style={{ fontWeight: 700, color: "var(--ink)" }}>Auto-manage</span> — Vera realigns the basket
-              when it genuinely drifts, inside caps this signature sets: $250 per action, weekly at most, never more
-              than 20% of a holding. Off any time, instantly.
+              when it genuinely drifts, inside caps this signature sets, sized to this buy:{" "}
+              <span className="tnum">{usd(defaultAutoPerActionUsd(valid ? amountNum : 0))}</span> per action, weekly
+              at most, never more than 20% of a holding. Off any time, instantly.
             </span>
           </label>
 

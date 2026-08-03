@@ -559,7 +559,7 @@ export function GroveDetailView({
             </div>
           </div>
 
-          <GroveAutoPanel g={g} held={held} autoFocus={autoFocus} />
+          <GroveAutoPanel g={g} held={held} autoFocus={autoFocus} positionUsd={held && !unpriced ? marketValue : undefined} />
 
           <div style={panel({ padding: "15px 18px 8px" })}>
             <div style={label}>Terms and custody</div>
