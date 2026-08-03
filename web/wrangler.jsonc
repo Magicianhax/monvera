@@ -10,7 +10,9 @@
   // Cloudflare Cron Triggers → worker.ts scheduled() → /api/cron/autopilot.
   // Hourly: the route itself claims only autopilots that are actually due.
   "triggers": {
-    "crons": ["0 * * * *", "*/15 * * * *", "0 13 * * 1"]
+    // hourly (autopilot/tradability/balances/chart-warm) · every 15 min (alerts)
+    // · Mondays 13:00 UTC (digest) · every 6h (auto-manage rebalance pass)
+    "crons": ["0 * * * *", "*/15 * * * *", "0 13 * * 1", "0 */6 * * *"]
   },
   // ALL custom domains must be listed here: once `routes` exists in config it
   // is the source of truth, and a deploy DETACHES any dashboard-added domain

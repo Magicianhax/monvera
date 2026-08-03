@@ -1,18 +1,21 @@
 import "server-only";
 
-// The auto-manage driver: the hourly pass that turns signed consent into
+// The auto-manage driver: the six-hourly pass that turns signed consent into
 // actual rebalances. For every launched grove it
 //
 //   1. finds who ever opted in (AutoEnabled events, Blockscout v2) and keeps
 //      only those still enabled, off cooldown, and with budget left,
 //   2. reads their position + live prices and asks the pure planner
 //      (rebalancePlan.ts) whether the basket has genuinely drifted,
-//   3. quotes the legs on Kyber exactly like a grove buy (the CONTRACT is
+//   3. asks Vera whether NOW is the window (rebalanceJudgment.ts) — the model
+//      can only veto a plan the math justified, and every failure defers,
+//   4. quotes the legs on Kyber exactly like a grove buy (the CONTRACT is
 //      sender and recipient — it executes and measures every leg itself),
-//   4. SIMULATES managedRebalance as the manager — one call proves the oracle
+//   5. SIMULATES managedRebalance as the manager — one call proves the oracle
 //      bands, the caps, the cooldown, and the allowances all hold — and only
 //      then sends it, signed by the manager hot key,
-//   5. notifies the user; the Rebalances panel picks the event up on its own.
+//   6. notifies the user (with Vera's one-sentence why); the Rebalances panel
+//      picks the event up on its own.
 //
 // The contract is the enforcement layer (per-token fraction, oracle-valued
 // turnover, lifetime budget — AutoConfig); everything here is merely polite:
@@ -28,6 +31,7 @@ import { priceAllWithFallback } from "./pricing";
 import { kyberQuote } from "./kyber";
 import { GROVE_MANAGER, GROVE_LEG_SLIPPAGE_BPS } from "./groveQuote";
 import { computeRebalancePlan, type PlanHolding, type PlanTarget } from "./rebalancePlan";
+import { judgeRebalance } from "./rebalanceJudgment";
 import { addNotification } from "./notifyStore";
 import { listRecentUsers } from "./userDirectory";
 
@@ -76,6 +80,8 @@ interface Outcome {
   reason: string;
   txHash?: `0x${string}`;
   turnoverUsd?: number;
+  /** Vera's one-sentence timing rationale — shown to the user, so it must be honest. */
+  veraReason?: string;
 }
 
 export interface AutoRebalanceReport {
@@ -176,6 +182,24 @@ async function rebalanceOne(
   const plan = computeRebalancePlan(holdings, missing, { maxTurnoverUsd, maxFractionBps: Number(fractionBps) }, { driftTriggerBps: DRIFT_TRIGGER_BPS });
   if (!plan) return skip("no drift worth acting on");
 
+  // The math says the rebalance is justified; Vera decides whether NOW is the
+  // window (a drift mid-storm waits rather than churns). She can only veto —
+  // never initiate, enlarge, or redirect — and every failure defers.
+  const totalUsd = holdings.reduce((s, x) => s + (Number(x.amountRaw) / 1e18) * x.priceUsd, 0);
+  const touched = new Set([...plan.sells.map((s) => s.symbol), ...plan.buys.map((b) => b.symbol)]);
+  const verdict = await judgeRebalance({
+    groveName: def.name,
+    turnoverUsd: plan.turnoverUsd,
+    maxDeviationBps: plan.maxDeviationBps,
+    rows: [...touched].map((symbol) => {
+      const hh = holdings.find((x) => x.symbol === symbol);
+      const currentPct = hh ? (((Number(hh.amountRaw) / 1e18) * hh.priceUsd) / totalUsd) * 100 : 0;
+      const targetPct = (def.components.find((c) => c.symbol === symbol)?.weightBps ?? 0) / 100;
+      return { symbol, currentWeightPct: currentPct, targetWeightPct: targetPct, deviationPct: currentPct - targetPct };
+    }),
+  });
+  if (verdict.action === "defer") return skip(`Vera deferred: ${verdict.reason}`);
+
   // ── quote the legs, sells first (they fund the pool the buys spend) ──
   type Leg = { tokenIn: Address; tokenOut: Address; amountIn: bigint; minOut: bigint; callTarget: Address; approvalTarget: Address; data: `0x${string}` };
   const legs: Leg[] = [];
@@ -233,7 +257,7 @@ async function rebalanceOne(
       console.error(`[auto-rebalance] reverted on-chain ${def.id}/${user}`, hash);
       return { grove: def.id, user, action: "failed", reason: "reverted on-chain", txHash: hash };
     }
-    return { grove: def.id, user, action: "rebalanced", reason: `drift ${plan.maxDeviationBps}bps`, txHash: hash, turnoverUsd: plan.turnoverUsd };
+    return { grove: def.id, user, action: "rebalanced", reason: `drift ${plan.maxDeviationBps}bps`, txHash: hash, turnoverUsd: plan.turnoverUsd, veraReason: verdict.reason };
   } catch (err) {
     console.error(`[auto-rebalance] send failed ${def.id}/${user}`, err);
     return { grove: def.id, user, action: "failed", reason: err instanceof Error ? err.message.split("\n")[0] : String(err) };
@@ -300,7 +324,10 @@ export async function runAutoRebalance(): Promise<AutoRebalanceReport> {
       await addNotification(userId, {
         kind: "system",
         title: `${def?.name ?? o.grove} rebalanced`,
-        body: `Auto-manage realigned your basket toward its published weights (about $${(o.turnoverUsd ?? 0).toFixed(2)} moved, inside your caps). The transaction is in the grove's Rebalances list.`,
+        body:
+          `Auto-manage realigned your basket toward its published weights (about $${(o.turnoverUsd ?? 0).toFixed(2)} moved, inside your caps).` +
+          (o.veraReason ? ` ${o.veraReason}` : "") +
+          " The transaction is in the grove's Rebalances list.",
         txHash: o.txHash,
         at: Date.now(),
       }).catch(() => {});

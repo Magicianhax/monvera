@@ -448,7 +448,7 @@ export function GroveDetailView({
             <Faq q="How is the basket chosen and weighted?" a={g.methodology.replace(/\*\*/g, "")} />
             <Faq
               q="Does it rebalance?"
-              a={`Only if you switch it on. ${g.rebalancePolicy.charAt(0).toUpperCase()}${g.rebalancePolicy.slice(1)}.\n\nAuto-manage is off by default. Flip it on in the Auto-manage panel on this page and Vera checks the basket hourly, realigning it only when it has genuinely drifted — inside caps the contract enforces on every action: your per-action budget, a lifetime budget, your cadence, and at most 20% of any single holding per rebalance. Switching it off is instant.\n\nEvery rebalance is its own transaction and appears in the Rebalances panel on this page the moment it lands — if that list is empty, nothing has ever touched the basket.`}
+              a={`Only if you switch it on. ${g.rebalancePolicy.charAt(0).toUpperCase()}${g.rebalancePolicy.slice(1)}.\n\nAuto-manage is off by default. Flip it on in the Auto-manage panel on this page and Vera checks the basket every six hours, realigning it only when it has genuinely drifted — and only after reading the market first, so a drift driven by a still-moving name waits instead of churning. Every action stays inside caps the contract enforces: your per-action budget, a lifetime budget, your cadence, and at most 20% of any single holding per rebalance. Switching it off is instant.\n\nEvery rebalance is its own transaction and appears in the Rebalances panel on this page the moment it lands — if that list is empty, nothing has ever touched the basket.`}
             />
             <Faq
               q="How do I get my money out?"

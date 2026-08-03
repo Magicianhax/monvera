@@ -123,9 +123,10 @@ export function GroveAutoPanel({ g, held, autoFocus }: { g: GroveLive; held: boo
       ) : (
         <>
           <p style={{ margin: "8px 0 10px", fontSize: 12, lineHeight: 1.55, color: "var(--ink-2)" }}>
-            Vera checks this basket against its published weights and realigns it only when it has genuinely
-            drifted. Every action is a transaction — it lands in the Rebalances list — and every cap below is
-            enforced by the contract, not by us.
+            Every six hours Vera checks this basket against its published weights. She acts only when it has
+            genuinely drifted — and only after reading the market first: a drift mid-storm waits rather than
+            churns. Every action is a transaction in the Rebalances list, and every cap below is enforced by the
+            contract, not by us.
           </p>
           <div style={{ display: "flex", gap: 8 }}>
             <label style={{ flex: 1 }}>
