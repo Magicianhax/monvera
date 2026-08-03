@@ -107,7 +107,7 @@ export function SettingsPopup({ onClose, nav }: { onClose: () => void; nav?: Cha
       <div
         className={closing ? "glassin glassout" : "glassin"}
         onClick={(e) => e.stopPropagation()}
-        style={{ width: "100%", maxWidth: 760, background: "linear-gradient(135deg,color-mix(in srgb,var(--primary) 10%,transparent),transparent 55%),var(--panel)", backdropFilter: "blur(14px) saturate(170%)", WebkitBackdropFilter: "blur(14px) saturate(170%)", border: "1px solid var(--line)", borderRadius: 22, boxShadow: "0 20px 60px rgba(8,20,12,.3)", overflow: "hidden" }}
+        style={{ width: "100%", maxWidth: 760, background: "linear-gradient(135deg,color-mix(in srgb,var(--primary) 10%,transparent),transparent 55%), var(--panel), var(--bg)", backdropFilter: "blur(14px) saturate(170%)", WebkitBackdropFilter: "blur(14px) saturate(170%)", border: "1px solid var(--line)", borderRadius: 22, boxShadow: "0 20px 60px rgba(8,20,12,.3)", overflow: "hidden" }}
       >
         {/* header */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 20px", borderBottom: "1px solid var(--line)" }}>

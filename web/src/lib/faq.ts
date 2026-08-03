@@ -50,8 +50,11 @@ export const FAQ: FaqItem[] = [
     a: "Names you already know like Apple, Nvidia, and Tesla, broad funds like the S&P 500 (SPY) and Nasdaq 100 (QQQ), sector and commodity ETFs, and short-term US Treasuries (SGOV) for the steadier side of a plan. Close to 100 tokenized stocks and funds in all.",
   },
   {
+    // Precise, not inflated: only Vera's INVESTED plans carry the signed
+    // on-chain recommendation (VeraRecord records INVEST, not sells or manual
+    // buys — by design). Every trade still settles on-chain with a receipt.
     q: "Is every trade really recorded on-chain?",
-    a: "Yes. Each recommendation is signed and recorded on Robinhood Chain in the same transaction as your trades, so anyone can check it on the public explorer. The Activity screen links every buy, sell, and transfer to its on-chain receipt.",
+    a: "Every trade settles on-chain, and the Activity screen links each buy, sell, and transfer to its public receipt. When Vera places a plan for you, her recommendation is additionally signed and recorded on Robinhood Chain before the money moves — that signed record is her public track record. Manual trades and sells settle on-chain like everything else, without a separate recommendation record.",
   },
   {
     q: "Who is behind Vera?",

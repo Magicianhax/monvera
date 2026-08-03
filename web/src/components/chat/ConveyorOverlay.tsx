@@ -38,6 +38,9 @@ interface ConveyorProps {
   totalUsd: number;
   etaSeconds: number | null;
   manual?: boolean;
+  /** Ask the batch to stop after the in-flight trade. The overlay used to have
+   *  no way out at all — a stuck run held the whole app hostage. */
+  onStop?: () => void;
 }
 
 const nameFor = (sym: string) => displayFor(sym).name || sym;
@@ -79,6 +82,27 @@ function StageCard({ symbol, amount, mode, leaving, skipped }: {
         )}
       </div>
     </div>
+  );
+}
+
+/** One tap arms the stop; the trade already in flight still completes (an
+ *  atomic settle cannot be recalled), everything after it stays unsold/unbought
+ *  and shows in the receipt as such. */
+function StopButton({ onStop }: { onStop: () => void }) {
+  const [armed, setArmed] = useState(false);
+  return (
+    <button
+      onClick={() => {
+        if (!armed) {
+          setArmed(true);
+          onStop();
+        }
+      }}
+      disabled={armed}
+      style={{ display: "block", width: "100%", height: 40, marginTop: 12, borderRadius: 12, fontSize: 13, fontWeight: 650, border: "1px solid var(--line)", background: "transparent", color: armed ? "var(--ink-3)" : "var(--ink-2)", cursor: armed ? "default" : "pointer" }}
+    >
+      {armed ? "Stopping after this trade…" : "Stop after this trade"}
+    </button>
   );
 }
 
@@ -238,6 +262,9 @@ export function ConveyorOverlay(p: ConveyorProps) {
         <div style={{ marginTop: 16, display: "inline-flex", alignItems: "center", gap: 7, fontSize: 12, fontWeight: 600, color: "var(--ink-2)" }}>
           <PIcon name="ph-seal-check" size={15} weight="fill" style={{ color: "var(--primary)" }} /> Gas-free · signed &amp; recorded on-chain
         </div>
+        {p.onStop && !finishing && (
+          <StopButton onStop={p.onStop} />
+        )}
       </div>
     </div>
   );

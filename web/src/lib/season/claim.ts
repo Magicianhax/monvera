@@ -31,14 +31,27 @@ export interface ClaimManifest {
 
 const BASE = (process.env.NEXT_PUBLIC_CLAIM_BASE_URL ?? "/seasons").replace(/\/$/, "");
 
+// A published manifest is immutable — its root is pinned on-chain at season
+// close — so re-fetching it on every 30s claims poll bought nothing. Memoize
+// per session: a hit is kept forever, a miss (season not closed / not published
+// yet) is retried on a 5-minute TTL so a late publish still appears without a
+// reload. Transient fetch failures are NOT memoized — the next poll retries.
+const manifestMemo = new Map<number, { at: number; manifest: ClaimManifest | null }>();
+const MANIFEST_MISS_TTL_MS = 5 * 60_000;
+
 /** Fetch a season's claim manifest, or null if it isn't published yet (404) or
  *  the fetch fails. Never throws — a missing manifest just means "no claim to
  *  show for this season", which is the normal state before a season closes. */
 export async function loadClaimManifest(seasonId: number): Promise<ClaimManifest | null> {
+  const hit = manifestMemo.get(seasonId);
+  if (hit && (hit.manifest !== null || Date.now() - hit.at < MANIFEST_MISS_TTL_MS)) {
+    return hit.manifest;
+  }
   try {
     const res = await fetch(`${BASE}/season-${seasonId}.json`, { cache: "no-store" });
-    if (!res.ok) return null;
-    return (await res.json()) as ClaimManifest;
+    const manifest = res.ok ? ((await res.json()) as ClaimManifest) : null;
+    manifestMemo.set(seasonId, { at: Date.now(), manifest });
+    return manifest;
   } catch {
     return null;
   }

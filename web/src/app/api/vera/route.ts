@@ -23,6 +23,9 @@ const BodySchema = z.object({
   text: z.string().min(1).max(600),
   cashUsd: z.number().min(0).max(1e9).optional(),
   investedUsd: z.number().min(0).max(1e9).optional(),
+  /** USDG parked at the smart account (grove-exit proceeds) — the user's cash,
+   *  but not what the buy flows can spend. */
+  smartCashUsd: z.number().min(0).max(1e9).optional(),
   holdings: z
     .array(
       z.object({
@@ -31,6 +34,11 @@ const BodySchema = z.object({
         valueUsd: z.number().min(0).max(1e9).optional(),
         dayChangePct: z.number().min(-100).max(1000).optional(),
         settlingUsd: z.number().min(0).max(1e9).optional(),
+        /** Value held inside a Grove (smart account) — owned, not sellable via
+         *  the ordinary flows; exiting the Grove is the way out. */
+        smartUsd: z.number().min(0).max(1e9).optional(),
+        /** Staked $MONVERA value — owned, unlocks after the cooldown. */
+        stakedUsd: z.number().min(0).max(1e9).optional(),
       }),
     )
     .max(60)
@@ -38,6 +46,10 @@ const BodySchema = z.object({
   recent: z.array(z.string().max(400)).max(20).optional(),
   /** The signed-in wallet — lets Vera read this user's own on-chain history. */
   address: z.string().regex(/^0x[a-fA-F0-9]{40}$/).optional(),
+  /** The ERC-4337 smart account (client-derived) — recorded in the user
+   *  directory so balance snapshots can value grove baskets and grove-exit
+   *  USDG, which live at this address rather than the EOA. */
+  smart: z.string().regex(/^0x[a-fA-F0-9]{40}$/).optional(),
 });
 
 export async function POST(req: NextRequest) {
@@ -66,7 +78,7 @@ export async function POST(req: NextRequest) {
   try {
     // Fire-and-forget: record who this user is so fleet-wide sends (the weekly
     // brief) can reach them. Never blocks or fails the turn.
-    if (body.address) void touchUser(user.userId, body.address);
+    if (body.address) void touchUser(user.userId, body.address, body.smart);
     const result = await routeVera({ ...body, userId: user.userId });
     return Response.json(result);
   } catch (err) {

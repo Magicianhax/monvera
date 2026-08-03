@@ -191,6 +191,11 @@ let payloadCache: { at: number; value: Promise<GrovesPayload> } | null = null;
 export function getGroves(): Promise<GrovesPayload> {
   if (payloadCache && Date.now() - payloadCache.at < PAYLOAD_TTL_MS) return payloadCache.value;
   const value = assemble(GROVES)
+    // Launched groves lead the shelf everywhere (public page, /api, in-app):
+    // Titan is live and buyable, the rest are previews. Stable sort, so the
+    // registry's order still decides within each group. Display-only — chain
+    // scripts key on onChainId, never on list position.
+    .then((groves) => groves.slice().sort((a, b) => Number(b.stats.deployed) - Number(a.stats.deployed)))
     .then((groves) => ({ asOf: new Date().toISOString(), note: NOTE, groves }))
     .catch((err) => {
       payloadCache = null;

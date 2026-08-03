@@ -10,15 +10,15 @@ import Turn from '../../../components/Turn.astro';
 A Grove is a curated basket of real tokenized stocks that Vera buys straight into your own wallet — a strategy you own, not a fund you buy. Every composition, weight, exclusion, and rule is published in full, and the basket settles as ordinary tokens in your wallet: nothing wrapped, nothing pooled, nothing custodial.
 
 <Aside type="note">
-Groves are visible today and open for buying when their contract goes live — every card is marked **Opens soon** until then. The compositions, backtests, and this page are already the real thing.
+**Titan Grove is live and buyable now.** The rest of the shelf is visible with real compositions and backtests, marked **Opens soon** until each contract goes live.
 </Aside>
 
 ## The shelf
 
 | Grove | Ticker | What it holds |
 | --- | --- | --- |
+| Titan Grove · **live** | $TITAN | The mega-cap seven plus a Nasdaq-100 anchor |
 | Tayyib Grove | $TAYYIB | 12 shariah-screened large caps (AAOIFI methodology, exclusions published) |
-| Titan Grove | $TITAN | The mega-cap seven plus a Nasdaq-100 anchor |
 | Silicon Grove | $SILIC | 11 names across the AI chip supply chain |
 | Rails Grove | $RAILS | 6 crypto-infrastructure equities |
 
@@ -35,15 +35,30 @@ Entering a Grove is free. Holding is free. Rebalancing is free. The only fee is 
   <Turn who="vera">Here's the plan — the Titan Grove's names at their published weights, $50 total. Nothing moves until you confirm.</Turn>
 </Transcript>
 
-Every Grove starts at **$20**. Each stock is placed as its own order, so small amounts buy the largest holdings first and the basket completes as the amount grows — the shelf shows the figure from which every name is included. Each purchase is placed as ordinary orders into your own wallet, and each stock is yours to hold or sell individually afterwards, like anything else you own.
+Every Grove starts at **$20**. Each stock is placed as its own order, so small amounts buy the largest holdings first and the basket completes as the amount grows — the shelf shows the figure from which every name is included. The whole buy settles as one gasless transaction: you get the entire basket or nothing, and each stock is yours afterwards.
 
 <Aside type="tip">
 Every swap pays the venue's spread, and below about $50 that spread takes a visibly larger share. $100 or more is the comfortable size.
 </Aside>
 
+## Where the basket lives — your two accounts
+
+You have two on-chain accounts, and both are shown side by side in the Wallet with their addresses:
+
+- **Your cash wallet** signs everything and holds your cash, ordinary trades, and staked $MONVERA.
+- **Your Grove account** is a gasless executor owned by your cash wallet — Grove baskets settle there, and exit proceeds land there. Only you can move it; Monvera has no key.
+
+Cash sitting in the Grove account is never stranded: it **funds your next Grove buy automatically** (the app spends it before touching your cash wallet), and a one-tap **Move to cash** turns it back into spendable USDG whenever you like. The Portfolio's account tabs show exactly which account holds what.
+
+## How exiting works
+
+Press **Exit** on the Grove and choose how much — a quarter, half, three quarters, or everything. The exit sells at live quotes in one gasless transaction, whole or not at all, and the fee applies only to profit above the share of cost basis you withdraw. Selling everything closes the position: every holding is sold to zero.
+
+Because the basket is ordinary tokens in your own account, you can also sell individual names outside the Grove at any time. If you do, a full exit through the Grove may no longer be coverable — the app then offers **Clear position**: it zeroes the Grove's accounting with no swap and **no fee**, and whatever you still hold stays yours to sell like any other stock.
+
 ## Auto-manage
 
-When the Grove contract is live you will be able to switch on auto-manage: Vera checks the basket against its published weights every hour and rebalances only when it has genuinely drifted — every action landing on-chain, inside caps the contract enforces. Until then, rebalancing stays in your hands.
+Auto-manage is opt-in per Grove: Vera checks the basket against its published weights and rebalances only when it has genuinely drifted — every action landing on-chain, inside hard caps the contract enforces (a per-action budget, a lifetime budget, a cooldown between actions, and a per-holding rebalance limit). You can revoke it instantly, at any time, even while the contract is paused.
 
 ## Honest numbers
 

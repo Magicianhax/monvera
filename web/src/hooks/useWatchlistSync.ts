@@ -8,6 +8,7 @@ import { useEffect } from "react";
 import { usePrivy } from "@privy-io/react-auth";
 import { authHeader } from "@/lib/authedFetch";
 import { useSmartAccount } from "@/hooks/useSmartAccount";
+import { useSmartAccountAddress } from "@/hooks/useSmartAccountAddress";
 import { registerRemotePush, snapshotWatchlist, hydrateWatchlist } from "@/lib/watchlist";
 
 async function push(symbol: string, on: boolean) {
@@ -27,6 +28,11 @@ async function push(symbol: string, on: boolean) {
 export function useWatchlistSync() {
   const { ready, authenticated } = usePrivy();
   const { address } = useSmartAccount();
+  // The ERC-4337 smart account (despite the hook names, `address` above is the
+  // EOA). Resolves async, so the effect below re-runs once it lands — the
+  // second sync is an idempotent union, and it's what records the smart
+  // address into the user directory for the balance-snapshot cron.
+  const smart = useSmartAccountAddress();
 
   useEffect(() => {
     if (!ready || !authenticated) return;
@@ -36,10 +42,12 @@ export function useWatchlistSync() {
       const h = await authHeader();
       if (!h.Authorization || cancelled) return;
       try {
-        // The address rides along so the server can record userId -> wallet.
-        // This runs on every app open, so hourly balance snapshots cover every
-        // signed-in user — not just the ones who happen to chat with Vera.
-        const r = await fetch(`/api/watchlist${address ? `?address=${address}` : ""}`, { headers: h });
+        // The address rides along so the server can record userId -> wallet
+        // (and userId -> smart account, which snapshots need to value grove
+        // baskets). This runs on every app open, so hourly balance snapshots
+        // cover every signed-in user — not just the ones who chat with Vera.
+        const params = address ? `?address=${address}${smart ? `&smart=${smart}` : ""}` : "";
+        const r = await fetch(`/api/watchlist${params}`, { headers: h });
         if (!r.ok || cancelled) return;
         const j = (await r.json()) as { symbols?: unknown };
         const server = Array.isArray(j.symbols)
@@ -60,5 +68,5 @@ export function useWatchlistSync() {
       cancelled = true;
       registerRemotePush(null);
     };
-  }, [ready, authenticated, address]);
+  }, [ready, authenticated, address, smart]);
 }

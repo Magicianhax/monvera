@@ -217,7 +217,10 @@ export function OrderTicket({ order, onClose, nav }: { order: OrderState; onClos
       <div
         className={closing ? "glassin glassout" : "glassin"}
         onClick={(e) => e.stopPropagation()}
-        style={{ width: "100%", maxWidth: 420, background: "linear-gradient(135deg,color-mix(in srgb,var(--primary) 10%,transparent),transparent 55%),var(--panel)", backdropFilter: "blur(14px) saturate(170%)", WebkitBackdropFilter: "blur(14px) saturate(170%)", border: "1px solid var(--line)", borderRadius: 24, boxShadow: "0 24px 70px rgba(8,20,12,.34)", overflow: "hidden" }}
+        // Final var(--bg) layer = opaque base. --panel is a translucent
+        // GRADIENT in this theme, so without the base the page bled through
+        // the card in light mode. Identical rendering on dark.
+        style={{ width: "100%", maxWidth: 420, background: "linear-gradient(135deg,color-mix(in srgb,var(--primary) 10%,transparent),transparent 55%), var(--panel), var(--bg)", backdropFilter: "blur(14px) saturate(170%)", WebkitBackdropFilter: "blur(14px) saturate(170%)", border: "1px solid var(--line)", borderRadius: 24, boxShadow: "0 24px 70px rgba(8,20,12,.34)", overflow: "hidden" }}
       >
         <style dangerouslySetInnerHTML={{ __html: VENUE_RACE_CSS }} />
         {/* header: side toggle + close */}

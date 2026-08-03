@@ -1,7 +1,13 @@
-/* /groves/[id] — one Grove, at full density. The room + tokens come from
-   SiteLandingV4.module.css (.root) and the shared shell in ../groves.module.css;
-   this module lays out the document: header, stats band, composition table,
-   performance, methodology, exclusions, and the fees & mechanics disclosure. */
+/* /groves/[id] — one Grove, at the in-app GroveDetailView's density. The room
+   + tokens come from SiteLandingV4.module.css (.root) and the shared shell in
+   ../groves.module.css; this module lays out the document as glass panels and
+   rows: identity → stat strip → ledger → performance → fees → mechanics →
+   methodology → exclusions → mono facts footer.
+
+   Type scale (three sizes per region, on purpose):
+   identity — H1 clamp 26–36px / thesis 14px / chips 10.5–12px mono
+   strip    — label 11px caps / value 21px (one 24px serif) / sub 11px
+   panels   — title 15px / rows 12.5–13.5px / captions + subs 11–11.5px */
 
 .main {
   width: 100%;
@@ -15,46 +21,54 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 500;
   color: var(--ink-3);
   text-decoration: none;
-  margin-bottom: 22px;
+  margin-bottom: 20px;
   transition: color 0.15s var(--ease);
 }
 .backLink:hover {
   color: var(--primary-bright);
 }
 
-/* ── cover band (components/GroveCover fills it) ── */
-.coverBand {
-  position: relative;
-  width: 100%;
-  height: clamp(140px, 22vw, 210px);
-  border-radius: var(--r);
-  overflow: hidden;
-  border: 1px solid var(--line);
-  margin-bottom: clamp(20px, 3vw, 30px);
-  background: rgba(18, 22, 26, 0.5);
-}
-
-/* ── header ── */
+/* ── identity — naked on the background, no panel ── */
 .head {
-  margin-bottom: clamp(28px, 4vw, 40px);
+  padding: 4px 4px 2px;
 }
-.headMeta {
+.chipRow {
   display: flex;
   align-items: center;
   gap: 10px;
   flex-wrap: wrap;
-  margin-bottom: 14px;
+}
+.stack {
+  display: flex;
+  align-items: center;
+}
+.stack > * + * {
+  margin-left: -7px;
+}
+.ring {
+  display: inline-grid;
+  border-radius: 50%;
+  border: 2px solid #1a2023;
+  background: #1a2023;
+}
+.morePill {
+  font-family: var(--f-mono);
+  font-size: 10.5px;
+  color: var(--ink-3);
+  padding: 2px 8px;
+  border-radius: var(--r-pill);
+  border: 1px solid var(--line);
 }
 .ticker {
   font-family: var(--f-mono);
-  font-size: 15px;
-  font-weight: 600;
+  font-size: 12px;
+  font-weight: 700;
   letter-spacing: 0.04em;
-  color: var(--primary-bright);
+  color: var(--ink-3);
 }
 .chip {
   font-family: var(--f-mono);
@@ -62,7 +76,7 @@
   letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--ink-3);
-  padding: 4px 10px;
+  padding: 3px 9px;
   border-radius: var(--r-pill);
   border: 1px solid var(--line);
 }
@@ -72,148 +86,179 @@
   letter-spacing: 0.1em;
   text-transform: uppercase;
   color: #ecab7e;
-  padding: 4px 10px;
+  padding: 3px 9px;
   border-radius: var(--r-pill);
   border: 1px solid rgba(236, 171, 126, 0.4);
   background: rgba(236, 171, 126, 0.08);
 }
 .h1 {
-  font-size: clamp(2.4rem, 5.6vw, 3.9rem);
+  /* down from the old 3.9rem — the page is the numbers, not the headline */
+  font-size: clamp(26px, 5vw, 36px);
+  font-weight: 500;
+  letter-spacing: -0.018em;
+  line-height: 1.05;
   color: var(--ink);
-  margin: 0 0 16px;
+  margin: 10px 0 0;
 }
-.lead {
-  margin: 0;
-  font-size: clamp(15.5px, 1.6vw, 17.5px);
-  line-height: 1.65;
+.thesis {
+  margin: 6px 0 0;
+  font-size: 14px;
+  line-height: 1.55;
   color: var(--ink-2);
-  max-width: 68ch;
-  text-wrap: pretty;
+  max-width: 640px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap; /* one line — the long thesis lives in methodology */
 }
 .ctas {
   display: flex;
   align-items: center;
-  gap: 14px;
-  margin-top: 26px;
+  gap: 12px;
+  margin-top: 20px;
   flex-wrap: wrap;
 }
-.minLine {
-  margin: 14px 0 0;
-  font-size: 13.5px;
-  line-height: 1.6;
+.factLine {
+  margin: 12px 0 0;
+  font-family: var(--f-mono);
+  font-size: 11.5px;
+  letter-spacing: 0.02em;
   color: var(--ink-3);
-  max-width: 64ch;
-  text-wrap: pretty;
 }
 
-/* ── stats band ── */
-.statsBand {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  padding: 22px 26px;
-  gap: 18px;
+/* ── stat strip — one row always; scrolls sideways rather than wrapping ── */
+.statPanel {
+  margin-top: 26px;
+  padding: 0;
+  overflow: hidden;
 }
-.bandStat {
+.statStrip {
   display: grid;
-  gap: 3px;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(150px, 1fr);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.statStrip::-webkit-scrollbar {
+  display: none;
+}
+.cell {
+  padding: 14px 16px;
   min-width: 0;
 }
-.bandStat + .bandStat {
-  border-left: 1px solid rgba(255, 255, 255, 0.08);
-  padding-left: 18px;
+.cell + .cell {
+  border-left: 1px solid rgba(255, 255, 255, 0.07);
 }
-.bandLbl {
-  font-size: 12px;
+/* the app's tiny caps stat label (CHAT_THEME_CSS has no public twin) */
+.microLbl {
+  display: block;
+  font: 700 11px/1 var(--f-ui);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
   color: var(--ink-3);
   white-space: nowrap;
 }
-.bandVal {
-  font-family: var(--f-mono);
+.cellVal {
+  display: block;
+  margin-top: 4px;
   font-size: 21px;
   font-weight: 600;
   color: var(--ink);
   font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
   white-space: nowrap;
 }
-.bandVal b {
-  color: var(--primary-bright);
-  font-weight: 600;
+/* the strip's one serif — mirrors the app's "Your position" cell */
+.cellSerif {
+  display: block;
+  margin-top: 3px;
+  font-family: var(--f-display);
+  font-size: 24px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+  white-space: nowrap;
 }
-.bandSub {
+.cellSub {
+  display: block;
+  margin-top: 2px;
+  font-size: 11px;
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+/* backtest sign colors — same rule as the app: green up, coral down */
+.pos {
+  color: var(--primary-bright);
+}
+.neg {
+  color: #ff6f5e;
+}
+.zeroNote {
+  margin: 10px 2px 0;
   font-size: 11.5px;
   color: var(--ink-3);
 }
-.previewNote {
-  font-size: 13px;
-  line-height: 1.6;
-  color: var(--ink-3);
-  margin: 12px 2px 0;
-  max-width: 78ch;
-  text-wrap: pretty;
-}
-.previewNote b {
-  color: var(--ink-2);
-  font-weight: 600;
-}
 
-/* ── sections ── */
-.section {
-  margin-top: clamp(44px, 6vw, 64px);
+/* ── panels — every section is one glass card with a 15px/700 title row ── */
+.panel {
+  margin-top: 14px;
+  padding: 15px 18px 12px;
 }
-.sectionTitle {
-  font-family: var(--f-display);
-  font-weight: 560;
-  font-size: clamp(1.5rem, 2.6vw, 2rem);
-  letter-spacing: -0.015em;
-  line-height: 1.1;
+.panelHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+.panelTitle {
+  font-size: 15px;
+  font-weight: 700;
   color: var(--ink);
-  margin: 10px 0 6px;
+  margin: 0;
 }
-.sectionLede {
-  font-size: 14.5px;
-  line-height: 1.6;
-  color: var(--ink-2);
-  margin: 0 0 18px;
-  max-width: 72ch;
-  text-wrap: pretty;
+.panelCap {
+  font-size: 11px;
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
-/* ── composition table ── */
+/* ── ledger: segmented allocation bar + the holdings table ── */
+.allocBar {
+  display: flex;
+  gap: 2px;
+  height: 8px;
+  border-radius: 99px;
+  overflow: hidden;
+  margin: 12px 0 4px;
+}
+.slice {
+  min-width: 3px;
+  opacity: 0.9;
+}
+/* the table scrolls inside its own container, never the page */
 .tableWrap {
-  border: 1px solid var(--line);
-  border-radius: var(--r);
-  background: rgba(18, 22, 26, 0.5);
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  margin-top: 4px;
 }
 .table {
   width: 100%;
   border-collapse: collapse;
-  min-width: 660px;
-  font-size: 14px;
 }
 .table th {
-  position: sticky;
-  top: 0;
-  z-index: 2;
   text-align: left;
   font-family: var(--f-mono);
-  font-size: 11px;
+  font-size: 10.5px;
   font-weight: 500;
   letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--ink-3);
-  background: #171c20;
-  padding: 12px 16px;
-  border-bottom: 1px solid var(--line);
+  padding: 8px 10px 8px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
   white-space: nowrap;
 }
-.table th:first-child {
-  border-top-left-radius: var(--r);
-}
-.table th:last-child {
-  border-top-right-radius: var(--r);
-}
 .table td {
-  padding: 11px 16px;
+  padding: 8px 10px 8px 0;
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
   vertical-align: middle;
 }
@@ -222,91 +267,170 @@
 }
 .num {
   text-align: right;
-  font-family: var(--f-mono);
+  font-size: 13px;
+  color: var(--ink-3);
   font-variant-numeric: tabular-nums;
-  color: var(--ink);
+  font-feature-settings: "tnum" 1;
   white-space: nowrap;
 }
 .numHead {
   text-align: right;
 }
+.weightCell {
+  color: var(--ink);
+  font-weight: 600;
+}
 .company {
   display: flex;
   align-items: center;
-  gap: 11px;
+  gap: 10px;
   min-width: 0;
 }
 .symbol {
-  font-family: var(--f-mono);
   font-size: 13.5px;
-  font-weight: 600;
+  font-weight: 700;
   color: var(--ink);
   display: block;
 }
 .coName {
-  font-size: 12.5px;
+  font-size: 11.5px;
   color: var(--ink-3);
   display: block;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  max-width: 180px;
+  max-width: 170px;
 }
-.weightCell {
-  color: var(--primary-bright);
-  font-weight: 600;
-}
-.reason {
+/* reasons clamp to one line on desktop, disappear on narrow screens */
+.reasonClamp {
+  display: block;
+  max-width: 300px;
   font-size: 13px;
-  line-height: 1.5;
   color: var(--ink-2);
-  min-width: 240px;
-  text-wrap: pretty;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* ── performance ── */
-.curveCard {
-  padding: 22px 22px 16px;
+.curveWrap {
+  margin-top: 12px;
 }
-.perfStats {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 14px 34px;
-  margin-top: 16px;
+.perfRow {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 10px;
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
 }
-.perfStat {
-  min-width: 104px;
-}
-.perfLbl {
-  font-size: 12px;
-  color: var(--ink-3);
+.perfCell {
+  min-width: 0;
 }
 .perfVal {
-  font-family: var(--f-mono);
-  font-size: 19px;
-  font-weight: 600;
+  display: block;
+  margin-top: 3px;
+  font-size: 14px;
+  font-weight: 700;
   color: var(--ink);
   font-variant-numeric: tabular-nums;
-  margin-top: 1px;
+  font-feature-settings: "tnum" 1;
+  white-space: nowrap;
 }
-.perfAccent {
-  color: var(--primary-bright);
-}
-.honesty {
-  font-size: 13px;
+.caption {
+  margin: 10px 0 2px;
+  font-size: 11.5px;
   line-height: 1.6;
   color: var(--ink-3);
-  margin: 14px 2px 0;
-  max-width: 78ch;
-  text-wrap: pretty;
 }
 
-/* ── methodology ── */
-.method p {
-  font-size: 14.5px;
-  line-height: 1.7;
+/* ── fee rows — the app's Row: key left, value right, hairline dividers ── */
+.factRows {
+  margin-top: 6px;
+}
+.factRow {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  padding: 8px 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+}
+.factRow:first-child {
+  border-top: 0;
+}
+.factKey {
+  flex: 1;
+  min-width: 0;
+  font-size: 12.5px;
   color: var(--ink-2);
-  margin: 0 0 14px;
+}
+.factKey small {
+  display: block;
+  font-size: 11px;
+  color: var(--ink-3);
+  margin-top: 2px;
+}
+.factVal {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+  white-space: nowrap;
+}
+.zero {
+  color: var(--primary-bright);
+  font-weight: 600;
+}
+.strong {
+  font-weight: 700;
+}
+
+/* ── mechanics — short bolded-key rows, never more than two lines ── */
+.mechRows {
+  margin-top: 6px;
+}
+.mechRow {
+  margin: 0;
+  padding: 9px 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--ink-2);
+  text-wrap: pretty;
+}
+.mechRow:first-child {
+  border-top: 0;
+}
+.mechRow b {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+/* ── methodology — the one prose zone ── */
+.callout {
+  border: 1px solid rgba(87, 201, 155, 0.3);
+  background: rgba(67, 186, 133, 0.07);
+  border-radius: var(--r-sm);
+  padding: 10px 14px;
+  margin-top: 12px;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--ink-2);
+  text-wrap: pretty;
+}
+.callout b {
+  color: var(--ink);
+  font-weight: 600;
+}
+.method {
+  margin-top: 10px;
+}
+.method p {
+  font-size: 13px;
+  line-height: 1.65;
+  color: var(--ink-2);
+  margin: 0 0 12px;
   max-width: 74ch;
   text-wrap: pretty;
 }
@@ -317,43 +441,30 @@
   color: var(--ink);
   font-weight: 600;
 }
-.callout {
-  border: 1px solid rgba(87, 201, 155, 0.3);
-  background: rgba(67, 186, 133, 0.07);
-  border-radius: var(--r);
-  padding: 16px 18px;
-  margin-bottom: 20px;
-  font-size: 14px;
-  line-height: 1.65;
-  color: var(--ink-2);
-  max-width: 78ch;
-  text-wrap: pretty;
-}
-.callout b {
-  color: var(--ink);
-  font-weight: 600;
-}
 
 /* ── exclusions ── */
 .exclList {
   list-style: none;
-  margin: 0;
+  margin: 6px 0 0;
   padding: 0;
-  border-top: 1px solid var(--line);
 }
 .exclItem {
   display: flex;
-  gap: 16px;
+  gap: 14px;
   align-items: baseline;
-  padding: 11px 2px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
-  font-size: 13.5px;
-  line-height: 1.55;
+  padding: 8px 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+.exclItem:first-child {
+  border-top: 0;
 }
 .exclSym {
   flex: none;
-  width: 64px;
+  width: 60px;
   font-family: var(--f-mono);
+  font-size: 12px;
   font-weight: 600;
   color: var(--ink);
 }
@@ -362,92 +473,25 @@
   text-wrap: pretty;
 }
 
-/* ── fees & mechanics ── */
-.feeTable {
-  border: 1px solid var(--line);
-  border-radius: var(--r);
-  overflow: hidden;
-}
-.feeRow {
+/* ── mono facts footer — chain facts, hairline-topped ── */
+.monoFoot {
   display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 18px;
-  padding: 13px 18px;
-  font-size: 14.5px;
-}
-.feeRow + .feeRow {
+  gap: 14px;
+  flex-wrap: wrap;
+  margin: 18px 2px 0;
+  padding-top: 12px;
   border-top: 1px solid rgba(255, 255, 255, 0.07);
-}
-.feeName {
-  color: var(--ink-2);
-}
-.feeName small {
-  display: block;
-  font-size: 12.5px;
-  color: var(--ink-3);
-  margin-top: 1px;
-  max-width: 52ch;
-  text-wrap: pretty;
-}
-.feeVal {
   font-family: var(--f-mono);
-  font-weight: 600;
-  font-size: 15px;
-  color: var(--ink);
-  white-space: nowrap;
-  font-variant-numeric: tabular-nums;
+  font-size: 11.5px;
+  color: var(--ink-3);
 }
-.feeZero {
+.footLink {
+  color: var(--ink-3);
+  text-decoration: none;
+  transition: color 0.15s var(--ease);
+}
+.footLink:hover {
   color: var(--primary-bright);
-}
-.mechanics {
-  margin: 20px 0 0;
-  padding: 0;
-  list-style: none;
-}
-.mechItem {
-  display: flex;
-  gap: 12px;
-  align-items: flex-start;
-  padding-block: 12px;
-  font-size: 14.5px;
-  line-height: 1.65;
-  color: var(--ink-2);
-  border-top: 1px solid rgba(255, 255, 255, 0.07);
-  max-width: 80ch;
-  text-wrap: pretty;
-}
-.mechItem b {
-  color: var(--ink);
-  font-weight: 600;
-}
-.mechDot {
-  flex: none;
-  margin-top: 8px;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--primary);
-}
-.rebalanceLine {
-  display: flex;
-  gap: 10px;
-  align-items: flex-start;
-  margin-top: 22px;
-  padding: 14px 18px;
-  border-radius: var(--r);
-  border: 1px solid var(--line);
-  background: rgba(18, 22, 26, 0.5);
-  font-size: 14px;
-  line-height: 1.6;
-  color: var(--ink-2);
-  max-width: 80ch;
-  text-wrap: pretty;
-}
-.rebalanceLine b {
-  color: var(--ink);
-  font-weight: 600;
 }
 
 /* ── mobile ── */
@@ -463,29 +507,16 @@
   .ctas a {
     justify-content: center;
   }
-  .statsBand {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 16px;
-    padding: 18px;
+  .thesis {
+    white-space: normal; /* one hard line reads clipped on phones — allow two */
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
   }
-  /* 2×2: kill the mid-row hairline that no longer lines up */
-  .bandStat + .bandStat {
-    border-left: 0;
-    padding-left: 0;
-  }
-  .bandStat:nth-child(even) {
-    border-left: 1px solid rgba(255, 255, 255, 0.08);
-    padding-left: 16px;
-  }
-  .bandVal {
-    font-size: 18px;
-  }
-  /* the table scrolls inside its own container, never the page */
-  .tableWrap {
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-  }
-  .table th {
-    position: static;
+}
+@media (max-width: 640px) {
+  /* reasons hide on narrow — logo, weight, and price are the load-bearing columns */
+  .reasonCol {
+    display: none;
   }
 }

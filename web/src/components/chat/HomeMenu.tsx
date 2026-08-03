@@ -8,14 +8,14 @@
 // theme's inset-highlight selector keys off that exact serialized string.
 import { useMemo } from "react";
 import { useSmartAccount } from "@/hooks/useSmartAccount";
-import { usePortfolio, useBalanceHistory } from "@/hooks/useBalances";
+import { holdingWorth, usePortfolio, useBalanceHistory } from "@/hooks/useBalances";
 import { useMonveraPrice, useMonveraChart } from "@/hooks/useMonveraToken";
 import { useMarketSummary } from "@/hooks/useMarket";
 import { usePrices } from "@/hooks/usePrices";
 import { STOCKS } from "@/lib/tokens";
 import { toTile } from "@/lib/displayAssets";
 import { AssetTile } from "@/components/design";
-import { PIcon, ChatMark, ChartHover, usd, pctStr, priceStr, dcol, chartPaths, curve, type ChatNav } from "./chatKit";
+import { PIcon, ChatMark, ChartHover, SkeletonBar, usd, pctStr, priceStr, dcol, chartPaths, curve, type ChatNav } from "./chatKit";
 import { portfolioDayCurve, equityCurveFrom } from "@/lib/portfolioCurve";
 import { useHidden, setHidden, money } from "./privacy";
 
@@ -89,25 +89,26 @@ function MarketPanel({ title, rows, priceOf, nav }: { title: string; rows: Marke
 export function HomeMenu({ nav }: { nav: ChatNav }) {
   const hidden = useHidden();
   const { address } = useSmartAccount();
-  const { data: pf } = usePortfolio(address ?? undefined);
+  const { data: pf, isPending } = usePortfolio(address ?? undefined);
   const { data: snaps } = useBalanceHistory(address ?? undefined);
   const { data: token } = useMonveraPrice();
   const { data: tokenHistory } = useMonveraChart("1d");
   const { data: market } = useMarketSummary();
   const { data: prices } = usePrices();
 
-  // Real holdings, MONVERA excluded (it renders in its own card), value-sorted.
+  // Real holdings, MONVERA excluded (it renders in its own card), sorted by
+  // full worth so Grove-held and settling shares count too.
   const holdings = useMemo(
     () =>
       (pf?.holdings ?? [])
-        .filter((h) => h.asset.symbol !== "MONVERA" && (h.valueUsd ?? 0) > 0)
+        .filter((h) => h.asset.symbol !== "MONVERA" && holdingWorth(h) > 0)
         .slice()
-        .sort((a, b) => (b.valueUsd ?? 0) - (a.valueUsd ?? 0)),
+        .sort((a, b) => holdingWorth(b) - holdingWorth(a)),
     [pf],
   );
   const monvera = pf?.holdings.find((h) => h.asset.symbol === "MONVERA");
-  const heldSum = holdings.reduce((s, h) => s + (h.valueUsd ?? 0), 0);
-  const dayUsd = holdings.reduce((s, h) => s + ((h.valueUsd ?? 0) * (h.dayChangePct ?? 0)) / 100, 0);
+  const heldSum = holdings.reduce((s, h) => s + holdingWorth(h), 0);
+  const dayUsd = holdings.reduce((s, h) => s + (holdingWorth(h) * (h.dayChangePct ?? 0)) / 100, 0);
   const total = pf?.totalUsd ?? 0;
   const dayPct = total - dayUsd > 0 ? (dayUsd / (total - dayUsd)) * 100 : 0;
   const dayStr = (dayUsd >= 0 ? "+" : "-") + usd(Math.abs(dayUsd)) + " (" + pctStr(dayPct) + ")";
@@ -159,16 +160,27 @@ export function HomeMenu({ nav }: { nav: ChatNav }) {
               </button>
             </div>
             <div style={{ display: "flex", alignItems: "baseline", gap: 12, marginTop: 2 }}>
-              <span className="serif tnum" style={{ fontSize: 40, fontWeight: 500, letterSpacing: "-.02em", lineHeight: 1 }}>{money(total, hidden)}</span>
-              <span className="tnum" style={{ fontSize: 13.5, fontWeight: 600, color: dcol(dayUsd) }}>{dayStr} today</span>
+              {/* Never $0.00 while loading — the first frame of a funded account
+                  must not read as "my funds are gone". */}
+              {isPending ? (
+                <SkeletonBar w={170} h={34} style={{ margin: "3px 0" }} />
+              ) : (
+                <>
+                  <span className="serif tnum" style={{ fontSize: 40, fontWeight: 500, letterSpacing: "-.02em", lineHeight: 1 }}>{money(total, hidden)}</span>
+                  <span className="tnum" style={{ fontSize: 13.5, fontWeight: 600, color: dcol(dayUsd) }}>{dayStr} today</span>
+                </>
+              )}
             </div>
             <div style={{ marginTop: 12 }}>
               {(() => {
+                if (isPending) {
+                  return <div style={{ height: 130, display: "flex", alignItems: "center", justifyContent: "center" }}><SkeletonBar w="100%" h={96} /></div>;
+                }
                 // Real equity curve (hourly snapshots incl. deposits/trades)
                 // once enough history exists; intraday holdings curve until then.
                 const day =
                   equityCurveFrom(snaps ?? [], pf?.totalUsd) ??
-                  portfolioDayCurve(pf?.holdings ?? [], pf?.cashUsd ?? 0);
+                  portfolioDayCurve(pf?.holdings ?? [], (pf?.cashUsd ?? 0) + (pf?.smartCashUsd ?? 0));
                 if (!day) {
                   return (
                     <div style={{ height: 130, display: "flex", alignItems: "center", justifyContent: "center", borderTop: "1px dashed var(--line-2)", fontSize: 12.5, color: "var(--ink-3)" }}>
@@ -196,15 +208,20 @@ export function HomeMenu({ nav }: { nav: ChatNav }) {
             <div style={{ display: "flex", marginTop: 6, paddingTop: 16, borderTop: "1px solid var(--line-2)" }}>
               <div style={{ flex: 1 }}>
                 <div style={statLabel}>Cash</div>
-                <div className="tnum" style={{ fontSize: 18, fontWeight: 600, marginTop: 2 }}>{money(pf?.cashUsd ?? 0, hidden)}</div>
+                {/* ALL cash — EOA plus grove-exit USDG — so Cash + Invested
+                    matches the Total above instead of silently missing money. */}
+                <div className="tnum" style={{ fontSize: 18, fontWeight: 600, marginTop: 2 }}>{isPending ? <SkeletonBar w={72} h={18} /> : money((pf?.cashUsd ?? 0) + (pf?.smartCashUsd ?? 0), hidden)}</div>
+                {!isPending && (pf?.smartCashUsd ?? 0) >= 0.01 && (
+                  <div className="tnum" style={{ fontSize: 10.5, color: "var(--ink-3)", marginTop: 1 }}>incl. {money(pf?.smartCashUsd ?? 0, hidden)} from Grove exits</div>
+                )}
               </div>
               <div style={{ flex: 1, paddingLeft: 16, borderLeft: "1px solid var(--line-2)" }}>
                 <div style={statLabel}>Invested</div>
-                <div className="tnum" style={{ fontSize: 18, fontWeight: 600, marginTop: 2 }}>{usd(pf?.investedUsd ?? 0)}</div>
+                <div className="tnum" style={{ fontSize: 18, fontWeight: 600, marginTop: 2 }}>{isPending ? <SkeletonBar w={72} h={18} /> : money(pf?.investedUsd ?? 0, hidden)}</div>
               </div>
               <div style={{ flex: 1, paddingLeft: 16, borderLeft: "1px solid var(--line-2)" }}>
                 <div style={statLabel}>Holdings</div>
-                <div className="tnum" style={{ fontSize: 18, fontWeight: 600, marginTop: 2 }}>{holdings.length}</div>
+                <div className="tnum" style={{ fontSize: 18, fontWeight: 600, marginTop: 2 }}>{isPending ? <SkeletonBar w={30} h={18} /> : holdings.length}</div>
               </div>
             </div>
             <div style={{ display: "flex", gap: 10, marginTop: 16 }}>
@@ -224,7 +241,9 @@ export function HomeMenu({ nav }: { nav: ChatNav }) {
             </div>
             <div className="serif tnum" style={{ fontSize: 26, fontWeight: 500, marginTop: 4 }}>{token?.priceUsd != null ? priceStr(token.priceUsd) : "—"}</div>
             <div className="tnum" style={{ fontSize: 11.5, color: "var(--ink-3)", marginTop: 1 }}>
-              You hold {tokenQty.toLocaleString("en-US", { maximumFractionDigits: 0 })} · ≈ {usd(monvera?.valueUsd ?? 0)}
+              You hold {hidden ? "•••" : tokenQty.toLocaleString("en-US", { maximumFractionDigits: 0 })}
+              {(monvera?.stakedQty ?? 0) > 0 ? <> · {hidden ? "•••" : Math.round(monvera!.stakedQty!).toLocaleString("en-US")} staked</> : null}
+              {" · ≈ "}{money(monvera ? holdingWorth(monvera) : 0, hidden)}
             </div>
             <div style={{ flex: 1, minHeight: 56, marginTop: 10, display: "flex" }}>
               {/* hover readout only on real history, never the fallback curve */}
@@ -293,22 +312,26 @@ export function HomeMenu({ nav }: { nav: ChatNav }) {
             <div>
               {holdings.map((h) => {
                 const sym = h.asset.symbol;
+                const worthUsd = holdingWorth(h);
+                const inGrove = (h.smartUsd ?? 0) > 0;
                 return (
                   <button key={sym} className="hgl" onClick={() => nav.openCanvas("holding", sym)} style={{ display: "flex", alignItems: "center", gap: 12, width: "100%", padding: "10px 8px", textAlign: "left", borderRadius: 12 }}>
                     <AssetTile asset={toTile(sym, h.asset.name)} size={32} radius={9} />
                     <span style={{ flex: 1, minWidth: 0 }}>
                       <span style={{ display: "block", fontWeight: 500, fontSize: 14, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{h.asset.name}</span>
-                      <span style={{ display: "block", fontSize: 11.5, color: "var(--ink-3)" }}>{heldSum > 0 ? Math.round(((h.valueUsd ?? 0) / heldSum) * 100) + "% of portfolio" : ""}</span>
+                      <span style={{ display: "block", fontSize: 11.5, color: "var(--ink-3)" }}>{heldSum > 0 ? Math.round((worthUsd / heldSum) * 100) + "% of portfolio" : ""}{inGrove ? " · in a Grove" : ""}</span>
                     </span>
                     <span style={{ textAlign: "right" }}>
-                      <span className="tnum" style={{ display: "block", fontSize: 14, fontWeight: 600 }}>{usd(h.valueUsd ?? 0)}</span>
+                      <span className="tnum" style={{ display: "block", fontSize: 14, fontWeight: 600 }}>{usd(worthUsd)}</span>
                       <span className="tnum" style={{ display: "block", fontSize: 11.5, fontWeight: 600, color: dcol(h.dayChangePct ?? 0) }}>{h.dayChangePct != null ? pctStr(h.dayChangePct) : "—"}</span>
                     </span>
                   </button>
                 );
               })}
               {holdings.length === 0 && (
-                <div style={{ padding: "10px 8px", fontSize: 12.5, color: "var(--ink-2)" }}>Nothing yet — ask Vera to put your cash to work.</div>
+                <div style={{ padding: "10px 8px", fontSize: 12.5, color: "var(--ink-2)" }}>
+                  {isPending ? <SkeletonBar w="70%" h={13} /> : "Nothing yet — ask Vera to put your cash to work."}
+                </div>
               )}
             </div>
           </div>

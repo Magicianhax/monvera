@@ -58,6 +58,25 @@ function AppShellInner() {
   const { ready, authenticated } = usePrivy();
   const chatDesktop = useChatDesktop();
 
+  // Kill the cold-open waterfall: the shell chunk used to start downloading
+  // only AFTER Privy finished booting and said "authenticated" — serial, on
+  // every open. A returning user already has a Privy session in localStorage,
+  // so start pulling their shell chunk NOW, in parallel with the auth boot.
+  // Fresh visitors have no session key, download nothing, and keep the cheap
+  // sign-in page — the "signed-out never pays for the product" rule holds.
+  useEffect(() => {
+    let returning = false;
+    try {
+      returning = Object.keys(window.localStorage).some((k) => k.startsWith("privy:"));
+    } catch {
+      return; // storage blocked — keep the old serial behavior
+    }
+    if (!returning) return;
+    const forced = new URLSearchParams(window.location.search).get("view");
+    const wantDesktop = forced === "desktop" || (forced !== "mobile" && window.matchMedia("(min-width: 761px)").matches);
+    void (wantDesktop ? import("@/components/chat/ChatApp") : import("@/components/chat/ChatAppMobile"));
+  }, []);
+
   // Signed out (or Privy still booting): the aurora auth screen owns the full
   // viewport on phone AND desktop. While booting it shows just the breathing
   // orb; the headline + sign-in card materialize once Privy is ready.

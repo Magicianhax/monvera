@@ -41,6 +41,13 @@ export interface InvestSuccess {
   /** `venue` = which venue won best execution for that leg (legs can differ). */
   holdings: { symbol: string; name: string; weightPct: number; amountUsd: number; txHash?: `0x${string}`; venue?: VenueName }[];
   amountUsd: number;
+  /** What the user ASKED to invest. amountUsd is what actually filled; when the
+      two differ, legs failed and the success copy must say so. */
+  plannedUsd?: number;
+  /** Legs that did not fill (failed after every retry). Empty on a clean fill —
+      a partial fill presented as an unqualified success is money the user
+      believes is invested and isn't. */
+  failed?: { symbol: string; amountUsd: number; message: string }[];
   /** Some legs settled via RFQ — submitted + on-chain, shares unwrap in minutes. */
   anySettling?: boolean;
   /** The on-chain AI verification this plan passed (for the "Verified on-chain" panel). */

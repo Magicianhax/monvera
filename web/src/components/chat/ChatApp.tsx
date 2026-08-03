@@ -18,6 +18,8 @@ import { useNotifications } from "@/hooks/useNotifications";
 import { useWatchlistSync } from "@/hooks/useWatchlistSync";
 import { ChatCenter, type ChatCenterHandle } from "./ChatCenter";
 import { HomeMenu } from "./HomeMenu";
+import { RecoverBanner } from "./RecoverBanner";
+import { SeasonRewardsBanner } from "./SeasonRewardsBanner";
 import type { OrderState } from "./OrderTicket";
 import type { PayMode } from "./PaySheet";
 import { displayFor } from "@/lib/displayAssets";
@@ -210,11 +212,17 @@ export function ChatApp() {
   const label = (text: string) => (navExpanded ? <span style={{ fontSize: 13.5, fontWeight: 600, whiteSpace: "nowrap" }}>{text}</span> : null);
 
   return (
-    <div className="mvc" data-mode={colorMode} data-style={colorStyle} style={{ height: "100dvh", width: "100%", display: "flex", fontFamily: "var(--font-ui)", color: "var(--ink)", background: "var(--bg)", overflow: "hidden", fontSize: 15 }}>
+    // Grid shell, and the COLUMNS carry the sizes: the sidebar toggle animates
+    // via grid-template-columns (the sanctioned track animation — no per-node
+    // width transition, one interpolation for the whole row). Track pairs that
+    // can't interpolate (canvas mount 2→3 tracks, 486px↔fr on the wide toggle)
+    // snap exactly as they always did — the canvas' own transform keyframes
+    // (.canv/.canv-out) cover its entrance and exit.
+    <div className="mvc" data-mode={colorMode} data-style={colorStyle} style={{ height: "100dvh", width: "100%", display: "grid", gridTemplateColumns: `${navExpanded ? 252 : 78}px minmax(0, 1fr)${canvas && meta ? (canvasWide ? " minmax(0, 1fr)" : " 486px") : ""}`, transition: "grid-template-columns .22s cubic-bezier(.32,.72,0,1)", fontFamily: "var(--font-ui)", color: "var(--ink)", background: "var(--bg)", overflow: "hidden", fontSize: 15 }}>
       <style dangerouslySetInnerHTML={{ __html: CHAT_THEME_CSS + CHAT_STYLE_CSS }} />
 
       {/* ── left sidebar ── */}
-      <nav style={{ flex: "none", width: navExpanded ? 252 : 78, display: "flex", flexDirection: "column", padding: "12px 10px", borderRight: "1px solid var(--line)", background: "var(--panel-2)", backdropFilter: "blur(24px) saturate(170%)", WebkitBackdropFilter: "blur(24px) saturate(170%)", minHeight: 0, transition: "width .22s cubic-bezier(.32,.72,0,1)" }}>
+      <nav style={{ display: "flex", flexDirection: "column", padding: "12px 10px", borderRight: "1px solid var(--line)", background: "var(--panel-2)", backdropFilter: "blur(24px) saturate(170%)", WebkitBackdropFilter: "blur(24px) saturate(170%)", minHeight: 0, minWidth: 0, overflow: "hidden" }}>
         <button onClick={nav.goMenu} style={{ display: "flex", alignItems: "center", gap: 10, padding: "4px 8px 8px", flex: "none", textAlign: "left" }}>
           <ChatOrb size={38} style={{ animation: "mvcspin 7s linear infinite" }} />
           {navExpanded && (
@@ -312,7 +320,13 @@ export function ChatApp() {
       </nav>
 
       {/* ── center (Groves takes the whole surface over; back restores it) ── */}
-      <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
+      <div style={{ minWidth: 0, minHeight: 0, display: "flex", flexDirection: "column" }}>
+        {/* Money waiting to move is an app-level fact, not a Wallet-canvas
+            secret — the bar rides above whatever surface is open. */}
+        <RecoverBanner />
+        {/* Claimable season rewards can EXPIRE — an app-level deadline, not a
+            Staking-page secret. The button jumps straight to the claim surface. */}
+        <SeasonRewardsBanner onOpen={() => nav.openStaking()} />
         {stakingOpen
           ? <StakingPage nav={nav} prefill={stakingPrefill} onBack={() => setStakingOpen(false)} />
           : grovesView
@@ -320,9 +334,11 @@ export function ChatApp() {
           : home === "menu" ? <HomeMenu nav={nav} /> : <ChatCenter nav={nav} chat={chat} narrowed={!!canvas} pendingAsk={pendingAsk} consumeAsk={consumeAsk} />}
       </div>
 
-      {/* ── right canvas ── */}
+      {/* ── right canvas — sized by its grid track (486px narrow, an equal
+          share wide); the old inline width transition never actually animated
+          (486px↔auto can't interpolate). Entrance/exit = .canv keyframes. ── */}
       {canvas && meta && (
-        <aside className={canvasClosing ? "canv canv-out" : "canv"} style={{ flex: canvasWide ? 1 : "none", width: canvasWide ? "auto" : 486, minWidth: canvasWide ? 0 : undefined, borderLeft: "1px solid var(--line)", background: "var(--panel-2)", backdropFilter: "blur(24px) saturate(170%)", WebkitBackdropFilter: "blur(24px) saturate(170%)", display: "flex", flexDirection: "column", minHeight: 0, transition: "width .28s ease" }}>
+        <aside className={canvasClosing ? "canv canv-out" : "canv"} style={{ borderLeft: "1px solid var(--line)", background: "var(--panel-2)", backdropFilter: "blur(24px) saturate(170%)", WebkitBackdropFilter: "blur(24px) saturate(170%)", display: "flex", flexDirection: "column", minHeight: 0, minWidth: 0 }}>
           <div style={{ flex: "none", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "16px 20px", borderBottom: "1px solid var(--line)" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
               <span style={{ width: 40, height: 40, borderRadius: 13, flex: "none", display: "grid", placeItems: "center", background: "linear-gradient(145deg,var(--primary-2),var(--primary))", color: "#fff", boxShadow: "0 6px 14px color-mix(in srgb, var(--primary) 32%, transparent)" }}>

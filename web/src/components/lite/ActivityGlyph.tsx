@@ -17,11 +17,12 @@ export function ActivityGlyph({
   /** Color of the ring cut around the front logo (should match the row bg). */
   ring?: string;
 }) {
-  const isTrade = event.kind === "buy" || event.kind === "sell";
+  const buyLike = event.kind === "buy" || event.kind === "groveBuy";
+  const isTrade = buyLike || event.kind === "sell" || event.kind === "groveExit";
   if (!isTrade) return <TokenLogo symbol={event.symbol} size={size} />;
 
-  const from = event.kind === "buy" ? "USDG" : event.symbol;
-  const to = event.kind === "buy" ? event.symbol : "USDG";
+  const from = buyLike ? "USDG" : event.symbol;
+  const to = buyLike ? event.symbol : "USDG";
   const small = Math.round(size * 0.66);
   return (
     <div style={{ position: "relative", width: size, height: size, flex: "none" }} aria-hidden>

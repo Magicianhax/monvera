@@ -7,13 +7,16 @@
 // itself (Arcus needs a plain EOA taker), so this sweeps any USDG left in the old
 // smart account back to the EOA. The EOA owns that smart account, so the move is
 // a normal sponsored UserOp — gas-free, no extra keys.
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createPublicClient, encodeFunctionData, http } from "viem";
 import { chain, RPC_URL } from "@/lib/chain";
 import { USDG } from "@/lib/tokens";
-import { getSmartAccountClient, sendSponsoredCalls } from "@/lib/aa";
+import { sendSponsoredCalls } from "@/lib/aa";
 import { asViemProvider } from "@/lib/provider";
 import { useActiveWallet } from "@/hooks/useActiveWallet";
+import { useRefreshBalances } from "@/hooks/useBalances";
+import { useSmartAccountResolution } from "@/hooks/useSmartAccountAddress";
 
 const client = createPublicClient({ chain, transport: http(RPC_URL) });
 const BALANCE_OF = [
@@ -27,47 +30,34 @@ type Phase = "checking" | "idle" | "moving" | "done" | "error";
 
 export function useLegacyRecover() {
   const wallet = useActiveWallet();
-  const [legacyAddr, setLegacyAddr] = useState<`0x${string}` | null>(null);
-  const [raw, setRaw] = useState<bigint>(BigInt(0));
-  const [phase, setPhase] = useState<Phase>("checking");
+  const refreshBalances = useRefreshBalances();
+  const qc = useQueryClient();
+  const [phase, setPhase] = useState<Phase>("idle");
   const [error, setError] = useState<string | null>(null);
   const [txHash, setTxHash] = useState<`0x${string}` | null>(null);
 
-  const owner = wallet?.address;
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      if (!wallet) {
-        if (!cancelled) setPhase("idle");
-        return;
-      }
-      try {
-        if (!cancelled) setPhase("checking");
-        const provider = asViemProvider(await wallet.getEthereumProvider());
-        const { account } = await getSmartAccountClient(provider);
-        const s = account.address as `0x${string}`;
-        const bal = (await client.readContract({
-          address: USDG.address as `0x${string}`,
-          abi: BALANCE_OF,
-          functionName: "balanceOf",
-          args: [s],
-        })) as bigint;
-        if (!cancelled) {
-          setLegacyAddr(s);
-          setRaw(bal);
-          setPhase("idle");
-        }
-      } catch (e) {
-        if (!cancelled) {
-          setError(e instanceof Error ? e.message : "Couldn't check your previous account.");
-          setPhase("error");
-        }
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [owner]);
+  // The smart-account address, without a provider round trip per mount.
+  const { address: smartAddr } = useSmartAccountResolution();
+
+  // LIVE balance, not a one-shot mount read: a grove exit deposits USDG here
+  // mid-session, and the old effect never looked again — the "move to cash"
+  // bar only appeared after a full page refresh. Keyed under "portfolio" so
+  // useRefreshBalances' prefix invalidation refetches this the moment any
+  // trade settles.
+  const balQ = useQuery({
+    queryKey: ["portfolio", "grove-cash", smartAddr],
+    enabled: Boolean(smartAddr),
+    refetchInterval: 30_000,
+    refetchOnWindowFocus: true,
+    queryFn: async () =>
+      (await client.readContract({
+        address: USDG.address as `0x${string}`,
+        abi: BALANCE_OF,
+        functionName: "balanceOf",
+        args: [smartAddr as `0x${string}`],
+      })) as bigint,
+  });
+  const raw = balQ.data ?? BigInt(0);
 
   const recover = useCallback(async () => {
     if (!wallet || raw <= BigInt(0)) return;
@@ -83,19 +73,22 @@ export function useLegacyRecover() {
         },
       ]);
       setTxHash(receipt.receipt.transactionHash as `0x${string}`);
-      setRaw(BigInt(0));
+      // Optimistically zero the bar, then let the refetch confirm — the cash
+      // just changed pockets and every money surface should say so now.
+      qc.setQueryData(["portfolio", "grove-cash", smartAddr], BigInt(0));
       setPhase("done");
+      refreshBalances();
     } catch (e) {
       setError(e instanceof Error ? e.message : "The move didn't go through.");
       setPhase("error");
     }
-  }, [wallet, raw]);
+  }, [wallet, raw, refreshBalances, qc, smartAddr]);
 
   return {
-    legacyAddr,
+    legacyAddr: smartAddr ?? null,
     usdValue: Number(raw) / 1_000_000, // USDG is 6dp
     hasFunds: raw > BigInt(0),
-    phase,
+    phase: balQ.isPending && !smartAddr ? "idle" : balQ.isPending ? "checking" : phase,
     error,
     txHash,
     recover,

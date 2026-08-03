@@ -17,7 +17,7 @@ import { USDG, STOCKS, ALL_ASSETS, type Asset } from "@/lib/tokens";
 import { MONVERA } from "@/lib/monveraToken";
 import { fromUnits } from "@/lib/format";
 import { useDemo } from "@/components/demo/DemoProvider";
-import { useSmartAccountAddress } from "@/hooks/useSmartAccountAddress";
+import { useSmartAccountResolution } from "@/hooks/useSmartAccountAddress";
 
 // Shared freshness policy for money reads: poll on a calm interval AND refetch
 // when the user returns to the tab / reconnects / re-mounts a screen, so a
@@ -60,6 +60,25 @@ export interface Holding {
   smartQty?: number;
   smartRaw?: bigint;
   smartUsd?: number;
+  /** $MONVERA actively staked (earning weight). Counted in totals, shown as
+      "staked", not sellable until unstaked + withdrawn. */
+  stakedQty?: number;
+  stakedRaw?: bigint;
+  stakedUsd?: number;
+  /** $MONVERA in the unstake cooldown or withdrawable — owned, on its way out,
+      no longer earning weight. Labeled "unstaking", never "staked". */
+  unstakingQty?: number;
+  unstakingRaw?: bigint;
+  unstakingUsd?: number;
+  /** Unix seconds when the cooling unstake unlocks; past = ready to withdraw. */
+  unstakeUnlockAt?: number;
+}
+
+/** Everything a holding is worth to its owner: settled shares plus the parts
+ *  the EOA cannot sell right now (settling fills, Grove-held shares, staked or
+ *  cooling $MONVERA). Display surfaces sum THIS; sell flows keep `raw`/`qty`. */
+export function holdingWorth(h: Holding): number {
+  return (h.valueUsd ?? 0) + (h.settlingUsd ?? 0) + (h.smartUsd ?? 0) + (h.stakedUsd ?? 0) + (h.unstakingUsd ?? 0);
 }
 
 export interface Portfolio {
@@ -68,7 +87,10 @@ export interface Portfolio {
   investedUsd: number;
   /** Spendable USDG (USD). */
   cashUsd: number;
-  /** investedUsd + cashUsd — the headline number, computed server-side. */
+  /** USDG parked at the smart account (Grove-exit proceeds). The user's cash,
+      but not what the ordinary buy flows can spend — label it when shown. */
+  smartCashUsd: number;
+  /** investedUsd + cashUsd + smartCashUsd — the headline, computed server-side. */
   totalUsd: number;
 }
 
@@ -107,10 +129,18 @@ interface PortfolioApiHolding {
   smartQty?: number;
   smartRaw?: string;
   smartUsd?: number | null;
+  stakedQty?: number;
+  stakedRaw?: string;
+  stakedUsd?: number | null;
+  unstakingQty?: number;
+  unstakingRaw?: string;
+  unstakingUsd?: number | null;
+  unstakeUnlockAt?: number;
 }
 
 interface PortfolioApiResponse {
   cashUsd: number;
+  smartCashUsd?: number;
   investedUsd: number;
   totalUsd: number;
   holdings: PortfolioApiHolding[];
@@ -125,10 +155,13 @@ interface PortfolioApiResponse {
  *  user less money than they have. */
 export function usePortfolio(address?: string) {
   const demo = useDemo();
-  const smart = useSmartAccountAddress();
+  // Wait for the smart-address derivation to settle (a few ms, local) before
+  // the first fetch: firing EOA-only and refetching when the key flipped cost
+  // a duplicate /api/portfolio on every open and made grove money pop in late.
+  const { address: smart, resolving } = useSmartAccountResolution();
   const query = useQuery({
     queryKey: ["portfolio", address, smart],
-    enabled: !demo && Boolean(address),
+    enabled: !demo && Boolean(address) && !resolving,
     refetchInterval: 30_000,
     ...LIVE_BALANCE_OPTS,
     queryFn: async (): Promise<Portfolio> => {
@@ -155,12 +188,20 @@ export function usePortfolio(address?: string) {
           smartQty: h.smartQty ?? undefined,
           smartRaw: h.smartRaw !== undefined ? BigInt(h.smartRaw) : undefined,
           smartUsd: h.smartUsd ?? undefined,
+          stakedQty: h.stakedQty ?? undefined,
+          stakedRaw: h.stakedRaw !== undefined ? BigInt(h.stakedRaw) : undefined,
+          stakedUsd: h.stakedUsd ?? undefined,
+          unstakingQty: h.unstakingQty ?? undefined,
+          unstakingRaw: h.unstakingRaw !== undefined ? BigInt(h.unstakingRaw) : undefined,
+          unstakingUsd: h.unstakingUsd ?? undefined,
+          unstakeUnlockAt: h.unstakeUnlockAt ?? undefined,
         });
       }
       return {
         holdings,
         investedUsd: api.investedUsd,
         cashUsd: api.cashUsd,
+        smartCashUsd: api.smartCashUsd ?? 0,
         totalUsd: api.totalUsd,
       };
     },
@@ -225,6 +266,9 @@ export function useRefreshBalances() {
       qc.invalidateQueries({ queryKey: ["portfolio"] });
       qc.invalidateQueries({ queryKey: ["activity"] });
       qc.invalidateQueries({ queryKey: ["transactions"] });
+      // Grove position (basis + tracked amounts) moves with every grove trade;
+      // without this the exit button and position card lagged the buy by 30s.
+      qc.invalidateQueries({ queryKey: ["grove-position"] });
     };
     invalidate();
     // The read RPC can trail the bundler by a block right after inclusion, so a

@@ -9,10 +9,12 @@
 // reason to stop before spending gas, not a leg to drop. That is why the server
 // refuses the whole quote when any component is unquotable.
 import { useCallback, useMemo, useRef, useState } from "react";
-import { createPublicClient, http, type Address } from "viem";
+import { createPublicClient, erc20Abi, http, type Address } from "viem";
 import { chain, RPC_URL } from "@/lib/chain";
+import { USDG } from "@/lib/tokens";
 import { authHeader } from "@/lib/authedFetch";
 import { useActiveWallet } from "@/hooks/useActiveWallet";
+import { useRefreshBalances } from "@/hooks/useBalances";
 import { asViemProvider } from "@/lib/provider";
 import { getSmartAccountClient, sendSponsoredCalls } from "@/lib/aa";
 import { buildPermitCall } from "@/lib/permit";
@@ -107,6 +109,7 @@ async function preflight(quote: GroveBuyQuoteJson): Promise<string | null> {
 
 export function useGroveBuy(): UseGroveBuy {
   const wallet = useActiveWallet();
+  const refreshBalances = useRefreshBalances();
   const [phase, setPhase] = useState<GroveBuyPhase>("idle");
   const [error, setError] = useState<string | null>(null);
   const [quote, setQuote] = useState<GroveBuyQuoteJson | null>(null);
@@ -173,9 +176,23 @@ export function useGroveBuy(): UseGroveBuy {
         const { owner: smartAccount } = await getSmartAccountClient(viemProvider);
         const signTyped = typedDataSigner(provider, eoa);
 
+        // Cash already parked at the smart account (grove-exit proceeds) funds
+        // the buy FIRST; only the shortfall crosses from the EOA. Read the raw
+        // balance now — display caches are too stale to size a transfer by.
+        const smartUsdg = await client.readContract({
+          address: USDG.address as Address,
+          abi: erc20Abi,
+          functionName: "balanceOf",
+          args: [smartAccount as Address],
+        });
+
         setPhase("signing");
-        const calls = await buildGroveBuyCalls(q, eoa, smartAccount as Address, (owner, spender, token, value) =>
-          buildPermitCall(signTyped, owner, spender, token, value),
+        const calls = await buildGroveBuyCalls(
+          q,
+          eoa,
+          smartAccount as Address,
+          (owner, spender, token, value) => buildPermitCall(signTyped, owner, spender, token, value),
+          smartUsdg,
         );
 
         // Deliberately NOT simulating buy() here. The approve is step 3 of this
@@ -202,12 +219,14 @@ export function useGroveBuy(): UseGroveBuy {
           })),
         });
         setPhase("done");
+        // The basket (and any spent grove cash) just moved — refetch now.
+        refreshBalances();
       } catch (err) {
         setError(err instanceof Error ? err.message : String(err));
         setPhase("error");
       }
     },
-    [wallet, getQuote],
+    [wallet, getQuote, refreshBalances],
   );
 
   const busy = phase === "quoting" || phase === "checking" || phase === "signing" || phase === "buying";

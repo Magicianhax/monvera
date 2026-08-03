@@ -9,13 +9,13 @@
 // pulls, "at least" is the venue floor each leg reverts below.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useGroveBuy } from "@/hooks/useGroveBuy";
-import { useUsdcBalance } from "@/hooks/useBalances";
+import { usePortfolio, useUsdcBalance } from "@/hooks/useBalances";
 import { useActiveWallet } from "@/hooks/useActiveWallet";
 import type { GroveLive } from "@/hooks/useGroves";
 import { toTile } from "@/lib/displayAssets";
 import { AssetTile } from "@/components/design";
-import { GroveModal, ModalCard, ReceiptRow, TrustCaption, ModalButtons, ModalDoneButton } from "./GroveModal";
-import { PIcon, usd } from "./chatKit";
+import { GroveModal, ModalCard, ModalSuccessIcon, ModalWorking, ReceiptRow, TrustCaption, ModalButtons, ModalDoneButton } from "./GroveModal";
+import { usd } from "./chatKit";
 
 /** Trim a token amount to something readable without lying about size. */
 function tokenStr(raw: string): string {
@@ -29,15 +29,22 @@ function tokenStr(raw: string): string {
 export function GroveBuyPanel({ g, onClose }: { g: GroveLive; onClose: () => void }) {
   const wallet = useActiveWallet();
   const { data: bal } = useUsdcBalance(wallet?.address);
+  const { data: port } = usePortfolio(wallet?.address);
   const [amount, setAmount] = useState(String(Math.max(g.minBuyUsd, 100)));
   const { phase, busy, error, quote, success, getQuote, buy } = useGroveBuy();
 
   const cash = bal?.value ?? 0;
+  // Grove-exit proceeds park at the smart account and fund a re-buy FIRST
+  // (useGroveBuy spends them before pulling from the EOA) — so the spendable
+  // number here is BOTH pots, or a user re-entering after an exit is told
+  // they have no money.
+  const groveCash = port?.smartCashUsd ?? 0;
+  const spendable = cash + groveCash;
   const amountNum = Number(amount);
   const valid = Number.isFinite(amountNum) && amountNum >= g.minBuyUsd;
   // bal !== undefined, not cash > 0: a LOADED zero balance must block exactly
   // like any other insufficient balance, or the $0 user signs a doomed permit.
-  const overCash = valid && bal !== undefined && amountNum > bal.value;
+  const overCash = valid && bal !== undefined && amountNum > spendable;
 
   // Price on a settle, not on every keystroke — each quote fans out to the
   // venue once per component.
@@ -84,14 +91,22 @@ export function GroveBuyPanel({ g, onClose }: { g: GroveLive; onClose: () => voi
 
   const done = Boolean(success);
 
+  // Transaction-out beats get the staking dialog's treatment: the form
+  // disappears behind a spinner + live step, then the check POPS on success.
+  const working = phase === "checking" || phase === "signing" || phase === "buying";
+
   return (
     <GroveModal title={done ? "Bought" : `Buy ${g.name}`} onClose={onClose} busy={busy}>
-      {done && success ? (
+      {working ? (
+        <ModalWorking
+          title={`Buying ${g.name}`}
+          step={phaseLabel}
+          symbols={(quote?.legs.length ? quote.legs : undefined)?.map((l) => l.symbol)}
+        />
+      ) : done && success ? (
         // ── success (PaySheet "sent" idiom) ──
         <div style={{ textAlign: "center", padding: "8px 0 2px" }}>
-          <div style={{ width: 60, height: 60, borderRadius: "50%", background: "var(--primary)", display: "grid", placeItems: "center", margin: "0 auto 12px" }}>
-            <PIcon name="ph-check" size={30} weight="bold" style={{ color: "var(--primary-ink, #fff)" }} />
-          </div>
+          <ModalSuccessIcon />
           <div className="serif" style={{ fontSize: 20, fontWeight: 500 }}>{g.name} is yours</div>
           <p style={{ fontSize: 13, color: "var(--ink-2)", margin: "6px 0 12px", lineHeight: 1.55 }}>
             <span className="tnum">{usd(success.totalUsd)}</span> across {success.legs.length} {success.legs.length === 1 ? "holding" : "holdings"}, settled in your own wallet.
@@ -126,9 +141,9 @@ export function GroveBuyPanel({ g, onClose }: { g: GroveLive; onClose: () => voi
                 disabled={busy}
                 style={{ flex: 1, minWidth: 0, border: "none", outline: "none", background: "transparent", fontSize: 24, fontWeight: 600, color: busy ? "var(--ink-3)" : "var(--ink)" }}
               />
-              {cash >= g.minBuyUsd && (
+              {spendable >= g.minBuyUsd && (
                 <button
-                  onClick={() => setAmount(String(Math.floor(cash)))}
+                  onClick={() => setAmount(String(Math.floor(spendable)))}
                   disabled={busy}
                   style={{ flex: "none", padding: "5px 12px", borderRadius: 999, fontSize: 11.5, fontWeight: 700, background: "var(--panel-2)", border: "1px solid var(--line)", color: "var(--ink-2)", cursor: busy ? "default" : "pointer" }}
                 >
@@ -138,9 +153,9 @@ export function GroveBuyPanel({ g, onClose }: { g: GroveLive; onClose: () => voi
             </div>
             <div className="mono" style={{ fontSize: 11.5, color: overCash ? "var(--neg)" : "var(--ink-3)", marginTop: 6 }}>
               {overCash
-                ? `You have ${usd(cash)} in cash`
+                ? `You have ${usd(spendable)} to spend${groveCash >= 0.01 ? ` (incl. ${usd(groveCash)} in your Grove account)` : ""}`
                 : bal !== undefined
-                  ? `Balance ${usd(cash)} · from ${usd(g.minBuyUsd)}`
+                  ? `Balance ${usd(spendable)}${groveCash >= 0.01 ? ` · ${usd(groveCash)} from Grove exits used first` : ""} · from ${usd(g.minBuyUsd)}`
                   : `From ${usd(g.minBuyUsd)}`}
             </div>
           </ModalCard>
@@ -171,13 +186,26 @@ export function GroveBuyPanel({ g, onClose }: { g: GroveLive; onClose: () => voi
           {fresh && valid && (
             <div style={{ margin: "10px 2px 0" }}>
               <ReceiptRow k="Total" v={usd(totalUsd)} strong />
-              <ReceiptRow k="Gas" v="sponsored" muted />
+              <ReceiptRow k="Gas" v="on us" muted />
               <ReceiptRow k="Entry fee" v="none" muted />
             </div>
           )}
 
           {error && (
-            <div style={{ fontSize: 12.5, lineHeight: 1.55, color: "var(--neg)", marginTop: 10 }}>{error}</div>
+            <div style={{ fontSize: 12.5, lineHeight: 1.55, color: "var(--neg)", marginTop: 10 }}>
+              {error}
+              {/* The auto-quote only re-fires when the AMOUNT changes, so a
+                  failed quote used to strand the panel with Buy disabled until
+                  the user edited the number. The error itself must be a retry. */}
+              {valid && !busy && (
+                <button
+                  onClick={() => void getQuote(g.id, amountNum)}
+                  style={{ display: "block", width: "100%", height: 38, marginTop: 8, borderRadius: 11, fontSize: 12.5, fontWeight: 700, border: "1px solid var(--line)", background: "var(--panel-2)", color: "var(--ink)" }}
+                >
+                  Price it again
+                </button>
+              )}
+            </div>
           )}
 
           <TrustCaption>Settles in your own wallet, whole or not at all</TrustCaption>

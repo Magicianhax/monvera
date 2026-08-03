@@ -30,13 +30,16 @@ import { useActiveWallet } from "@/hooks/useActiveWallet";
 import { asViemProvider } from "@/lib/provider";
 import { getSmartAccountClient } from "@/lib/aa";
 
-/** The smart account address, or undefined until the embedded wallet is ready. */
-export function useSmartAccountAddress(): `0x${string}` | undefined {
+/** The smart account address plus whether the derivation is still in flight.
+ *  `resolving` lets money queries wait the few ms for the address instead of
+ *  fetching EOA-only and refetching when the key flips — that double fetch was
+ *  every cold open's tax, and grove money "popping in late" was its symptom. */
+export function useSmartAccountResolution(): { address: `0x${string}` | undefined; resolving: boolean } {
   const wallet = useActiveWallet();
   const embedded = wallet?.walletClientType === "privy" ? wallet : undefined;
   const eoa = embedded?.address;
 
-  const { data } = useQuery({
+  const query = useQuery({
     queryKey: ["smart-account-address", eoa],
     enabled: Boolean(eoa && embedded),
     // Counterfactual and deterministic — derived once, good for the session.
@@ -50,5 +53,12 @@ export function useSmartAccountAddress(): `0x${string}` | undefined {
     },
   });
 
-  return data;
+  // Only "resolving" while the derivation can actually run: no embedded wallet
+  // (external-wallet session, or Privy still hydrating) must not block anyone.
+  return { address: query.data, resolving: Boolean(eoa && embedded) && query.isPending };
+}
+
+/** The smart account address, or undefined until the embedded wallet is ready. */
+export function useSmartAccountAddress(): `0x${string}` | undefined {
+  return useSmartAccountResolution().address;
 }

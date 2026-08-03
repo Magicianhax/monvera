@@ -13,7 +13,7 @@
 //
 // No platform fee — Arcus's fee is inside each quote and our referral code is
 // attached server-side. No executor contract: settlement is per-leg RFQ.
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { encodeFunctionData, zeroAddress } from "viem";
 import { useSignTypedData } from "@privy-io/react-auth";
 import { useActiveWallet } from "@/hooks/useActiveWallet";
@@ -31,7 +31,7 @@ import { authHeader } from "@/lib/authedFetch";
 import type { Allocation } from "@/lib/allocation-schema";
 import type { AllocateResult, InvestSuccess } from "@/lib/invest-types";
 import type { VenueName } from "@/hooks/useSwap";
-import { explainError, explainInvestFailure } from "@/lib/explainError";
+import { explainError, explainInvestFailure, isUserRejection } from "@/lib/explainError";
 
 /** POST /api/commit-plan response — Vera's signed risk inference for this plan. */
 interface CommitPlan {
@@ -83,6 +83,8 @@ export interface UseInvest {
   /** Adopt a ready-made allocation (Scan to Buy) without an allocate model call. */
   adopt: (result: AllocateResult) => void;
   invest: (allocation: Allocation, amountUsd: number, address: string, mode?: InvestMode) => Promise<void>;
+  /** Stop the leg loop after the in-flight trade; the rest report as failed. */
+  stop: () => void;
   reset: () => void;
   clearError: () => void;
 }
@@ -129,6 +131,9 @@ export function useInvest(): UseInvest {
   const [allocation, setAllocation] = useState<AllocateResult | null>(null);
   const [success, setSuccess] = useState<InvestSuccess | null>(null);
   const [progress, setProgress] = useState<InvestProgress | null>(null);
+  // Set by stop() or by a declined signature; checked before each leg so the
+  // run halts cleanly — what already filled stays filled, reported honestly.
+  const stopRef = useRef(false);
 
   const reset = useCallback(() => {
     setPhase("idle");
@@ -136,6 +141,11 @@ export function useInvest(): UseInvest {
     setAllocation(null);
     setSuccess(null);
     setProgress(null);
+    stopRef.current = false;
+  }, []);
+
+  const stop = useCallback(() => {
+    stopRef.current = true;
   }, []);
 
   const clearError = useCallback(() => setError(null), []);
@@ -271,7 +281,7 @@ export function useInvest(): UseInvest {
         const filled: { leg: (typeof active)[number]["leg"]; amountMicro: bigint; txHash: `0x${string}`; settling: boolean }[] = [];
         const filledSyms: string[] = [];
         const legVenues: Record<string, VenueName> = {};
-        const failures: { symbol: string; message: string }[] = [];
+        const failures: { symbol: string; amountUsd: number; message: string }[] = [];
         let lastTx: `0x${string}` | null = null;
         let permitDone = false;
         const total = active.length;
@@ -303,8 +313,17 @@ export function useInvest(): UseInvest {
           }
           return { txHash: await relay(await settleCallFor(quote, signTyped)), settling: false };
         };
+        stopRef.current = false;
         for (let idx = 0; idx < active.length; idx++) {
           const q = active[idx];
+          if (stopRef.current) {
+            // User asked to stop (button or a declined signature): the rest is
+            // recorded as unfilled, never silently dropped.
+            for (const rest of active.slice(idx)) {
+              failures.push({ symbol: rest.leg.symbol, amountUsd: Number(rest.amountMicro) / 1_000_000, message: "You stopped the run." });
+            }
+            break;
+          }
           // Mark this leg as in-flight so the placing screen names it.
           setProgress({
             total,
@@ -332,6 +351,12 @@ export function useInvest(): UseInvest {
             try {
               res = await settleQuote(quote);
             } catch (firstErr) {
+              // A declined signature is the user saying NO — stop the run, never
+              // walk the retry ladder re-prompting for a trade they refused.
+              if (isUserRejection(firstErr)) {
+                stopRef.current = true;
+                throw firstErr;
+              }
               // Two known transient failures:
               //  - a "tx" settle reverts the router's InvalidAction() guard when
               //    relayed from the smart account (symbol-dependent) → retry the
@@ -346,6 +371,10 @@ export function useInvest(): UseInvest {
               try {
                 res = await settleQuote(quote);
               } catch (secondErr) {
+                if (isUserRejection(secondErr)) {
+                  stopRef.current = true;
+                  throw secondErr;
+                }
                 // Last rung: the best OTHER venue (skip the one that failed).
                 console.warn(`[invest] leg ${q.leg.symbol} cross-venue retry:`, secondErr instanceof Error ? secondErr.message : secondErr);
                 quote = await fetchArcusQuote({ side: "buy", symbol: q.leg.symbol, sellAmount: q.amountMicro, taker: eoa, executor, avoid: [failedVenue] });
@@ -363,7 +392,11 @@ export function useInvest(): UseInvest {
             console.error(`[invest] leg ${q.leg.symbol} failed (after retry):`, legErr instanceof Error ? legErr.message : legErr);
             // Keep the reason: when NOTHING fills, the user deserves to know why
             // in plain words instead of a blank "it didn't go through".
-            failures.push({ symbol: q.leg.symbol, message: legErr instanceof Error ? legErr.message : String(legErr) });
+            failures.push({
+              symbol: q.leg.symbol,
+              amountUsd: Number(q.amountMicro) / 1_000_000,
+              message: legErr instanceof Error ? legErr.message : String(legErr),
+            });
           }
           const doneCount = idx + 1;
           const perLeg = (Date.now() - startedAt) / 1000 / doneCount;
@@ -437,6 +470,8 @@ export function useInvest(): UseInvest {
           txHash: (recordTx ?? lastTx ?? "0x") as `0x${string}`,
           holdings,
           amountUsd: Number(spentMicro) / 1_000_000,
+          plannedUsd: amountUsd,
+          failed: failures,
           anySettling: filled.some((f) => f.settling),
           verification: commit
             ? {
@@ -483,6 +518,7 @@ export function useInvest(): UseInvest {
     allocate,
     adopt,
     invest,
+    stop,
     reset,
     clearError,
   };

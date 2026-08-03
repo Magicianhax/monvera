@@ -8,8 +8,13 @@
 //   - USDC / mUSD: flat $1 series, synthesized (they are dollar pegs).
 //
 // Everything is cached in-memory per instance (promise-deduped) so a screenful
-// of clients costs at most one upstream call per symbol per TTL window.
+// of clients costs at most one upstream call per symbol per TTL window. The
+// whole-universe sweeps (spark batches, day summary) are additionally backed by
+// KV: Cloudflare recycles isolates constantly, and memory-only meant every cold
+// one re-swept Yahoo — slow, throttle-prone, and it lost /api/portfolio's 3.5s
+// race so day-changes rendered blank.
 import { ALL_ASSETS } from "@/lib/tokens";
+import { kvCached } from "@/lib/server/kvCache";
 
 export type MarketRange = "1D" | "1W" | "1M" | "1Y" | "All";
 export const MARKET_RANGES: MarketRange[] = ["1D", "1W", "1M", "1Y", "All"];
@@ -54,6 +59,19 @@ function ttlCache<T>(key: string, ttlMs: number, load: () => Promise<T>): Promis
   });
   cacheStore.set(key, { at: Date.now(), value });
   return value;
+}
+
+// KV keys cap at 512 bytes and the whole-universe spark key (~95 sorted symbols
+// joined) blows past that, so the fleet-shared key carries a digest of the
+// symbol set instead. FNV-1a is plenty: distinct symbol sets number in the
+// single digits, and a collision only merges two cache entries, never corrupts.
+function fnv1a(s: string): string {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return (h >>> 0).toString(36);
 }
 
 // ── source mapping ────────────────────────────────────────────────────────────
@@ -232,8 +250,20 @@ export function getManyHistories(
   const yahooSyms = symbols.filter(
     (s) => STOCK_SYMBOLS.has(s) && !FLAT_DOLLAR.has(s) && !WRONG_OR_PRIVATE.has(s),
   );
-  const key = `spark:${range}:${[...yahooSyms].sort().join(",")}`;
-  return ttlCache(key, HISTORY_TTL[range], () => yahooSparkBatch(yahooSyms, range));
+  const list = [...yahooSyms].sort().join(",");
+  const key = `spark:${range}:${list}`;
+  // Memory answers first (a warm isolate never touches KV); a memory miss reads
+  // the fleet-shared sweep from KV instead of re-paying Yahoo. A Map doesn't
+  // survive JSON (kvCache packs with JSON.stringify), so KV holds the plain
+  // [symbol, history] pairs and each isolate rebuilds the Map once per TTL.
+  return ttlCache(key, HISTORY_TTL[range], async () => {
+    const entries = await kvCached(
+      `market:spark:${range}:${yahooSyms.length}:${fnv1a(list)}`,
+      HISTORY_TTL[range],
+      async () => [...(await yahooSparkBatch(yahooSyms, range))],
+    );
+    return new Map(entries);
+  });
 }
 
 // ── CoinGecko (tokens) ────────────────────────────────────────────────────────
@@ -298,15 +328,21 @@ export function getHistory(symbol: string, range: MarketRange): Promise<MarketHi
  * portfolio rows and the market list. One cached object for all clients.
  */
 export function getDaySummary(): Promise<Record<string, DaySummaryEntry>> {
-  return ttlCache("day-summary", 5 * 60_000, async () => {
-    const histories = await getManyHistories(
-      ALL_ASSETS.map((a) => a.symbol),
-      "1D",
-    );
-    const map: Record<string, DaySummaryEntry> = {};
-    for (const [symbol, h] of histories) {
-      map[symbol] = { dayChangePct: h.changePct, spark: downsample(h.series, 20) };
-    }
-    return map;
-  });
+  // KV-backed behind the in-memory layer: this object is what /api/portfolio
+  // races on a 3.5s timer, so a cold isolate must be able to answer from the
+  // fleet-shared copy instead of blanking every row's day-change while it
+  // re-sweeps Yahoo. Plain numbers throughout, so it round-trips JSON as-is.
+  return ttlCache("day-summary", 5 * 60_000, () =>
+    kvCached("market:day-summary", 5 * 60_000, async () => {
+      const histories = await getManyHistories(
+        ALL_ASSETS.map((a) => a.symbol),
+        "1D",
+      );
+      const map: Record<string, DaySummaryEntry> = {};
+      for (const [symbol, h] of histories) {
+        map[symbol] = { dayChangePct: h.changePct, spark: downsample(h.series, 20) };
+      }
+      return map;
+    }),
+  );
 }

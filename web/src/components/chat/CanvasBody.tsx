@@ -7,10 +7,10 @@
 //
 // Glass idiom: panels MUST inline `background: "var(--panel)"` (with at least
 // one style property after it) so the CHAT_THEME_CSS highlight selector bites.
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import type { CSSProperties } from "react";
 import {
-  PIcon, ChatMark, ChartHover, usd, usd0, pctStr, priceStr, dcol, chartPaths, sparkPath, curve,
+  AddrChip, PIcon, ChatMark, ChartHover, usd, usd0, pctStr, priceStr, dcol, chartPaths, sparkPath, curve,
   type CanvasType, type ChatNav,
 } from "./chatKit";
 import { AutopilotCanvas } from "./AutopilotCanvas";
@@ -30,10 +30,12 @@ import { useHidden, money } from "./privacy";
 import { sinceBought } from "@/lib/sinceBought";
 import { AssetTile } from "@/components/design";
 import { ActivityGlyph } from "@/components/lite/ActivityGlyph";
+import { MoveCashModal } from "./MoveCashModal";
 import { usePrices } from "@/hooks/usePrices";
 import { useMarketSummary, useMarketHistory, useTradability, type MarketRange } from "@/hooks/useMarket";
-import { usePortfolio, useUsdcBalance } from "@/hooks/useBalances";
+import { holdingWorth, usePortfolio, useUsdcBalance, type Holding } from "@/hooks/useBalances";
 import { useSmartAccount } from "@/hooks/useSmartAccount";
+import { useSmartAccountAddress } from "@/hooks/useSmartAccountAddress";
 import { useTransactions } from "@/hooks/useTransactions";
 import { useVeraRecord } from "@/hooks/useVeraRecord";
 import { useAgentIdentity } from "@/hooks/useAgentIdentity";
@@ -120,16 +122,18 @@ function riskMeta(bps: number): { label: string; tone: string } {
   return { label: "Spicy", tone: "var(--neg)" };
 }
 
-/** USDG in/out over the last 30 days from wallet events. */
+/** USDG in/out over the last 30 days from wallet events. Grove trades count
+ *  like ordinary trades; internal moves and staking never count — the money
+ *  stayed the user's, it just changed pockets. */
 function monthFlows(events: WalletEvent[]): { inUsd: number; outUsd: number; any: boolean } {
   const cutoff = Date.now() / 1000 - 30 * 86400;
   let inUsd = 0, outUsd = 0, any = false;
   for (const e of events) {
     if (!e.timestamp || e.timestamp < cutoff) continue;
     if (e.kind === "receive" && e.symbol === "USDG") { inUsd += e.amount; any = true; }
-    else if (e.kind === "sell") { inUsd += e.usdgAmount ?? 0; any = true; }
+    else if (e.kind === "sell" || e.kind === "groveExit") { inUsd += e.usdgAmount ?? 0; any = true; }
     else if (e.kind === "send" && e.symbol === "USDG") { outUsd += e.amount; any = true; }
-    else if (e.kind === "buy") { outUsd += e.usdgAmount ?? 0; any = true; }
+    else if (e.kind === "buy" || e.kind === "groveBuy") { outUsd += e.usdgAmount ?? 0; any = true; }
   }
   return { inUsd, outUsd, any };
 }
@@ -137,15 +141,45 @@ function monthFlows(events: WalletEvent[]): { inUsd: number; outUsd: number; any
 /** Row copy for one wallet event (title/sub/right amount + its color). */
 function eventBits(e: WalletEvent): { title: string; sub: string; right: string; color: string } {
   const { verb, positive } = eventLabel(e);
-  const isTrade = e.kind === "buy" || e.kind === "sell";
-  const name = e.symbol === "USDG" ? "cash" : displayFor(e.symbol).name;
-  const via = isTrade ? "Swap" : e.counterparty ? (positive ? "From " : "To ") + shortAddress(e.counterparty) : "Transfer";
-  return {
-    title: `${verb} ${name}`,
-    sub: via + (e.timestamp ? " · " + relTime(e.timestamp) : ""),
-    right: isTrade ? (e.kind === "buy" ? "−" : "+") + usd(e.usdgAmount ?? 0) : (positive ? "+" : "−") + fmtAmt(e.amount) + " " + e.symbol,
-    color: (isTrade ? e.kind === "sell" : positive) ? "var(--pos)" : "var(--ink)",
-  };
+  const time = e.timestamp ? " · " + relTime(e.timestamp) : "";
+  switch (e.kind) {
+    case "groveBuy":
+      return {
+        title: "Bought a Grove basket",
+        sub: `${e.legs ?? 1} stock${(e.legs ?? 1) === 1 ? "" : "s"} · Grove${time}`,
+        right: e.usdgAmount !== undefined ? "−" + usd(e.usdgAmount) : `+${fmtAmt(e.amount)} ${e.symbol}`,
+        color: "var(--ink)",
+      };
+    case "groveExit":
+      return {
+        title: "Exited a Grove",
+        sub: `${e.legs ?? 1} stock${(e.legs ?? 1) === 1 ? "" : "s"} sold · Grove${time}`,
+        right: e.usdgAmount !== undefined ? "+" + usd(e.usdgAmount) : `−${fmtAmt(e.amount)} ${e.symbol}`,
+        color: "var(--pos)",
+      };
+    case "stake":
+      return { title: "Staked $MONVERA", sub: `Staking${time}`, right: "−" + fmtAmt(e.amount) + " MONVERA", color: "var(--ink)" };
+    case "unstake":
+      return { title: "Unstaked $MONVERA", sub: `Staking${time}`, right: "+" + fmtAmt(e.amount) + " MONVERA", color: "var(--pos)" };
+    case "move":
+      return {
+        title: e.moveTo === "smart" ? "Moved to your Grove account" : "Moved to your cash wallet",
+        sub: `Between your own accounts${time}`,
+        right: fmtAmt(e.amount) + " " + e.symbol,
+        color: "var(--ink)",
+      };
+    default: {
+      const isTrade = e.kind === "buy" || e.kind === "sell";
+      const name = e.symbol === "USDG" ? "cash" : displayFor(e.symbol).name;
+      const via = isTrade ? "Swap" : e.counterparty ? (positive ? "From " : "To ") + shortAddress(e.counterparty) : "Transfer";
+      return {
+        title: `${verb} ${name}`,
+        sub: via + time,
+        right: isTrade ? (e.kind === "buy" ? "−" : "+") + usd(e.usdgAmount ?? 0) : (positive ? "+" : "−") + fmtAmt(e.amount) + " " + e.symbol,
+        color: (isTrade ? e.kind === "sell" : positive) ? "var(--pos)" : "var(--ink)",
+      };
+    }
+  }
 }
 
 // ── market ───────────────────────────────────────────────────────────────────
@@ -304,9 +338,14 @@ function HoldingPanel({ symbol, nav }: { symbol: string; nav: ChatNav }) {
   const [alertOpen, setAlertOpen] = useState(false);
   const [alertDir, setAlertDir] = useState<"above" | "below">("above");
   const [alertPrice, setAlertPrice] = useState("");
-  const [alertState, setAlertState] = useState<"idle" | "saving" | "set">("idle");
+  const [alertState, setAlertState] = useState<"idle" | "saving" | "set" | "failed">("idle");
+  // `held` gates SELLING (EOA shares only — Grove-held shares can't ride the
+  // normal sell path); `owned` gates the position band, which shows the full
+  // worth including any part sitting in a Grove.
   const held = !!holding && holding.qty > 0;
-  const positionStr = holding ? (holding.valueUsd !== undefined ? usd(holding.valueUsd) : fmtAmt(holding.qty) + " sh") : "";
+  const worthUsd = holding ? holdingWorth(holding) : 0;
+  const owned = !!holding && (held || worthUsd > 0);
+  const positionStr = holding ? (worthUsd > 0 ? usd(worthUsd) : fmtAmt(holding.qty) + " sh") : "";
 
   const meta = hist?.meta;
   // Context the old asset page had: why it moved today (relative to the tape),
@@ -317,7 +356,9 @@ function HoldingPanel({ symbol, nav }: { symbol: string; nav: ChatNav }) {
   const entryTs = held
     ? (ctxTxs ?? []).filter((t) => t.symbol === symbol && t.direction === "in").reduce<number | undefined>((min, t) => (t.timestamp && (!min || t.timestamp < min) ? t.timestamp : min), undefined)
     : undefined;
-  const { data: yearHist } = useMarketHistory(symbol, "1Y");
+  // The 1Y series only feeds "since you bought" — skip the fetch entirely for
+  // assets the user doesn't hold (undefined symbol disables the query).
+  const { data: yearHist } = useMarketHistory(held ? symbol : undefined, "1Y");
   const since = held ? sinceBought(entryTs, yearHist?.timestamps, yearHist?.series, price) : null;
   const stats: { label: string; value: string }[] = [
     { label: "Open", value: series ? usd(series[0]) : "—" },
@@ -372,11 +413,16 @@ function HoldingPanel({ symbol, nav }: { symbol: string; nav: ChatNav }) {
       </div>
 
       {/* position — naked row framed by hairlines */}
-      {held && (
+      {owned && (
         <div style={{ marginTop: 14, padding: "12px 4px", display: "flex", alignItems: "center", justifyContent: "space-between", borderTop: "1px solid var(--line-2)", borderBottom: "1px solid var(--line-2)" }}>
           <div>
             <div style={{ fontSize: 11.5, fontWeight: 600, textTransform: "uppercase", letterSpacing: ".03em", color: "var(--ink-3)" }}>You own</div>
             <div className="tnum serif" style={{ fontSize: 22, fontWeight: 500, marginTop: 2 }}>{positionStr}</div>
+            {(holding?.smartUsd ?? 0) > 0 && (
+              <div className="tnum" style={{ fontSize: 11.5, color: "var(--ink-3)", marginTop: 2 }}>
+                {usd(holding!.smartUsd!)} of this sits in a Grove — exit the Grove to sell that part
+              </div>
+            )}
           </div>
           <PIcon name="ph-trend-up" size={24} style={{ color: "var(--pos)" }} />
         </div>
@@ -467,14 +513,19 @@ function HoldingPanel({ symbol, nav }: { symbol: string; nav: ChatNav }) {
                 const t = parseFloat(alertPrice);
                 if (!isFinite(t) || t <= 0 || alertState === "saving") return;
                 setAlertState("saving");
+                // A swallowed rejection left the row looking untouched — the
+                // user believed the alert was set when the server said no.
                 try { await createAlert({ symbol, direction: alertDir, threshold: t }); setAlertState("set"); setAlertOpen(false); }
-                catch { setAlertState("idle"); }
+                catch { setAlertState("failed"); }
               }}
               style={{ height: 40, padding: "0 15px", flex: "none", borderRadius: 12, fontSize: 13, fontWeight: 700, background: "var(--primary)", color: "var(--primary-ink)", opacity: alertState === "saving" ? 0.6 : 1 }}
             >
-              {alertState === "saving" ? "…" : "Set"}
+              {alertState === "saving" ? "…" : alertState === "failed" ? "Retry" : "Set"}
             </button>
           </div>
+        )}
+        {alertState === "failed" && (
+          <div style={{ fontSize: 11.5, color: "var(--neg)", marginTop: 6 }}>Couldn&rsquo;t set that alert — check the price and try again.</div>
         )}
       </div>
       {/* Two ways to hand this name to Vera: buy it directly (she asks how
@@ -495,28 +546,57 @@ function HoldingPanel({ symbol, nav }: { symbol: string; nav: ChatNav }) {
 
 function PortfolioPanel({ nav }: { nav: ChatNav }) {
   const { address } = useSmartAccount();
+  const smartAddr = useSmartAccountAddress();
   const hiddenP = useHidden();
   const { data: port, isLoading } = usePortfolio(address ?? undefined);
 
+  // One user, two on-chain accounts. Combined is the default truth; the tabs
+  // slice the SAME holdings by where they physically sit — EOA (ordinary
+  // trades) vs the ERC-4337 smart account (Grove baskets, Grove-exit cash).
+  const [acct, setAcct] = useState<"all" | "eoa" | "smart">("all");
+  const valOf = useCallback(
+    (h: Holding) =>
+      acct === "all"
+        ? holdingWorth(h)
+        : acct === "eoa"
+          ? (h.valueUsd ?? 0) + (h.settlingUsd ?? 0)
+          : (h.smartUsd ?? 0),
+    [acct],
+  );
+
   const cash = port?.cashUsd ?? 0;
+  const smartCash = port?.smartCashUsd ?? 0;
   const total = port?.totalUsd ?? 0;
-  const monveraValue = (port?.holdings ?? []).find((h) => h.asset.symbol === "MONVERA")?.valueUsd ?? 0;
-  const invested = Math.max(0, (port?.investedUsd ?? 0) - monveraValue);
+  // Full worth everywhere here: settled shares PLUS Grove-held, settling and
+  // staked parts. Only the sell flows care about the EOA-only split.
+  const monveraHolding = (port?.holdings ?? []).find((h) => h.asset.symbol === "MONVERA");
+  const invested = Math.max(0, (port?.investedUsd ?? 0) - (monveraHolding ? holdingWorth(monveraHolding) : 0));
+
+  // Per-account totals that SUM to the combined figure (staking and settling
+  // key to the EOA; baskets and grove cash to the smart account). The hero
+  // follows the tab — an account tab that still showed the combined number
+  // read as a bug.
+  const allH = port?.holdings ?? [];
+  const eoaTotal = cash + allH.reduce((s, h) => s + (h.valueUsd ?? 0) + (h.settlingUsd ?? 0) + (h.stakedUsd ?? 0) + (h.unstakingUsd ?? 0), 0);
+  const smartTotal = smartCash + allH.reduce((s, h) => s + (h.smartUsd ?? 0), 0);
+  const heroTotal = acct === "all" ? total : acct === "eoa" ? eoaTotal : smartTotal;
+  const heroCash = acct === "smart" ? smartCash : cash;
+  const heroInvested = acct === "all" ? invested : Math.max(0, heroTotal - heroCash);
 
   const holdings = (port?.holdings ?? [])
-    .filter((h) => h.asset.symbol !== "MONVERA")
+    .filter((h) => h.asset.symbol !== "MONVERA" && (acct === "all" || valOf(h) > 0))
     .slice()
-    .sort((a, b) => (b.valueUsd ?? 0) - (a.valueUsd ?? 0));
-  const stockValue = holdings.reduce((s, h) => s + (h.valueUsd ?? 0), 0);
-  const dayUsd = holdings.reduce((s, h) => s + (h.valueUsd ?? 0) * ((h.dayChangePct ?? 0) / 100), 0);
+    .sort((a, b) => valOf(b) - valOf(a));
+  const stockValue = holdings.reduce((s, h) => s + valOf(h), 0);
+  const dayUsd = holdings.reduce((s, h) => s + valOf(h) * ((h.dayChangePct ?? 0) / 100), 0);
   const dayStr = (dayUsd >= 0 ? "+" : "−") + "$" + Math.abs(dayUsd).toFixed(2);
 
-  // Donut ring over non-MONVERA holdings by valueUsd share.
-  const segs = holdings.filter((h) => (h.valueUsd ?? 0) > 0);
+  // Donut ring over non-MONVERA holdings by the selected account's share.
+  const segs = holdings.filter((h) => valOf(h) > 0);
   let acc = 0;
   const stops: string[] = [];
   const legend = segs.map((h, i) => {
-    const w = stockValue > 0 ? ((h.valueUsd ?? 0) / stockValue) * 100 : 0;
+    const w = stockValue > 0 ? (valOf(h) / stockValue) * 100 : 0;
     const col = `color-mix(in srgb, var(--primary) ${Math.max(28, 92 - i * 15)}%, var(--panel-2))`;
     stops.push(`${col} ${acc.toFixed(1)}% ${(acc + w).toFixed(1)}%`);
     acc += w;
@@ -527,19 +607,56 @@ function PortfolioPanel({ nav }: { nav: ChatNav }) {
 
   return (
     <div>
-      {/* hero */}
+      {/* account tabs ABOVE the hero — the whole panel, headline included,
+          follows the selection; Combined is the overall truth. */}
+      <div style={{ padding: "0 2px 10px" }}>
+        <div style={{ display: "inline-flex", gap: 4, padding: 3, borderRadius: 999, border: "1px solid var(--line)", background: "var(--panel)" }}>
+          {([["all", "Combined"], ["eoa", "Cash wallet"], ["smart", "Grove account"]] as const).map(([k, lbl]) => (
+            <button
+              key={k}
+              onClick={() => setAcct(k)}
+              style={{ height: 30, padding: "0 13px", borderRadius: 999, fontSize: 12, fontWeight: 700, background: acct === k ? "var(--primary)" : "transparent", color: acct === k ? "var(--primary-ink)" : "var(--ink-3)" }}
+            >
+              {lbl}
+            </button>
+          ))}
+        </div>
+        {acct !== "all" && (
+          <div style={{ marginTop: 7, fontSize: 11.5, color: "var(--ink-3)", display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+            {(acct === "eoa" ? address : smartAddr) ? (
+              <AddrChip addr={(acct === "eoa" ? address : smartAddr) as string} />
+            ) : (
+              <span className="mono">…</span>
+            )}
+            <span>{acct === "eoa" ? "ordinary trades settle here" : "Grove buys & exits settle here"}</span>
+          </div>
+        )}
+      </div>
+
+      {/* hero — every number follows the selected account tab; Combined is
+          the overall truth. */}
       <div style={hero(15, 20, { padding: "20px 22px" })}>
-        <div style={{ fontSize: 11.5, fontWeight: 600, textTransform: "uppercase", letterSpacing: ".04em", color: "var(--ink-3)" }}>Total balance</div>
-        <div className="serif tnum" style={{ fontSize: 34, fontWeight: 500, marginTop: 2 }}>{money(total, hiddenP)}</div>
+        <div style={{ fontSize: 11.5, fontWeight: 600, textTransform: "uppercase", letterSpacing: ".04em", color: "var(--ink-3)" }}>
+          {acct === "all" ? "Total balance" : acct === "eoa" ? "Cash wallet balance" : "Grove account balance"}
+        </div>
+        <div className="serif tnum" style={{ fontSize: 34, fontWeight: 500, marginTop: 2 }}>{money(heroTotal, hiddenP)}</div>
         <div className="tnum" style={{ fontSize: 13.5, fontWeight: 600, color: dcol(dayUsd), marginTop: 2 }}>{dayStr} today</div>
         <div style={{ display: "flex", gap: 20, marginTop: 14, alignItems: "flex-end" }}>
+          {/* money(..., hidden) everywhere — "Hide balances" must hide these
+              tiles too, not just the headline. */}
           <div>
             <div style={{ fontSize: 11, color: "var(--ink-3)", fontWeight: 600, textTransform: "uppercase" }}>Cash</div>
-            <div className="tnum" style={{ fontSize: 16, fontWeight: 600, marginTop: 2 }}>{usd(cash)}</div>
+            <div className="tnum" style={{ fontSize: 16, fontWeight: 600, marginTop: 2 }}>{money(heroCash, hiddenP)}</div>
+            {acct === "all" && smartCash >= 0.01 && (
+              <div className="tnum" style={{ fontSize: 10.5, color: "var(--ink-3)", marginTop: 1 }}>+{money(smartCash, hiddenP)} from Grove exits</div>
+            )}
+            {acct === "smart" && (
+              <div style={{ fontSize: 10.5, color: "var(--ink-3)", marginTop: 1 }}>from Grove exits</div>
+            )}
           </div>
           <div>
             <div style={{ fontSize: 11, color: "var(--ink-3)", fontWeight: 600, textTransform: "uppercase" }}>Invested</div>
-            <div className="tnum" style={{ fontSize: 16, fontWeight: 600, marginTop: 2 }}>{usd(invested)}</div>
+            <div className="tnum" style={{ fontSize: 16, fontWeight: 600, marginTop: 2 }}>{money(heroInvested, hiddenP)}</div>
           </div>
           {stockValue > 0 && (
             <button onClick={() => nav.askVera("Sell everything")} style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 6, height: 34, padding: "0 13px", borderRadius: 999, border: "1px solid var(--line)", background: "var(--panel-2)", fontSize: 12, fontWeight: 650, color: "var(--ink-2)" }}>
@@ -577,22 +694,42 @@ function PortfolioPanel({ nav }: { nav: ChatNav }) {
       {/* holdings — naked hairline list */}
       <div style={{ marginTop: 14, padding: "0 2px" }}>
         {holdings.length === 0 && (
-          <div style={EMPTY_NOTE}>{isLoading ? "Loading your holdings…" : "You don't own anything yet — start a plan with Vera to get going."}</div>
+          <div style={EMPTY_NOTE}>
+            {isLoading
+              ? "Loading your holdings…"
+              : acct === "smart"
+                ? "Nothing in your Grove account — buy a Grove and the basket lands here."
+                : acct === "eoa"
+                  ? "Nothing in your cash wallet yet — ordinary buys land here."
+                  : "You don't own anything yet — start a plan with Vera to get going."}
+          </div>
         )}
         {holdings.map((h, i) => {
           const tile = toTile(h.asset.symbol, h.asset.name);
-          const w = stockValue > 0 && h.valueUsd !== undefined ? Math.round((h.valueUsd / stockValue) * 100) + "% of portfolio" : "";
+          const worthUsd = valOf(h);
+          const w = stockValue > 0 && worthUsd > 0 ? Math.round((worthUsd / stockValue) * 100) + "% of portfolio" : "";
+          // Where the shares actually sit — only on Combined; on an account tab
+          // every row already belongs to that account, so flags would be noise.
+          const flags = acct !== "all" ? [] : [
+            h.smartUsd !== undefined && h.smartUsd > 0 ? ((h.valueUsd ?? 0) > 0 ? "partly in a Grove" : "in a Grove") : "",
+            h.settlingUsd !== undefined && h.settlingUsd > 0 ? "settling" : "",
+          ].filter(Boolean);
+          // Nothing at the EOA = nothing the sell flow can move; the way out is
+          // the Grove's own exit, so don't offer a button that can only revert.
+          const sellable = h.qty > 0;
           return (
             <div key={h.asset.symbol} style={{ display: "flex", alignItems: "center", gap: 12, padding: "11px 6px", borderTop: i === 0 ? "none" : "1px solid var(--line-2)" }}>
               <button onClick={() => nav.openCanvas("holding", h.asset.symbol)} style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", gap: 12, textAlign: "left" }}>
                 <AssetTile asset={tile} size={34} radius={10} />
                 <span style={{ minWidth: 0 }}>
                   <span style={{ display: "block", fontWeight: 600, fontSize: 14, color: "var(--ink)" }}>{tile.name}</span>
-                  <span style={{ display: "block", fontSize: 11.5, color: "var(--ink-3)" }}>{h.valueUsd !== undefined ? usd(h.valueUsd) : "—"}{w ? " · " + w : ""}</span>
+                  <span style={{ display: "block", fontSize: 11.5, color: "var(--ink-3)" }}>{worthUsd > 0 ? usd(worthUsd) : "—"}{w ? " · " + w : ""}{flags.length ? " · " + flags.join(" · ") : ""}</span>
                 </span>
               </button>
               <button onClick={() => nav.openBuy(h.asset.symbol)} title="Buy more" style={{ width: 30, height: 30, flex: "none", border: "1px solid var(--line)", borderRadius: 9, display: "grid", placeItems: "center", background: "transparent", color: "var(--primary)" }}><PIcon name="ph-plus" size={13} weight="bold" /></button>
-              <button onClick={() => nav.openSell(h.asset.symbol)} title="Sell" style={{ width: 30, height: 30, flex: "none", border: "1px solid var(--line)", borderRadius: 9, display: "grid", placeItems: "center", background: "transparent", color: "var(--neg)" }}><PIcon name="ph-minus" size={13} weight="bold" /></button>
+              {sellable && (
+                <button onClick={() => nav.openSell(h.asset.symbol)} title="Sell" style={{ width: 30, height: 30, flex: "none", border: "1px solid var(--line)", borderRadius: 9, display: "grid", placeItems: "center", background: "transparent", color: "var(--neg)" }}><PIcon name="ph-minus" size={13} weight="bold" /></button>
+              )}
             </div>
           );
         })}
@@ -602,10 +739,12 @@ function PortfolioPanel({ nav }: { nav: ChatNav }) {
       <div style={{ marginTop: 14, display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 8 }}>
         <StatTile label="Today" value={dayStr} color={dcol(dayUsd)} />
         <StatTile label="Top holding" value={legend.length ? `${legend[0].name} · ${topWeight}` : "—"} />
-        <StatTile label="Cash ready" value={usd(cash)} />
+        <StatTile label="Cash ready" value={money(cash, hiddenP)} />
       </div>
 
-      <VeraRead holdings={holdings.map((h) => ({ symbol: h.asset.symbol, weightPct: Math.max(0.01, h.valueUsd ?? 0) }))} />
+      {/* Vera reads the WHOLE portfolio regardless of the account tab — the
+          tab is a lens for the human, not a boundary for the analysis. */}
+      <VeraRead holdings={(port?.holdings ?? []).filter((h) => h.asset.symbol !== "MONVERA").map((h) => ({ symbol: h.asset.symbol, weightPct: Math.max(0.01, holdingWorth(h)) }))} />
 
       <button onClick={() => nav.askVera("Review my portfolio and rebalance if needed")} style={{ display: "flex", width: "100%", alignItems: "center", justifyContent: "center", gap: 8, height: 50, marginTop: 10, borderRadius: 14, fontSize: 15, fontWeight: 600, color: "var(--primary-ink)", background: "var(--primary)" }}>
         <PIcon name="ph-sparkle" size={17} weight="fill" /> Ask Vera to rebalance
@@ -643,7 +782,9 @@ function VeraPanel() {
         </div>
         <div style={{ marginTop: 14, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 14px", borderRadius: 12, background: "var(--panel-2)" }}>
           <span style={{ fontSize: 11.5, fontWeight: 600, color: "var(--ink-3)" }}>Signer</span>
-          <span className="mono" style={{ fontSize: 12, color: "var(--primary)" }}>{identity?.signer ? shortAddress(identity.signer) : "—"}</span>
+          {/* The signer IS the trust claim — it must be checkable and copyable,
+              not a dead string. */}
+          {identity?.signer ? <AddrChip addr={identity.signer} /> : <span className="mono" style={{ fontSize: 12, color: "var(--primary)" }}>—</span>}
         </div>
       </div>
 
@@ -699,23 +840,41 @@ function VeraPanel() {
 
 function WalletPanel({ nav }: { nav: ChatNav }) {
   const { address } = useSmartAccount();
+  const smartAddr = useSmartAccountAddress();
   const recover = useLegacyRecover();
   const hidden = useHidden();
+  // Which account card(s) to show — same segmented idiom as the Portfolio.
+  const [acctTab, setAcctTab] = useState<"all" | "eoa" | "smart">("all");
+  // The move-to-cash popup (progress + success beats).
+  const [moveOpen, setMoveOpen] = useState(false);
   const { data: bal } = useUsdcBalance(address ?? undefined);
   const { data: txs } = useTransactions(address ?? undefined);
   const { data: port } = usePortfolio(address ?? undefined);
   const cash = bal?.value ?? 0;
-  const events = useMemo(() => toWalletEvents(txs ?? []), [txs]);
+  const smartCash = port?.smartCashUsd ?? 0;
+  // Both addresses let the classifier name grove trades and collapse internal
+  // EOA<->smart moves instead of showing "Sent cash" to a stranger.
+  const events = useMemo(
+    () => toWalletEvents(txs ?? [], { eoa: address ?? undefined, smartAccount: smartAddr }),
+    [txs, address, smartAddr],
+  );
   const flows = monthFlows(events);
-  // Everything the account holds: MONVERA first (the project token), then stocks by value.
+  // Everything the account holds: MONVERA first (the project token), then
+  // stocks by FULL worth — Grove-held, settling and staked parts included.
   const held = useMemo(
     () =>
       (port?.holdings ?? [])
-        .filter((h) => (h.valueUsd ?? h.settlingUsd ?? 0) > 0 || h.qty > 0)
+        .filter((h) => holdingWorth(h) > 0 || h.qty > 0 || (h.stakedQty ?? 0) > 0 || (h.smartQty ?? 0) > 0)
         .slice()
-        .sort((a, b) => (a.asset.symbol === "MONVERA" ? -1 : b.asset.symbol === "MONVERA" ? 1 : (b.valueUsd ?? 0) - (a.valueUsd ?? 0))),
+        .sort((a, b) => (a.asset.symbol === "MONVERA" ? -1 : b.asset.symbol === "MONVERA" ? 1 : holdingWorth(b) - holdingWorth(a))),
     [port],
   );
+  // Per-account split for the "your two accounts" cards: ordinary trades and
+  // staking key on the EOA; Grove baskets and Grove-exit cash key on the
+  // ERC-4337 smart account.
+  const eoaStocksUsd = (port?.holdings ?? []).reduce((s, h) => s + (h.valueUsd ?? 0) + (h.settlingUsd ?? 0), 0);
+  const eoaStakedUsd = (port?.holdings ?? []).reduce((s, h) => s + (h.stakedUsd ?? 0) + (h.unstakingUsd ?? 0), 0);
+  const smartStocksUsd = (port?.holdings ?? []).reduce((s, h) => s + (h.smartUsd ?? 0), 0);
 
   return (
     <div>
@@ -724,27 +883,23 @@ function WalletPanel({ nav }: { nav: ChatNav }) {
         <Pill text="Self-custody · Gasless" />
         {(() => {
           // The wallet is the money hub — the headline is EVERYTHING the account
-          // holds (cash + stocks + $MONVERA + settling fills), not just USDG.
+          // holds (cash + stocks + $MONVERA + Grove baskets + staked + settling
+          // fills), not just USDG. Grove-exit USDG counts as cash here.
           const total = Math.max(port?.totalUsd ?? 0, cash);
-          const investedAll = Math.max(0, total - cash);
+          const cashAll = cash + smartCash;
+          const investedAll = Math.max(0, total - cashAll);
           return (
             <>
               <div className="serif tnum" style={{ fontSize: 34, fontWeight: 500, marginTop: 8, letterSpacing: "-.01em" }}>{money(total, hidden)}</div>
               <div className="tnum" style={{ fontSize: 12.5, color: "var(--ink-3)", marginTop: 2 }}>
-                {money(cash, hidden)} cash · {money(investedAll, hidden)} in stocks & tokens
+                {money(cashAll, hidden)} cash · {money(investedAll, hidden)} in stocks & tokens
               </div>
             </>
           );
         })()}
         <div style={{ marginTop: 14, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 14px", borderRadius: 12, background: "var(--panel-2)" }}>
-          {/* the self-custody claim, checkable: the address links to the explorer */}
-          {address ? (
-            <a href={addressUrl(address)} target="_blank" rel="noreferrer" className="mono" style={{ fontSize: 12, color: "var(--ink-2)", display: "inline-flex", alignItems: "center", gap: 5, textDecoration: "none" }}>
-              {shortAddress(address)} <PIcon name="ph-arrow-square-out" size={11} weight="bold" style={{ color: "var(--primary)" }} />
-            </a>
-          ) : (
-            <span className="mono" style={{ fontSize: 12, color: "var(--ink-2)" }}>…</span>
-          )}
+          {/* the self-custody claim, checkable: explorer link + one-tap copy */}
+          {address ? <AddrChip addr={address} /> : <span className="mono" style={{ fontSize: 12, color: "var(--ink-2)" }}>…</span>}
           <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11.5, fontWeight: 700, color: "var(--primary)" }}>
             <PIcon name="ph-lock-key" size={13} weight="fill" /> only you hold the keys
           </span>
@@ -759,21 +914,78 @@ function WalletPanel({ nav }: { nav: ChatNav }) {
         </div>
       </div>
 
-      {/* stranded USDG at the previous account address: real money, one tap back */}
+      {/* your two accounts — WHICH address holds WHAT, with the addresses
+          visible + copyable. Same segmented-tab idiom as the Portfolio: Both
+          shows the pair, an account tab gives that one the full width. */}
+      <div style={{ marginTop: 12 }}>
+        <div style={{ display: "inline-flex", gap: 4, padding: 3, borderRadius: 999, border: "1px solid var(--line)", background: "var(--panel)" }}>
+          {([["all", "Both accounts"], ["eoa", "Cash wallet"], ["smart", "Grove account"]] as const).map(([k, lbl]) => (
+            <button
+              key={k}
+              onClick={() => setAcctTab(k)}
+              style={{ height: 30, padding: "0 13px", borderRadius: 999, fontSize: 12, fontWeight: 700, background: acctTab === k ? "var(--primary)" : "transparent", color: acctTab === k ? "var(--primary-ink)" : "var(--ink-3)" }}
+            >
+              {lbl}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div style={{ marginTop: 8, display: "grid", gridTemplateColumns: acctTab === "all" ? "repeat(auto-fit,minmax(min(260px,100%),1fr))" : "1fr", gap: 8 }}>
+        {(acctTab === "all" || acctTab === "eoa") && (
+          <div style={{ padding: "13px 14px", borderRadius: 16, border: "1px solid var(--line)", background: "var(--panel)" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 7, fontSize: 12.5, fontWeight: 700 }}>
+              <PIcon name="ph-wallet" size={15} weight="fill" style={{ color: "var(--primary)" }} /> Cash wallet
+              <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: ".05em", textTransform: "uppercase", color: "var(--ink-3)", marginLeft: "auto" }}>signs everything</span>
+            </div>
+            <div style={{ marginTop: 4 }}>
+              {address ? <AddrChip addr={address} /> : <span className="mono" style={{ fontSize: 11, color: "var(--ink-3)" }}>…</span>}
+            </div>
+            <div style={{ marginTop: 9, display: "flex", flexDirection: "column", gap: 4, fontSize: 12 }}>
+              <div style={{ display: "flex", justifyContent: "space-between" }}><span style={{ color: "var(--ink-3)" }}>Cash</span><span className="tnum" style={{ fontWeight: 650 }}>{money(cash, hidden)}</span></div>
+              <div style={{ display: "flex", justifyContent: "space-between" }}><span style={{ color: "var(--ink-3)" }}>Stocks &amp; tokens</span><span className="tnum" style={{ fontWeight: 650 }}>{money(eoaStocksUsd, hidden)}</span></div>
+              {eoaStakedUsd >= 0.01 && (
+                <div style={{ display: "flex", justifyContent: "space-between" }}><span style={{ color: "var(--ink-3)" }}>Staked $MONVERA</span><span className="tnum" style={{ fontWeight: 650 }}>{money(eoaStakedUsd, hidden)}</span></div>
+              )}
+            </div>
+          </div>
+        )}
+        {(acctTab === "all" || acctTab === "smart") && (
+          <div style={{ padding: "13px 14px", borderRadius: 16, border: "1px solid var(--line)", background: "var(--panel)" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 7, fontSize: 12.5, fontWeight: 700 }}>
+              <PIcon name="ph-tree" size={15} weight="fill" style={{ color: "var(--primary)" }} /> Grove account
+              <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: ".05em", textTransform: "uppercase", color: "var(--ink-3)", marginLeft: "auto" }}>gasless executor</span>
+            </div>
+            <div style={{ marginTop: 4 }}>
+              {smartAddr ? <AddrChip addr={smartAddr} /> : <span className="mono" style={{ fontSize: 11, color: "var(--ink-3)" }}>…</span>}
+            </div>
+            <div style={{ marginTop: 9, display: "flex", flexDirection: "column", gap: 4, fontSize: 12 }}>
+              <div style={{ display: "flex", justifyContent: "space-between" }}><span style={{ color: "var(--ink-3)" }}>Cash from Grove exits</span><span className="tnum" style={{ fontWeight: 650 }}>{money(smartCash, hidden)}</span></div>
+              <div style={{ display: "flex", justifyContent: "space-between" }}><span style={{ color: "var(--ink-3)" }}>Grove baskets</span><span className="tnum" style={{ fontWeight: 650 }}>{money(smartStocksUsd, hidden)}</span></div>
+            </div>
+            <div style={{ fontSize: 10.5, color: "var(--ink-3)", lineHeight: 1.45, marginTop: 8 }}>Owned by your cash wallet — only you can move it.</div>
+          </div>
+        )}
+      </div>
+
+      {/* USDG at the Grove account (exit proceeds), one tap from spendable.
+          Same action as the app-top bar — repeated here because this is the
+          money hub. Copy tells the true story: it's the smart account, not
+          some "previous address". */}
       {recover.hasFunds && (
         <div style={{ marginTop: 12, padding: "13px 14px", borderRadius: 16, border: "1.5px solid var(--primary)", background: "var(--primary-soft)" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13.5, fontWeight: 700 }}>
-            <PIcon name="ph-info" size={16} weight="bold" style={{ color: "var(--primary)" }} /> Recover previous balance
+            <PIcon name="ph-coins" size={16} weight="bold" style={{ color: "var(--primary)" }} /> Cash in your Grove account
           </div>
           <div style={{ fontSize: 12.5, color: "var(--ink-2)", lineHeight: 1.5, marginTop: 5 }}>
-            You have <b className="tnum" style={{ color: "var(--ink)" }}>{usd(recover.usdValue)}</b> at your previous account address. Move it here, gas on us.
+            <b className="tnum" style={{ color: "var(--ink)" }}>{usd(recover.usdValue)}</b> from Grove exits. It funds Grove buys automatically — or move it to spendable cash, gas on us.
           </div>
-          {recover.error && <div style={{ fontSize: 12, color: "var(--neg)", marginTop: 5 }}>{recover.error}</div>}
-          <button onClick={() => recover.recover()} disabled={recover.phase === "moving"} style={{ width: "100%", height: 42, marginTop: 9, borderRadius: 12, fontSize: 13, fontWeight: 700, background: "var(--primary)", color: "var(--primary-ink)", opacity: recover.phase === "moving" ? 0.6 : 1 }}>
-            {recover.phase === "moving" ? "Moving…" : `Move ${usd(recover.usdValue)} here`}
+          <button onClick={() => setMoveOpen(true)} disabled={moveOpen} style={{ width: "100%", height: 42, marginTop: 9, borderRadius: 12, fontSize: 13, fontWeight: 700, background: "var(--primary)", color: "var(--primary-ink)", cursor: moveOpen ? "default" : "pointer" }}>
+            Move {usd(recover.usdValue)} to cash
           </button>
         </div>
       )}
+      {/* the move runs in the same progress/success popup the banner uses */}
+      {moveOpen && <MoveCashModal r={recover} onClose={() => setMoveOpen(false)} />}
 
       {/* in / out */}
       <div style={{ marginTop: 12, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
@@ -792,16 +1004,41 @@ function WalletPanel({ nav }: { nav: ChatNav }) {
           </span>
           <span className="tnum" style={{ fontWeight: 600, fontSize: 14 }}>{usd(cash)}</span>
         </div>
+        {smartCash >= 0.01 && (
+          <div className="hgl" style={{ display: "flex", alignItems: "center", gap: 11, padding: "10px 6px", borderTop: "1px solid var(--line-2)", borderRadius: 12 }}>
+            <AssetTile asset={toTile("USDG")} size={34} radius={10} />
+            <span style={{ flex: 1, minWidth: 0 }}>
+              <span style={{ display: "block", fontWeight: 600, fontSize: 14 }}>Cash · Grove account</span>
+              <span style={{ display: "block", fontSize: 11.5, color: "var(--ink-3)" }}>USDG from Grove exits · counted in your total</span>
+            </span>
+            <span className="tnum" style={{ fontWeight: 600, fontSize: 14 }}>{usd(smartCash)}</span>
+          </div>
+        )}
         {held.map((h) => {
           const sym = h.asset.symbol;
           const tile = toTile(sym, h.asset.name);
-          const value = h.valueUsd ?? h.settlingUsd ?? 0;
+          const value = holdingWorth(h);
+          // Amount line tells the whole story: what sits at the wallet, what a
+          // Grove holds, what is staked, what is still settling.
+          const parts = [
+            h.qty > 0 || value === 0 ? `${fmtAmt(h.qty)} ${sym}` : "",
+            (h.smartQty ?? 0) > 0 ? `${fmtAmt(h.smartQty!)} in a Grove` : "",
+            (h.stakedQty ?? 0) > 0 ? `${fmtAmt(h.stakedQty!)} staked` : "",
+            // A finished cooldown is money the user can act on NOW — never
+            // leave it labeled "unstaking" after the clock ran out.
+            (h.unstakingQty ?? 0) > 0
+              ? (h.unstakeUnlockAt ?? 0) * 1000 <= Date.now()
+                ? `${fmtAmt(h.unstakingQty!)} ready to withdraw`
+                : `${fmtAmt(h.unstakingQty!)} unstaking`
+              : "",
+            h.settlingUsd ? "settling" : "",
+          ].filter(Boolean);
           return (
             <button key={sym} className="hgl" onClick={() => nav.openCanvas(sym === "MONVERA" ? "token" : "holding", sym)} style={{ display: "flex", alignItems: "center", gap: 11, width: "100%", padding: "10px 6px", borderTop: "1px solid var(--line-2)", borderRadius: 12, textAlign: "left" }}>
               <AssetTile asset={tile} size={34} radius={10} />
               <span style={{ flex: 1, minWidth: 0 }}>
                 <span style={{ display: "block", fontWeight: 600, fontSize: 14, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{tile.name}</span>
-                <span className="tnum" style={{ display: "block", fontSize: 11.5, color: "var(--ink-3)" }}>{fmtAmt(h.qty)} {sym}{h.settlingUsd ? " · settling" : ""}</span>
+                <span className="tnum" style={{ display: "block", fontSize: 11.5, color: "var(--ink-3)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{parts.join(" · ")}</span>
               </span>
               <span className="tnum" style={{ fontWeight: 600, fontSize: 14 }}>{value > 0 ? usd(value) : "—"}</span>
             </button>
@@ -861,7 +1098,14 @@ function TokenPanel({ nav }: { nav: ChatNav }) {
         <div style={{ display: "inline-flex", alignItems: "center", gap: 6, marginTop: 6, padding: "6px 12px", borderRadius: 999, background: "var(--panel-2)", fontSize: 12, fontWeight: 600, color: "var(--ink-2)" }}>
           <PIcon name="ph-wallet" size={13} weight="fill" style={{ color: "var(--primary)" }} />
           {monvera
-            ? <>You hold {tokenQty(monvera.raw, 18)} · ≈ {monvera.valueUsd !== undefined ? usd(monvera.valueUsd) : "—"}</>
+            ? <>
+                You hold {tokenQty(monvera.raw, 18)}
+                {monvera.stakedRaw !== undefined && monvera.stakedRaw > BigInt(0) ? <> · {tokenQty(monvera.stakedRaw, 18)} staked</> : null}
+                {monvera.unstakingRaw !== undefined && monvera.unstakingRaw > BigInt(0)
+                  ? <> · {tokenQty(monvera.unstakingRaw, 18)} {(monvera.unstakeUnlockAt ?? 0) * 1000 <= Date.now() ? "ready to withdraw" : "unstaking"}</>
+                  : null}
+                {" · ≈ "}{holdingWorth(monvera) > 0 ? usd(holdingWorth(monvera)) : "—"}
+              </>
             : <>You don&rsquo;t hold any $MONVERA yet</>}
         </div>
         <div style={{ marginTop: 12 }}>
@@ -1040,9 +1284,13 @@ const ACTIVITY_PAGE = 10;
 
 function ActivityPanel() {
   const { address } = useSmartAccount();
+  const smartAddr = useSmartAccountAddress();
   const { data: txs } = useTransactions(address ?? undefined);
   const { data: invests } = useActivity(address ?? undefined);
-  const events = useMemo(() => toWalletEvents(txs ?? []), [txs]);
+  const events = useMemo(
+    () => toWalletEvents(txs ?? [], { eoa: address ?? undefined, smartAccount: smartAddr }),
+    [txs, address, smartAddr],
+  );
   const flows = monthFlows(events);
   const net = flows.inUsd - flows.outUsd;
 
@@ -1145,8 +1393,8 @@ function InsightsPanel({ nav }: { nav: ChatNav }) {
   const { data: port } = usePortfolio(address ?? undefined);
   const cash = port?.cashUsd ?? 0;
   const holdings = (port?.holdings ?? []).filter((h) => h.asset.symbol !== "MONVERA");
-  const stockValue = holdings.reduce((s, h) => s + (h.valueUsd ?? 0), 0);
-  const techValue = holdings.reduce((s, h) => s + (catFor(h.asset.symbol, h.asset.name) === "Tech" ? (h.valueUsd ?? 0) : 0), 0);
+  const stockValue = holdings.reduce((s, h) => s + holdingWorth(h), 0);
+  const techValue = holdings.reduce((s, h) => s + (catFor(h.asset.symbol, h.asset.name) === "Tech" ? holdingWorth(h) : 0), 0);
   const techPct = stockValue > 0 ? (techValue / stockValue) * 100 : 0;
 
   const cards = [
@@ -1182,7 +1430,7 @@ function InsightsPanel({ nav }: { nav: ChatNav }) {
   ];
 
   // Movers today — only when live day changes exist.
-  const withDay = holdings.filter((h) => typeof h.dayChangePct === "number" && (h.valueUsd ?? 0) > 0);
+  const withDay = holdings.filter((h) => typeof h.dayChangePct === "number" && holdingWorth(h) > 0);
   if (withDay.length >= 2) {
     const best = withDay.reduce((a, b) => ((a.dayChangePct ?? 0) >= (b.dayChangePct ?? 0) ? a : b));
     const worst = withDay.reduce((a, b) => ((a.dayChangePct ?? 0) <= (b.dayChangePct ?? 0) ? a : b));

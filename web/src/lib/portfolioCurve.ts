@@ -15,8 +15,18 @@ export interface DayCurve {
 
 interface CurveHolding {
   valueUsd?: number;
+  /** Parts of the holding the EOA can't sell right now — settling fills,
+   *  Grove-held shares, staked tokens. They move with the market all the same,
+   *  so the curve values them like everything else. */
+  settlingUsd?: number;
+  smartUsd?: number;
+  stakedUsd?: number;
   spark?: number[];
 }
+
+/** Full worth of one curve holding. */
+const curveWorth = (h: CurveHolding): number =>
+  (h.valueUsd ?? 0) + (h.settlingUsd ?? 0) + (h.smartUsd ?? 0) + (h.stakedUsd ?? 0);
 
 const N = 24; // common resolution for all holdings
 
@@ -70,13 +80,13 @@ function resample(series: number[], n: number): number[] {
  * noise reads as the user's money swinging.
  */
 export function portfolioDayCurve(holdings: CurveHolding[], cashUsd = 0): DayCurve | null {
-  const priced = holdings.filter((h) => (h.valueUsd ?? 0) > 0);
+  const priced = holdings.filter((h) => curveWorth(h) > 0);
   if (priced.length === 0) return null;
 
   const sum = new Array<number>(N).fill(cashUsd);
   let anyMovement = false;
   for (const h of priced) {
-    const value = h.valueUsd ?? 0;
+    const value = curveWorth(h);
     const spark = h.spark;
     if (spark && spark.length >= 2 && spark[spark.length - 1] > 0) {
       anyMovement = true;

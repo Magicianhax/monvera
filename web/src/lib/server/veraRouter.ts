@@ -223,7 +223,21 @@ export interface VeraContext {
   address?: string;
   cashUsd?: number;
   investedUsd?: number;
-  holdings?: { symbol: string; qty: number; valueUsd?: number; dayChangePct?: number; settlingUsd?: number }[];
+  /** Grove-exit USDG parked at the smart account — the user's cash, but NOT
+   *  spendable by the buy flows. Never fold into cashUsd. */
+  smartCashUsd?: number;
+  /** valueUsd = EOA-held (sellable). smartUsd = held inside a Grove (exit the
+   *  Grove to sell). stakedUsd = staked $MONVERA (cooldown to unlock). All
+   *  three are the user's money — Vera must never read a grove holder as $0. */
+  holdings?: {
+    symbol: string;
+    qty: number;
+    valueUsd?: number;
+    dayChangePct?: number;
+    settlingUsd?: number;
+    smartUsd?: number;
+    stakedUsd?: number;
+  }[];
   recent?: string[];
 }
 
@@ -315,19 +329,39 @@ async function accountBlock(ctx: VeraContext): Promise<string> {
   return lines.join("\n");
 }
 
+/** A holding's full worth: sellable + grove-held + staked + settling. */
+function holdingWorthUsd(h: NonNullable<VeraContext["holdings"]>[number]): number {
+  return (h.valueUsd ?? 0) + (h.smartUsd ?? 0) + (h.stakedUsd ?? 0) + (h.settlingUsd ?? 0);
+}
+
 function contextBlock(ctx: VeraContext): string {
   const lines: string[] = [];
   if (ctx.holdings?.length) {
     lines.push(
       "USER'S PORTFOLIO (live, real): " +
         ctx.holdings
-          .map((h) => `${h.symbol} ${h.valueUsd !== undefined ? "$" + h.valueUsd.toFixed(2) : h.qty}${typeof h.dayChangePct === "number" ? ` (${h.dayChangePct >= 0 ? "+" : ""}${h.dayChangePct.toFixed(2)}% today)` : ""}${h.settlingUsd ? ` · $${h.settlingUsd.toFixed(2)} settling` : ""}`)
+          .map((h) => {
+            // Full worth first, then provenance: a grove-held or staked position
+            // is the user's money even when the sellable (EOA) part is $0.
+            const worth = holdingWorthUsd(h);
+            const parts = [
+              h.smartUsd ? `$${h.smartUsd.toFixed(2)} in a Grove — exit the Grove to sell` : "",
+              h.stakedUsd ? `$${h.stakedUsd.toFixed(2)} staked` : "",
+              h.settlingUsd ? `$${h.settlingUsd.toFixed(2)} settling` : "",
+            ].filter(Boolean);
+            return `${h.symbol} ${worth > 0 ? "$" + worth.toFixed(2) : h.qty}${typeof h.dayChangePct === "number" ? ` (${h.dayChangePct >= 0 ? "+" : ""}${h.dayChangePct.toFixed(2)}% today)` : ""}${parts.length ? ` [${parts.join(", ")}]` : ""}`;
+          })
           .join(" · "),
     );
   } else {
     lines.push("USER'S PORTFOLIO: no stock holdings yet.");
   }
   if (ctx.cashUsd !== undefined) lines.push(`Cash: $${ctx.cashUsd.toFixed(2)} USDG.`);
+  if (ctx.smartCashUsd) {
+    lines.push(
+      `Grove-account cash: $${ctx.smartCashUsd.toFixed(2)} USDG from Grove exits — the user's money, counted in their total, but NOT spendable by buy flows.`,
+    );
+  }
   if (ctx.investedUsd !== undefined) lines.push(`Invested: $${ctx.investedUsd.toFixed(2)}.`);
   // recent[] is client-supplied and lands in the SYSTEM prompt, so it is a
   // system-role injection vector: fence it and neutralize any planted role
@@ -583,9 +617,12 @@ export async function routeVera(ctx: VeraContext): Promise<VeraResult> {
       };
     }
     case "review_portfolio": {
+      // Weight by FULL worth (sellable + grove-held + staked + settling) — the
+      // panel's own VeraRead does the same. A grove-only portfolio is a real
+      // portfolio; reviewing only the EOA told those users they owned nothing.
       const holdings = (ctx.holdings ?? [])
-        .filter((h) => (h.valueUsd ?? 0) > 0)
-        .map((h) => ({ symbol: h.symbol, weightPct: Math.max(0.01, h.valueUsd ?? 0) }));
+        .filter((h) => holdingWorthUsd(h) > 0)
+        .map((h) => ({ symbol: h.symbol, weightPct: Math.max(0.01, holdingWorthUsd(h)) }));
       if (holdings.length === 0) {
         return { intent: "reply", message: "You don't hold any stocks yet, so there's nothing to review — tell me a goal and I'll build your first plan." };
       }
@@ -1266,8 +1303,20 @@ function relTime(sec: number): string {
 // snapped to the full position when the ask is close enough that leftovers
 // would just be dust. $MONVERA never rides these rails (its own route).
 async function sellPlan(ctx: VeraContext, symbolRaw?: string, amountUsd?: number, all?: boolean): Promise<VeraResult> {
+  // Sellable through these rails = EOA-held (valueUsd). Grove-held money is
+  // just as real but exits through the Grove — the plan must NAME it, never
+  // silently leave it behind or tell its owner they hold nothing.
   const held = (ctx.holdings ?? []).filter((h) => (h.valueUsd ?? 0) > 0.5 && h.symbol !== "MONVERA");
+  const groveHeld = (ctx.holdings ?? []).filter((h) => (h.smartUsd ?? 0) > 0.5 && h.symbol !== "MONVERA");
+  const groveUsd = groveHeld.reduce((s, h) => s + (h.smartUsd ?? 0), 0);
   if (held.length === 0) {
+    if (groveUsd > 0) {
+      return {
+        intent: "reply",
+        message: `Your stocks — about $${groveUsd.toFixed(2)} — are held inside a Grove, and Groves cash out through their own exit: it sells the basket at live quotes and the fee is 10% of profit only. Open your Grove and press Exit.`,
+        suggestions: ["Open my Groves"],
+      };
+    }
     return { intent: "reply", message: "You don't hold any stocks to sell. Your cash is already cash." };
   }
 
@@ -1295,6 +1344,7 @@ async function sellPlan(ctx: VeraContext, symbolRaw?: string, amountUsd?: number
       message: [
         `The cash-out: ${legs.length} holding${legs.length === 1 ? "" : "s"}, about $${totalUsd.toFixed(2)} back to cash, each sold at a live quote.`,
         skipped.length ? `(${skipped.join(", ")} can't be filled right now, so I left ${skipped.length === 1 ? "it" : "them"} out. Sell later.)` : "",
+        groveUsd > 0 ? `(Another $${groveUsd.toFixed(2)} sits in a Grove — that part cashes out by exiting the Grove, not here.)` : "",
         "Look it over, then confirm below.",
       ].filter(Boolean).join(" "),
       legs,
@@ -1306,6 +1356,14 @@ async function sellPlan(ctx: VeraContext, symbolRaw?: string, amountUsd?: number
   const symbol = symbolRaw.toUpperCase();
   const holding = held.find((h) => h.symbol === symbol);
   if (!holding) {
+    const inGrove = groveHeld.find((h) => h.symbol === symbol);
+    if (inGrove) {
+      return {
+        intent: "reply",
+        message: `Your ${symbol} — about $${(inGrove.smartUsd ?? 0).toFixed(2)} — is part of a Grove basket, so it sells through the Grove's exit (the whole basket, or a share of it, at live quotes). Open your Grove and press Exit.`,
+        suggestions: ["Open my Groves"],
+      };
+    }
     return {
       intent: "reply",
       message: `You don't hold any ${symbol}. You hold: ${held.map((h) => h.symbol).join(", ")}.`,

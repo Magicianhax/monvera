@@ -48,6 +48,16 @@ async function loadEvents(): Promise<EventSnapshot> {
   return { events, headTs };
 }
 
+// The ?all=1 table is identical for every caller of the same event snapshot,
+// but rebuilding it costs a replay per staker (O(stakers × events)) — with a
+// whole leaderboard of pollers that recompute dominated the handler. One slot
+// is enough: headTs pins the snapshot identity, so the memo naturally rolls
+// over when kvCached serves a fresh scan and is shared until then.
+let stakersMemo: {
+  key: string;
+  stakers: { address: string; staked: string; earned: string }[];
+} | null = null;
+
 export async function GET(req: Request): Promise<Response> {
   const address = new URL(req.url).searchParams.get("address");
   if (!address || !isAddress(address)) {
@@ -76,22 +86,37 @@ export async function GET(req: Request): Promise<Response> {
     // pass over a small in-memory array and zero extra chain reads.
     let stakers: { address: string; staked: string; earned: string }[] | undefined;
     if (new URL(req.url).searchParams.get("all") === "1") {
-      const timelines = replayBalances(events);
-      stakers = [...timelines.entries()]
-        .map(([addr, tl]) => ({
-          address: addr,
-          staked: (tl.length ? tl[tl.length - 1].bal : BigInt(0)).toString(),
-          earned: previewFor(events, SEASON1, headTs, addr as `0x${string}`).bankedSoFar.toString(),
-        }))
-        .filter((r) => r.staked !== "0" || r.earned !== "0")
-        .sort((a, b) => (BigInt(b.staked) > BigInt(a.staked) ? 1 : BigInt(b.staked) < BigInt(a.staked) ? -1 : 0));
+      const memoKey = `${headTs}:${events.length}`;
+      if (stakersMemo?.key === memoKey) {
+        stakers = stakersMemo.stakers;
+      } else {
+        const timelines = replayBalances(events);
+        stakers = [...timelines.entries()]
+          .map(([addr, tl]) => ({
+            address: addr,
+            staked: (tl.length ? tl[tl.length - 1].bal : BigInt(0)).toString(),
+            earned: previewFor(events, SEASON1, headTs, addr as `0x${string}`).bankedSoFar.toString(),
+          }))
+          .filter((r) => r.staked !== "0" || r.earned !== "0")
+          .sort((a, b) => (BigInt(b.staked) > BigInt(a.staked) ? 1 : BigInt(b.staked) < BigInt(a.staked) ? -1 : 0));
+        stakersMemo = { key: memoKey, stakers };
+      }
     }
-    return Response.json({
-      seasonStarted: true,
-      bankedSoFar: p.bankedSoFar.toString(),
-      todayAccruing: p.todayAccruing.toString(),
-      ...(stakers ? { stakers } : {}),
-    });
+    return Response.json(
+      {
+        seasonStarted: true,
+        bankedSoFar: p.bankedSoFar.toString(),
+        todayAccruing: p.todayAccruing.toString(),
+        ...(stakers ? { stakers } : {}),
+      },
+      {
+        // Edge-cacheable because the URL carries the address: a shared cache
+        // keys each wallet's variant separately, and the snapshot behind the
+        // numbers only moves once per 30s scan window anyway. The failure path
+        // below stays uncached so a blip is never pinned for other readers.
+        headers: { "Cache-Control": "public, s-maxage=15, stale-while-revalidate=30" },
+      },
+    );
   } catch (err) {
     // The RESPONSE stays soft — the tiles just read "—" rather than the page
     // having to handle an error. But the failure is logged: swallowing it

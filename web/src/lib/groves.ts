@@ -265,7 +265,8 @@ export function fullDiversificationUsd(g: { components: { weightBps: number }[] 
 
 // ── build-time validation ────────────────────────────────────────────────────
 // A registry typo must fail the build, not ship a basket that can't execute.
-// The minimum buy must place at least one leg that clears the ~$11 venue floor
+// The minimum buy must place at least one leg that clears OUR ~$11 per-leg gas
+// floor — Monvera's economics, not a venue rule; no venue imposes a minimum
 // (small buys concentrate via groveLegsFor, so one clean leg is the real bar).
 
 for (const g of GROVES) {
@@ -285,7 +286,7 @@ for (const g of GROVES) {
   }
   if (g.minBuyUsd < MIN_LEG_USD) {
     throw new Error(
-      `Grove "${g.id}": minBuyUsd $${g.minBuyUsd} is under the $${MIN_LEG_USD} venue floor — even a fully concentrated buy could not fill.`,
+      `Grove "${g.id}": minBuyUsd $${g.minBuyUsd} is under our $${MIN_LEG_USD} per-leg gas floor — even a fully concentrated buy could not fill.`,
     );
   }
   const dupes = new Set<string>();

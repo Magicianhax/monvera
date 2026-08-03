@@ -24,6 +24,8 @@ function authed(req: NextRequest): boolean {
 
 interface PortfolioBody {
   cashUsd?: number;
+  /** Grove-exit USDG at the smart account — cash, just not EOA-spendable. */
+  smartCashUsd?: number;
   investedUsd?: number;
   totalUsd?: number;
 }
@@ -32,7 +34,19 @@ export async function GET(req: NextRequest) {
   if (!authed(req)) return unauthorized();
   try {
     const users = await listRecentUsers(90, 500).catch(() => []);
-    const addresses = [...new Set(users.map((u) => u.address.toLowerCase()))];
+    // One snapshot per EOA. Keep the smart account alongside (first non-null
+    // wins) — grove baskets and grove-exit USDG live there, and /api/portfolio
+    // only values them when `smart` is passed. Rows recorded before migration
+    // 0011 (or by clients that haven't reported it yet) have null and are
+    // valued EOA-only, exactly as before.
+    const ADDR = /^0x[a-fA-F0-9]{40}$/;
+    const byAddress = new Map<string, string | null>();
+    for (const u of users) {
+      const address = u.address.toLowerCase();
+      const smart = u.smartAddress && ADDR.test(u.smartAddress) ? u.smartAddress.toLowerCase() : null;
+      if (!byAddress.has(address) || (byAddress.get(address) === null && smart)) byAddress.set(address, smart);
+    }
+    const addresses = [...byAddress.keys()];
     if (addresses.length === 0) return Response.json({ snapped: 0, failed: 0, asOf: new Date().toISOString() });
 
     const env = getCloudflareContext().env as { WORKER_SELF_REFERENCE?: { fetch: typeof fetch } };
@@ -47,11 +61,16 @@ export async function GET(req: NextRequest) {
       await Promise.all(
         addresses.slice(i, i + CONCURRENCY).map(async (address) => {
           try {
-            const res = await self.fetch(`https://monvera.best/api/portfolio?address=${address}`);
+            const smart = byAddress.get(address);
+            const res = await self.fetch(
+              `https://monvera.best/api/portfolio?address=${address}${smart ? `&smart=${smart}` : ""}`,
+            );
             if (!res.ok) throw new Error(`portfolio ${res.status}`);
             const p = (await res.json()) as PortfolioBody;
             if (typeof p.totalUsd !== "number") throw new Error("no totalUsd");
-            await putSnapshot(address, hour, p.cashUsd ?? 0, p.investedUsd ?? 0, p.totalUsd);
+            // cash column = ALL the user's cash (EOA + grove-exit USDG at the
+            // smart account), so cash + invested = total keeps holding.
+            await putSnapshot(address, hour, (p.cashUsd ?? 0) + (p.smartCashUsd ?? 0), p.investedUsd ?? 0, p.totalUsd);
             snapped++;
           } catch (err) {
             failed++;

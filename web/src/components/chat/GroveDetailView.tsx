@@ -26,7 +26,7 @@ import { fullDiversificationUsd } from "@/lib/groves";
 import { assetBySymbol } from "@/lib/tokens";
 import { toTile, displayFor } from "@/lib/displayAssets";
 import { AssetTile } from "@/components/design";
-import { PIcon, usd, usd0, dcol } from "./chatKit";
+import { AddrChip, PIcon, usd, usd0, dcol } from "./chatKit";
 
 const EXPLORER = "https://robinhoodchain.blockscout.com";
 
@@ -288,8 +288,10 @@ export function GroveDetailView({
             finished content column (the dead-space bug this layout replaces) */}
         <div style={{ display: "flex", flexDirection: "column", gap: 12, minWidth: 0 }}>
         <div style={panel({ padding: "15px 18px 8px" })}>
+          {/* This is the grove's published RECIPE, not anyone's holdings —
+              "Your basket" in the right rail is what the user owns. */}
           <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
-            <div style={{ fontSize: 14, fontWeight: 700 }}>Holdings</div>
+            <div style={{ fontSize: 14, fontWeight: 700 }}>What&rsquo;s inside</div>
             <div className="tnum" style={{ marginLeft: "auto", fontSize: 11, color: "var(--ink-3)" }}>
               {g.components.length} names · fixed weights
             </div>
@@ -305,6 +307,7 @@ export function GroveDetailView({
           {byWeight.map((c, i) => {
             const qty = heldBySymbol.get(c.symbol) ?? 0;
             const px = priceOf.get(c.symbol);
+            const mineUsd = qty > 0 && px != null ? qty * px : null;
             return (
               <div key={c.symbol} className="gvd-row" style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderTop: i === 0 ? "none" : "1px solid var(--line-2)", animationDelay: `${0.12 + Math.min(i, 7) * 0.045}s` }}>
                 <AssetTile asset={toTile(c.symbol)} size={28} radius={9} />
@@ -313,8 +316,19 @@ export function GroveDetailView({
                     <span style={{ fontSize: 13.5, fontWeight: 700 }}>{c.symbol}</span>
                     <span style={{ fontSize: 11.5, color: "var(--ink-3)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.name}</span>
                   </div>
+                  {/* Which names are YOURS, at a glance: held rows get a green
+                      mark + dollar value; a position that skipped a name (small
+                      buys take the largest weights first) says so honestly. */}
                   {held && qty > 0 && (
-                    <div className="tnum" style={{ fontSize: 10.5, color: "var(--ink-3)", marginTop: 1 }}>you hold {qty.toFixed(6)}</div>
+                    <div className="tnum" style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 10.5, marginTop: 1 }}>
+                      <span aria-hidden style={{ width: 6, height: 6, borderRadius: "50%", flex: "none", background: "var(--pos)" }} />
+                      <span style={{ color: "var(--ink-2)", fontWeight: 600 }}>
+                        you hold {qty.toFixed(6)}{mineUsd != null ? ` · ≈ ${usd(mineUsd)}` : ""}
+                      </span>
+                    </div>
+                  )}
+                  {held && qty === 0 && (
+                    <div style={{ fontSize: 10.5, color: "var(--ink-3)", marginTop: 1 }}>not in your position · small buys take the largest weights first</div>
                   )}
                 </div>
                 <div className="gvd-px tnum" style={{ fontSize: 12, color: "var(--ink-3)", flex: "none" }}>
@@ -378,8 +392,51 @@ export function GroveDetailView({
         </div>
         </div>
 
-        {/* right: manage, then terms */}
+        {/* right: your basket (when held), then manage, then terms */}
         <div className="gvd-right" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          {/* YOUR basket, broken out on its own: what you actually hold, what
+              each slice is worth, and its share of YOUR position — which can
+              differ from the published weights (small buys concentrate into
+              the largest names). The composition list answers "what is this
+              grove"; this panel answers "what is mine". */}
+          {held && (
+            <div style={panel({ padding: "15px 18px 12px" })}>
+              <div style={label}>Your basket</div>
+              <div style={{ marginTop: 8 }}>
+                {[...heldBySymbol.entries()]
+                  .map(([sym, qty]) => {
+                    const px = priceOf.get(sym);
+                    return { sym, qty, usdVal: px != null ? qty * px : null };
+                  })
+                  .sort((a, b) => (b.usdVal ?? 0) - (a.usdVal ?? 0))
+                  .map((r, i) => (
+                    <div key={r.sym} style={{ display: "flex", alignItems: "center", gap: 9, padding: "7px 0", borderTop: i === 0 ? "none" : "1px solid var(--line-2)" }}>
+                      <AssetTile asset={toTile(r.sym)} size={24} radius={8} />
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 12.5, fontWeight: 700 }}>{r.sym}</div>
+                        <div className="tnum" style={{ fontSize: 10.5, color: "var(--ink-3)" }}>{r.qty.toFixed(6)}</div>
+                      </div>
+                      <div style={{ textAlign: "right", flex: "none" }}>
+                        <div className="tnum" style={{ fontSize: 12.5, fontWeight: 650 }}>{r.usdVal != null ? usd(r.usdVal) : "—"}</div>
+                        <div className="tnum" style={{ fontSize: 10.5, color: "var(--ink-3)" }}>
+                          {r.usdVal != null && marketValue > 0 && !unpriced ? Math.round((r.usdVal / marketValue) * 100) + "% of yours" : ""}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between", paddingTop: 9, marginTop: 2, borderTop: "1px solid var(--line)", fontSize: 12 }}>
+                <span style={{ color: "var(--ink-3)", fontWeight: 600 }}>Total</span>
+                <span className="tnum" style={{ fontWeight: 700 }}>{unpriced ? "—" : usd(marketValue)}</span>
+              </div>
+              {heldBySymbol.size < g.components.length && (
+                <div style={{ fontSize: 10.5, color: "var(--ink-3)", lineHeight: 1.5, marginTop: 7 }}>
+                  {g.components.length - heldBySymbol.size} of the grove&rsquo;s names aren&rsquo;t in your position — small buys take the largest weights first. Buying more adds them.
+                </div>
+              )}
+            </div>
+          )}
+
           <div style={panel({ padding: "15px 18px 16px" })}>
             <div style={label}>Manage</div>
             {held && (
@@ -432,15 +489,7 @@ export function GroveDetailView({
               <Row k="Exit in profit" v={`${feePct}% of the profit`} sub="never the principal" strong />
               <Row
                 k="Your basket sits at"
-                v={
-                  smartAccount ? (
-                    <a href={`${EXPLORER}/address/${smartAccount}`} target="_blank" rel="noopener noreferrer" className="mono" style={{ color: "var(--ink)", textDecoration: "underline", textUnderlineOffset: 3, fontSize: 11.5 }}>
-                      {short(smartAccount)}
-                    </a>
-                  ) : (
-                    "your own account"
-                  )
-                }
+                v={smartAccount ? <AddrChip addr={smartAccount} /> : "your own account"}
                 sub="only you can move it"
               />
               <Row k="We can pause new buys" v="yes" sub="a safety switch, nothing more" />

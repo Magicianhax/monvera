@@ -44,6 +44,7 @@ export const DEMO_PORTFOLIO = {
   holdings: DEMO_HOLDINGS,
   investedUsd: DEMO_INVESTED,
   cashUsd: DEMO_USDC.value,
+  smartCashUsd: 0,
   totalUsd: DEMO_INVESTED + DEMO_USDC.value,
 };
 

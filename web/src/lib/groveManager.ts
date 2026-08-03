@@ -21,6 +21,7 @@ export const GROVE_MANAGER_ABI = parseAbi([
   "struct SwapLeg { address tokenIn; address tokenOut; uint256 amountIn; uint256 minOut; address callTarget; address approvalTarget; bytes data; }",
   "function buy(uint256 groveId, SwapLeg[] legs, uint256 deadline)",
   "function exit(uint256 groveId, SwapLeg[] legs, uint16 fractionBps, uint256 deadline)",
+  "function closePosition(uint256 groveId)",
   "function positionOf(address user, uint256 groveId) view returns (uint256 costBasisUsdg, address[] tokens, uint256[] amounts)",
   "function paused() view returns (bool)",
   "function callTargetAllowed(address) view returns (bool)",
@@ -149,48 +150,76 @@ export function buildGroveExitCalls(quote: GroveExitQuoteJson): Call[] {
 }
 
 /**
+ * The emergency hatch, as one sponsored call: zero the smart account's
+ * accounting for a grove WITHOUT selling anything. The contract charges no fee
+ * and moves no tokens — it exists for the case where part of the basket already
+ * left the wallet (sold through the ordinary flows), which makes a full exit
+ * physically impossible. Works even while the contract is paused.
+ */
+export function buildClosePositionCall(onChainId: number): Call {
+  return {
+    to: GROVE_MANAGER as Address,
+    data: encodeFunctionData({
+      abi: GROVE_MANAGER_ABI,
+      functionName: "closePosition",
+      args: [BigInt(onChainId)],
+    }),
+  };
+}
+
+/**
  * The full sponsored batch for a grove buy, in order:
  *
- *   1. EIP-2612 permit, EOA -> smart account, for exactly the total. Gasless and
- *      exact-value: the smart account never holds a standing allowance.
+ *   1. EIP-2612 permit, EOA -> smart account, for exactly the EOA's SHARE.
+ *      Gasless and exact-value: the smart account never holds a standing
+ *      allowance.
  *   2. Pull that USDG from the EOA into the smart account.
- *   3. Approve GroveManager to take it. The contract does `transferFrom(user)`,
- *      and `user` is the smart account because it is `msg.sender`.
+ *   3. Approve GroveManager to take the total. The contract does
+ *      `transferFrom(user)`, and `user` is the smart account (msg.sender).
  *   4. buy(). The contract pulls the USDG, runs every leg against the venue,
  *      checks each against its own oracle band, and sends the stock straight
  *      back to the smart account.
  *
- * All four ride one UserOp, so the basket is atomic: it fills whole or not at
- * all, and a revert anywhere leaves the user exactly as they started.
+ * `smartUsdgRaw` = USDG already sitting at the smart account (grove-exit
+ * proceeds park there). It is spent FIRST and only the shortfall crosses from
+ * the EOA — without this, a user whose cash sat in the Grove account could not
+ * re-enter a grove at all. When it covers the whole buy, steps 1-2 drop out.
+ *
+ * Everything rides one UserOp, so the basket is atomic: it fills whole or not
+ * at all, and a revert anywhere leaves the user exactly as they started.
  */
 export async function buildGroveBuyCalls(
   quote: GroveBuyQuoteJson,
   eoa: Address,
   smartAccount: Address,
   buildPermit: (owner: Address, spender: Address, token: Address, value: bigint) => Promise<Call>,
+  smartUsdgRaw: bigint = BigInt(0),
 ): Promise<Call[]> {
   const total = BigInt(quote.totalInUsdg);
   if (total <= BigInt(0)) throw new Error("Nothing to buy.");
   const usdg = USDG.address as Address;
+  const fromEoa = total > smartUsdgRaw ? total - smartUsdgRaw : BigInt(0);
 
-  return [
-    await buildPermit(eoa, smartAccount, usdg, total),
-    {
+  const calls: Call[] = [];
+  if (fromEoa > BigInt(0)) {
+    calls.push(await buildPermit(eoa, smartAccount, usdg, fromEoa));
+    calls.push({
       to: usdg,
       data: encodeFunctionData({
         abi: ERC20_MINI_ABI,
         functionName: "transferFrom",
-        args: [eoa, smartAccount, total],
+        args: [eoa, smartAccount, fromEoa],
       }),
-    },
-    {
-      to: usdg,
-      data: encodeFunctionData({
-        abi: ERC20_MINI_ABI,
-        functionName: "approve",
-        args: [quote.groveManager, total],
-      }),
-    },
-    { to: quote.groveManager, data: encodeGroveBuy(quote) },
-  ];
+    });
+  }
+  calls.push({
+    to: usdg,
+    data: encodeFunctionData({
+      abi: ERC20_MINI_ABI,
+      functionName: "approve",
+      args: [quote.groveManager, total],
+    }),
+  });
+  calls.push({ to: quote.groveManager, data: encodeGroveBuy(quote) });
+  return calls;
 }

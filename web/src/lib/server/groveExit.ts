@@ -19,7 +19,7 @@ import "server-only";
 //
 //  3. **Partial exits sell the same fraction of every holding**, so the basis
 //     and what remains stay proportional.
-import { createPublicClient, http, parseAbi, type Address, type Hex } from "viem";
+import { createPublicClient, erc20Abi, http, parseAbi, type Address, type Hex } from "viem";
 import { groveById } from "@/lib/groves";
 import { ALL_ASSETS, MULTICALL3, USDG } from "@/lib/tokens";
 import { chain } from "@/lib/chain";
@@ -130,6 +130,40 @@ export async function quoteGroveExit(
 
   const manager = GROVE_MANAGER as Address;
   const full = fractionBps === 10_000;
+
+  // The position is only half the truth: exit legs safeTransferFrom the WALLET,
+  // and nothing stops a user selling grove-bought tokens through the ordinary
+  // flows first. Quoting from tracked amounts alone produced calldata that could
+  // only revert on-chain — an opaque dead end. Check the real balances here and
+  // fail with the largest fraction the wallet can still cover, so the UI can
+  // offer that or the zero-fee closePosition hatch.
+  const wallet = await client.multicall({
+    contracts: held.map((h) => ({
+      address: h.token,
+      abi: erc20Abi,
+      functionName: "balanceOf" as const,
+      args: [user] as const,
+    })),
+  });
+  const short: string[] = [];
+  let maxFractionBps = 10_000;
+  for (let i = 0; i < held.length; i++) {
+    const bal = wallet[i].status === "success" ? (wallet[i].result as bigint) : BigInt(0);
+    const tracked = BigInt(held[i].amount);
+    if (bal >= tracked) continue;
+    short.push(held[i].symbol);
+    const f = Number((bal * BPS) / tracked); // floor — never offer more than covered
+    if (f < maxFractionBps) maxFractionBps = f;
+  }
+  if (short.length && (full || fractionBps > maxFractionBps)) {
+    const list = short.join(", ");
+    throw new GroveQuoteError(
+      maxFractionBps > 0
+        ? `Part of this basket (${list}) has left your wallet since it was bought — you can exit up to ${Math.floor(maxFractionBps / 100)}% here. For the rest, clear the position: it zeroes the Grove's accounting with no swap and no fee.`
+        : `This basket (${list}) is no longer in your wallet, so there is nothing the Grove can sell. Clear the position instead — it zeroes the accounting with no swap and no fee.`,
+      { code: "SHORT_BALANCE", maxFractionBps },
+    );
+  }
 
   const sized = held.map((h) => ({
     ...h,

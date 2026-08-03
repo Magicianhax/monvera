@@ -75,7 +75,23 @@ export interface GroveBuyQuote {
   skipped: { symbol: string; reason: string }[];
 }
 
-export class GroveQuoteError extends Error {}
+export class GroveQuoteError extends Error {
+  /** Machine-readable reason, when the client can offer a recovery path.
+   *  "SHORT_BALANCE": the wallet no longer holds enough of a tracked token to
+   *  cover the requested exit (sold or moved outside the Grove). */
+  code?: "SHORT_BALANCE";
+  /** With SHORT_BALANCE: the largest fractionBps the wallet can still cover
+   *  (0 = nothing is exitable through the contract; closePosition is the hatch). */
+  maxFractionBps?: number;
+
+  constructor(message: string, extra?: { code: "SHORT_BALANCE"; maxFractionBps: number }) {
+    super(message);
+    if (extra) {
+      this.code = extra.code;
+      this.maxFractionBps = extra.maxFractionBps;
+    }
+  }
+}
 
 /**
  * Quote a buy of `amountUsd` into a grove, ready to hand to GroveManager.buy.

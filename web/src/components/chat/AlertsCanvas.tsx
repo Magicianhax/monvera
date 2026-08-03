@@ -20,6 +20,9 @@ export function AlertsCanvas({ nav }: { nav: ChatNav }) {
   const { data: alerts } = useAlerts();
   const { markAllRead, deleteAlert } = useNotifyActions();
   const [busy, setBusy] = useState(false);
+  // Failed writes surface here instead of dying silently — the hook re-reads
+  // the true state either way, so the list snaps back to what the server has.
+  const [error, setError] = useState<string | null>(null);
 
   const items = notif?.notifications ?? [];
   const unread = notif?.unread ?? 0;
@@ -27,12 +30,23 @@ export function AlertsCanvas({ nav }: { nav: ChatNav }) {
 
   return (
     <div>
+      {error && (
+        <div style={{ margin: "0 4px 10px", background: "color-mix(in srgb,var(--neg) 10%,transparent)", border: "1px solid color-mix(in srgb,var(--neg) 30%,transparent)", borderRadius: 12, padding: "10px 13px", fontSize: 12.5, color: "var(--neg)", lineHeight: 1.5 }}>
+          {error}
+        </div>
+      )}
       {/* inbox */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 4px 6px" }}>
         <span style={{ fontSize: 13.5, fontWeight: 700 }}>Inbox{unread > 0 ? ` · ${unread} new` : ""}</span>
         {unread > 0 && (
           <button
-            onClick={async () => { if (busy) return; setBusy(true); try { await markAllRead(); } finally { setBusy(false); } }}
+            onClick={async () => {
+              if (busy) return;
+              setBusy(true); setError(null);
+              try { await markAllRead(); }
+              catch { setError("Couldn't mark everything read — try again."); }
+              finally { setBusy(false); }
+            }}
             style={{ fontSize: 12, fontWeight: 600, color: "var(--primary)", opacity: busy ? 0.6 : 1 }}
           >
             Mark all read
@@ -85,7 +99,13 @@ export function AlertsCanvas({ nav }: { nav: ChatNav }) {
               </span>
             </button>
             <button
-              onClick={async () => { if (busy) return; setBusy(true); try { await deleteAlert(a.id); } finally { setBusy(false); } }}
+              onClick={async () => {
+                if (busy) return;
+                setBusy(true); setError(null);
+                try { await deleteAlert(a.id); }
+                catch { setError("Couldn't delete that alert — try again."); }
+                finally { setBusy(false); }
+              }}
               aria-label="Delete alert"
               style={{ width: 30, height: 30, flex: "none", border: "1px solid var(--line)", borderRadius: 9, display: "grid", placeItems: "center", background: "transparent", color: "var(--neg)", opacity: busy ? 0.6 : 1 }}
             >

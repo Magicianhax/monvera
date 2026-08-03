@@ -30,12 +30,22 @@ import { explainError } from "@/lib/explainError";
 
 type Phase = "idle" | "quoting" | "preparing" | "swapping" | "done" | "error";
 
+// Post-trade sweep floors. A Matcha fill pays the taker (the smart account)
+// and the batch can only forward the pre-known minOut, so the fill's
+// remainder parks there. At or below these floors the residue is rounding
+// noise worth far less than the sponsored UserOp that would move it; above
+// them it's real user money and must reach the EOA.
+// 1e12 raw = 0.000001 MONVERA (18dp) — sub-cent at any plausible price.
+const MONVERA_SWEEP_FLOOR = BigInt(10) ** BigInt(12);
+// 10_000 raw = $0.01 USDG (6dp) — under a cent never justifies the ~$0.08 op.
+const USDG_SWEEP_FLOOR = BigInt(10_000);
+
 export interface MonveraSwapResult {
   txHash: `0x${string}`;
   side: "buy" | "sell";
   /** What was paid (raw: USDG 6dp on buy, MONVERA 18dp on sell). */
   amountIn: bigint;
-  /** Expected received per the executed quote (raw; actual fill within slippage). */
+  /** Received (raw), measured at the EOA: the batch's delta plus the post-trade sweep. */
   amountOut: bigint;
   /** Guaranteed-minimum received (raw MONVERA on buy, raw USDG on sell). */
   minOut: bigint;
@@ -172,11 +182,46 @@ export function useMonveraSwap() {
           throw new Error("The swap didn't deliver the expected $MONVERA. No funds were lost — please try again.");
         }
 
+        // Matcha pays the taker (the smart account) and the batched sweep can
+        // only forward the pre-known minOut — static calldata can't name the
+        // actual fill, which typically lands near toAmount. Without this, up
+        // to slippageBps of every Matcha buy strands on the smart account. So
+        // once the trade has settled, read what actually sits there and
+        // forward all of it to the EOA in one follow-up sponsored transfer.
+        // Best-effort: the user already has their trade — a failed sweep must
+        // never turn it into an error; the remainder stays on their own smart
+        // account, visible via the portfolio, and the next Matcha buy sweeps it.
+        let swept = BigInt(0);
+        if (executed.source === "matcha") {
+          try {
+            const residue = (await publicClient.readContract({
+              address: MONVERA.address,
+              abi: ERC20_MINI_ABI,
+              functionName: "balanceOf",
+              args: [smartAccount],
+            })) as bigint;
+            if (residue > MONVERA_SWEEP_FLOOR) {
+              await sendSponsoredCalls(provider, [
+                { to: MONVERA.address, data: encodeFunctionData({ abi: ERC20_MINI_ABI, functionName: "transfer", args: [eoa, residue] }) },
+              ]);
+              swept = residue;
+            }
+          } catch (err) {
+            console.warn(
+              "[monvera-swap] post-buy sweep failed — trade already settled, remainder stays on the smart account:",
+              err instanceof Error ? err.message : err,
+            );
+          }
+        }
+
         setResult({
           txHash: receipt.receipt.transactionHash as `0x${string}`,
           side: "buy",
           amountIn,
-          amountOut: BigInt(executed.toAmount),
+          // Report what the EOA verifiably received, not the quote's toAmount —
+          // a Matcha batch only forwards minOut, so toAmount would overstate
+          // whenever the sweep didn't run.
+          amountOut: monveraAfter - monveraBefore + swept,
           minOut: BigInt(executed.toAmountMin),
         });
         setPhase("done");
@@ -279,11 +324,45 @@ export function useMonveraSwap() {
           throw new Error("The swap didn't deliver the expected USDG. No funds were lost — please try again.");
         }
 
+        // Same stranding as the buy path, in USDG: Matcha pays the taker (the
+        // smart account) and the batch forwards only the pre-known minOut, so
+        // the fill's remainder — typically near toAmount — parks there.
+        // Sweeping the FULL balance is deliberate: grove-exit proceeds also
+        // park on the smart account ("Grove account cash" in the portfolio),
+        // so this may bring that cash home too — all of it is the user's
+        // money landing in their spendable wallet, a feature, not a bug.
+        // Best-effort, same as the buy sweep: never fail the settled trade.
+        let swept = BigInt(0);
+        if (executed.source === "matcha") {
+          try {
+            const residue = (await publicClient.readContract({
+              address: USDG.address as `0x${string}`,
+              abi: ERC20_MINI_ABI,
+              functionName: "balanceOf",
+              args: [smartAccount],
+            })) as bigint;
+            if (residue > USDG_SWEEP_FLOOR) {
+              await sendSponsoredCalls(provider, [
+                { to: USDG.address as `0x${string}`, data: encodeFunctionData({ abi: ERC20_MINI_ABI, functionName: "transfer", args: [eoa, residue] }) },
+              ]);
+              swept = residue;
+            }
+          } catch (err) {
+            console.warn(
+              "[monvera-swap] post-sell sweep failed — trade already settled, remainder stays on the smart account:",
+              err instanceof Error ? err.message : err,
+            );
+          }
+        }
+
         setResult({
           txHash: receipt.receipt.transactionHash as `0x${string}`,
           side: "sell",
           amountIn: amountRaw,
-          amountOut: BigInt(executed.toAmount),
+          // Measured, same rationale as the buy receipt: a Matcha batch only
+          // forwards minOut, so the quote's toAmount would overstate whenever
+          // the sweep didn't run.
+          amountOut: usdgAfter - usdgBefore + swept,
           minOut: BigInt(executed.toAmountMin),
         });
         setPhase("done");

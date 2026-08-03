@@ -6,9 +6,9 @@ import { GROVES, groveById, fullDiversificationUsd, MIN_LEG_USD, RECOMMENDED_BUY
 import { getGrove } from "@/lib/server/groveService";
 import type { BacktestResult } from "@/lib/server/quant";
 import { TokenLogo } from "@/components/lite/TokenLogo";
-import { GroveCover } from "@/components/GroveCover";
 import { Arrow, SiteFooterV4, SiteNavV4 } from "@/components/site/SiteChromeV4";
 import { pctLabel } from "@/components/site/StrategyCurve";
+import { displayFor } from "@/lib/displayAssets";
 import { usd, usdWhole } from "@/lib/format";
 import v4 from "@/components/site/SiteLandingV4.module.css";
 import shell from "../groves.module.css";
@@ -16,7 +16,15 @@ import s from "./grove.module.css";
 
 // One Grove, at full density — public and world-readable (buying happens in
 // the app). Same live layer as /api/groves/[id]; revalidates every 5 minutes.
+// Laid out like the in-app GroveDetailView: identity → CTAs → stat strip →
+// ledger → performance → fees → mechanics — panels and rows, not prose.
 export const revalidate = 300;
+
+// GroveManager address for the facts footer — read the env var directly:
+// lib/groveManager is a "use client" module, so importing its GROVE_MANAGER
+// export into this server component yields a client-reference proxy, not the
+// string (it 500'd the page). Empty while the contract is not deployed.
+const GROVE_MANAGER = process.env.NEXT_PUBLIC_GROVE_MANAGER || "";
 
 export function generateStaticParams() {
   return GROVES.map((g) => ({ id: g.id }));
@@ -105,10 +113,6 @@ function Rich({ text }: { text: string }) {
   );
 }
 
-function Eyebrow({ children }: { children: React.ReactNode }) {
-  return <p className={v4.eyebrow}>{children}</p>;
-}
-
 export default async function GrovePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const g = await getGrove(id.toLowerCase());
@@ -117,8 +121,13 @@ export default async function GrovePage({ params }: { params: Promise<{ id: stri
   const feePct = g.feeBps / 100;
   const excludedFromBacktest = g.backtest?.excluded ?? [];
   // Small buys concentrate into the largest holdings (groveLegsFor); from this
-  // amount every name clears the venue floor at its published weight.
+  // amount every name clears OUR per-leg gas floor at its published weight —
+  // the floor is Monvera's gas economics, never a venue minimum (no venue has one).
   const fullUsd = fullDiversificationUsd(g);
+  const byWeight = [...g.components].sort((a, b) => b.weightBps - a.weightBps);
+  const topFive = byWeight.slice(0, 5);
+  const restCount = g.components.length - topFive.length;
+  const btUp = (g.backtest?.portfolio.returnPct ?? 0) >= 0;
 
   return (
     <div className={`site ${v4.root} ${shell.shell}`} data-mode="dark">
@@ -128,88 +137,102 @@ export default async function GrovePage({ params }: { params: Promise<{ id: stri
           ← All groves
         </Link>
 
-        {/* ── cover band — the grove's motif (or registry raster override) ── */}
-        <div className={s.coverBand} aria-hidden>
-          <GroveCover id={g.id} coverImage={g.coverImage} />
-        </div>
-
-        {/* ── header ── */}
+        {/* ── identity — naked on the background, like the app's header ── */}
         <header className={s.head}>
-          <div className={s.headMeta}>
+          <div className={s.chipRow}>
+            <span className={s.stack} aria-label={`Top holdings: ${topFive.map((c) => c.symbol).join(", ")}`}>
+              {topFive.map((c) => (
+                <span key={c.symbol} className={s.ring}>
+                  <TokenLogo symbol={c.symbol} name={c.name} size={22} />
+                </span>
+              ))}
+            </span>
+            {restCount > 0 && <span className={s.morePill}>+{restCount}</span>}
             <span className={s.ticker}>{g.ticker}</span>
             <span className={s.chip}>{g.category}</span>
             {!g.stats.deployed && <span className={s.soon}>Opens soon</span>}
           </div>
           <h1 className={`${v4.display} ${s.h1}`}>{g.name}</h1>
-          <p className={s.lead}>{g.longThesis}</p>
+          <p className={s.thesis}>{g.thesis}</p>
+          {/* This page is read-only — the buy happens in the app. */}
           <div className={s.ctas}>
             <Link href={`/app?grove=${g.id}`} className={v4.cta}>
-              Buy with Vera <Arrow />
+              Buy in the app <Arrow />
             </Link>
             <Link href={`/app?grove=${g.id}&auto=1`} className={v4.ghost}>
               Enable auto-manage
             </Link>
           </div>
-          <p className={s.minLine}>
-            Minimum buy {usdWhole(g.minBuyUsd)}. Small amounts buy the largest holdings first —
-            from {usdWhole(fullUsd)} every name is included.
-          </p>
-          <p className={s.minLine}>
-            Every swap pays the trading venue&apos;s spread — under ~$50 it takes a visibly
-            bigger share. {usdWhole(RECOMMENDED_BUY_USD)}+ recommended.
-          </p>
+          {/* No slogan line for live groves — the numbers below speak. Only a
+              not-yet-open grove needs a status note here. */}
+          {!g.stats.deployed && (
+            <p className={s.factLine}>
+              Buys open when the contract is live — composition and rules already public
+            </p>
+          )}
         </header>
 
-        {/* ── stats band ── */}
-        <section className={`${v4.glass} ${s.statsBand}`} aria-label="Grove stats">
-          <div className={s.bandStat}>
-            <span className={s.bandLbl}>Investors</span>
-            <span className={s.bandVal}>{g.stats.users.toLocaleString("en-US")}</span>
-            <span className={s.bandSub}>open positions</span>
-          </div>
-          <div className={s.bandStat}>
-            <span className={s.bandLbl}>Managed</span>
-            <span className={s.bandVal}>{usdWhole(g.stats.managedUsd)}</span>
-            <span className={s.bandSub}>USDG cost basis, on-chain</span>
-          </div>
-          <div className={s.bandStat}>
-            <span className={s.bandLbl}>Fees paid, ever</span>
-            <span className={s.bandVal}>{usdWhole(g.stats.feesUsd)}</span>
-            <span className={s.bandSub}>10% of realized profit only</span>
-          </div>
-          <div className={s.bandStat}>
-            <span className={s.bandLbl}>1y backtest vs SPY</span>
-            <span className={s.bandVal}>
-              {g.backtest ? (
-                <>
-                  <b>{pctLabel(g.backtest.portfolio.returnPct)}</b> /{" "}
-                  {pctLabel(g.backtest.benchmark.returnPct)}
-                </>
-              ) : (
-                "—"
-              )}
-            </span>
-            <span className={s.bandSub}>history, not a promise</span>
+        {/* ── stat strip — five cells, one row, scrolls before it wraps ── */}
+        <section className={`${v4.glass} ${s.statPanel}`} aria-label="Grove stats">
+          <div className={s.statStrip}>
+            <div className={s.cell}>
+              <span className={s.microLbl}>From</span>
+              <span className={s.cellSerif}>{usdWhole(g.minBuyUsd)}</span>
+              <span className={s.cellSub}>
+                all {g.components.length} names from {usdWhole(fullUsd)}
+              </span>
+            </div>
+            <div className={s.cell}>
+              <span className={s.microLbl}>Total invested</span>
+              <span className={s.cellVal}>{usdWhole(g.stats.managedUsd)}</span>
+              <span className={s.cellSub}>cost basis, all holders</span>
+            </div>
+            <div className={s.cell}>
+              <span className={s.microLbl}>Investors</span>
+              <span className={s.cellVal}>{g.stats.users.toLocaleString("en-US")}</span>
+              <span className={s.cellSub}>open positions</span>
+            </div>
+            <div className={s.cell}>
+              <span className={s.microLbl}>Fees paid, ever</span>
+              <span className={s.cellVal}>{usdWhole(g.stats.feesUsd)}</span>
+              <span className={s.cellSub}>{feePct}% of realized profit only</span>
+            </div>
+            <div className={s.cell}>
+              <span className={s.microLbl}>1y vs S&amp;P</span>
+              <span className={`${s.cellVal} ${btUp ? s.pos : s.neg}`}>
+                {g.backtest ? pctLabel(g.backtest.portfolio.returnPct) : "—"}
+              </span>
+              <span className={s.cellSub}>
+                {g.backtest ? `S&P ${pctLabel(g.backtest.benchmark.returnPct)} · ` : ""}
+                history, not a promise
+              </span>
+            </div>
           </div>
         </section>
         {!g.stats.deployed && (
-          <p className={s.previewNote}>
-            <b>This grove has not opened yet.</b> The zeros above are honest: the counters read
-            straight from the GroveManager contract, so they are public and on-chain from day
-            one — no dashboard math, no adjustments.
+          <p className={s.zeroNote}>
+            Not open yet — the zeros read straight from the GroveManager contract from day one.
           </p>
         )}
 
-        {/* ── composition ── */}
-        <section className={s.section} aria-labelledby="composition">
-          <Eyebrow>Composition</Eyebrow>
-          <h2 id="composition" className={s.sectionTitle}>
-            {g.components.length} holdings, every weight public
-          </h2>
-          <p className={s.sectionLede}>
-            Real tokenized stocks, bought into your own wallet at these target weights. Prices
-            are live from the same feeds the app trades on.
-          </p>
+        {/* ── what's inside — the ledger, weights first ── */}
+        <section className={`${v4.glass} ${s.panel}`} aria-labelledby="composition">
+          <div className={s.panelHead}>
+            <h2 id="composition" className={s.panelTitle}>
+              What&apos;s inside
+            </h2>
+            <span className={s.panelCap}>{g.components.length} names · fixed weights</span>
+          </div>
+          {/* weights are in the table — the bar is a shape, not data */}
+          <div className={s.allocBar} aria-hidden>
+            {byWeight.map((c) => (
+              <span
+                key={c.symbol}
+                className={s.slice}
+                style={{ width: `${c.weightBps / 100}%`, background: displayFor(c.symbol, c.name).color }}
+              />
+            ))}
+          </div>
           <div className={s.tableWrap}>
             <table className={s.table}>
               <thead>
@@ -221,15 +244,17 @@ export default async function GrovePage({ params }: { params: Promise<{ id: stri
                   <th scope="col" className={s.numHead}>
                     Price
                   </th>
-                  <th scope="col">Why it&apos;s here</th>
+                  <th scope="col" className={s.reasonCol}>
+                    Why it&apos;s here
+                  </th>
                 </tr>
               </thead>
               <tbody>
-                {g.components.map((c) => (
+                {byWeight.map((c) => (
                   <tr key={c.symbol}>
                     <td>
                       <span className={s.company}>
-                        <TokenLogo symbol={c.symbol} name={c.name} size={30} />
+                        <TokenLogo symbol={c.symbol} name={c.name} size={26} />
                         <span>
                           <span className={s.symbol}>{c.symbol}</span>
                           <span className={s.coName}>{c.name}</span>
@@ -238,7 +263,9 @@ export default async function GrovePage({ params }: { params: Promise<{ id: stri
                     </td>
                     <td className={`${s.num} ${s.weightCell}`}>{c.weightBps / 100}%</td>
                     <td className={s.num}>{c.priceUsd != null ? usd(c.priceUsd) : "—"}</td>
-                    <td className={s.reason}>{c.reason}</td>
+                    <td className={s.reasonCol}>
+                      <span className={s.reasonClamp}>{c.reason}</span>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -246,97 +273,173 @@ export default async function GrovePage({ params }: { params: Promise<{ id: stri
           </div>
         </section>
 
-        {/* ── performance ── */}
-        <section className={s.section} aria-labelledby="performance">
-          <Eyebrow>Performance</Eyebrow>
-          <h2 id="performance" className={s.sectionTitle}>
-            One year, replayed honestly
-          </h2>
-          <p className={s.sectionLede}>
-            The basket at today&apos;s weights, simulated over the last twelve months of real
-            market data with monthly rebalancing, against buy-and-hold S&amp;P 500 (dashed).
-          </p>
+        {/* ── performance — the curve plus four numbers, one honesty line ── */}
+        <section className={`${v4.glass} ${s.panel}`} aria-labelledby="performance">
+          <div className={s.panelHead}>
+            <h2 id="performance" className={s.panelTitle}>
+              Performance
+            </h2>
+            <span className={s.panelCap}>1y, replayed at today&apos;s weights</span>
+          </div>
           {g.backtest ? (
             <>
-              <div className={`${v4.glass} ${s.curveCard}`}>
-                <GroveCurve bt={g.backtest} />
-                <div className={s.perfStats}>
-                  <div className={s.perfStat}>
-                    <div className={s.perfLbl}>{g.name} · 1y</div>
-                    <div className={`${s.perfVal} ${s.perfAccent}`}>
-                      {pctLabel(g.backtest.portfolio.returnPct)}
-                    </div>
-                  </div>
-                  <div className={s.perfStat}>
-                    <div className={s.perfLbl}>S&amp;P 500 · same year</div>
-                    <div className={s.perfVal}>{pctLabel(g.backtest.benchmark.returnPct)}</div>
-                  </div>
-                  <div className={s.perfStat}>
-                    <div className={s.perfLbl}>Worst dip</div>
-                    <div className={s.perfVal}>
-                      −{g.backtest.portfolio.maxDrawdownPct.toFixed(1)}%
-                    </div>
-                  </div>
-                  <div className={s.perfStat}>
-                    <div className={s.perfLbl}>Sharpe</div>
-                    <div className={s.perfVal}>{g.backtest.portfolio.sharpe.toFixed(2)}</div>
-                  </div>
+              <div className={s.curveWrap}>
+                <GroveCurve bt={g.backtest} height={140} />
+              </div>
+              <div className={s.perfRow}>
+                <div className={s.perfCell}>
+                  <span className={s.microLbl}>{g.ticker} · 1y</span>
+                  <span className={`${s.perfVal} ${btUp ? s.pos : s.neg}`}>
+                    {pctLabel(g.backtest.portfolio.returnPct)}
+                  </span>
+                </div>
+                <div className={s.perfCell}>
+                  <span className={s.microLbl}>S&amp;P 500 · same yr</span>
+                  <span className={s.perfVal}>{pctLabel(g.backtest.benchmark.returnPct)}</span>
+                </div>
+                <div className={s.perfCell}>
+                  <span className={s.microLbl}>Worst dip</span>
+                  <span className={s.perfVal}>−{g.backtest.portfolio.maxDrawdownPct.toFixed(1)}%</span>
+                </div>
+                <div className={s.perfCell}>
+                  <span className={s.microLbl}>Sharpe</span>
+                  <span className={s.perfVal}>{g.backtest.portfolio.sharpe.toFixed(2)}</span>
                 </div>
               </div>
-              <p className={s.honesty}>
-                Backtests are history, not promises.
+              <p className={s.caption}>
+                Backtests are history, not promises
                 {g.backtest.coveragePct < 100 && (
                   <>
                     {" "}
-                    This one covers {g.backtest.coveragePct}% of the basket&apos;s weight
+                    · covers {g.backtest.coveragePct}% of the basket&apos;s weight
                     {excludedFromBacktest.length > 0 && (
-                      <> — {excludedFromBacktest.join(", ")} had no honest public price history,
-                      so they were left out of the simulation rather than faked</>
+                      <>
+                        {" "}
+                        — {excludedFromBacktest.join(", ")}{" "}
+                        had no honest price history, so left out rather than faked
+                      </>
                     )}
-                    .
                   </>
                 )}
+                .
               </p>
             </>
           ) : (
-            <p className={s.honesty}>
-              No backtest to show right now — market history for this basket could not be
-              loaded. We publish nothing rather than an estimate.
+            <p className={s.caption}>
+              No backtest to show — market history could not be loaded, and we publish nothing
+              rather than an estimate.
             </p>
           )}
         </section>
 
-        {/* ── methodology ── */}
-        <section className={s.section} aria-labelledby="methodology">
-          <Eyebrow>Methodology</Eyebrow>
-          <h2 id="methodology" className={s.sectionTitle}>
-            How this basket is built
-          </h2>
+        {/* ── every fee, including the zeros — the compact table IS the pitch ── */}
+        <section className={`${v4.glass} ${s.panel}`} aria-labelledby="fees">
+          <div className={s.panelHead}>
+            <h2 id="fees" className={s.panelTitle}>
+              Every fee, including the zeros
+            </h2>
+          </div>
+          <div className={s.factRows}>
+            <div className={s.factRow}>
+              <span className={s.factKey}>Entry</span>
+              <span className={`${s.factVal} ${s.zero}`}>$0</span>
+            </div>
+            <div className={s.factRow}>
+              <span className={s.factKey}>Management</span>
+              <span className={`${s.factVal} ${s.zero}`}>$0</span>
+            </div>
+            <div className={s.factRow}>
+              <span className={s.factKey}>Rebalancing</span>
+              <span className={`${s.factVal} ${s.zero}`}>$0</span>
+            </div>
+            <div className={s.factRow}>
+              <span className={s.factKey}>
+                Network fees
+                <small>every transaction sponsored — gas is on us</small>
+              </span>
+              <span className={`${s.factVal} ${s.zero}`}>$0</span>
+            </div>
+            <div className={s.factRow}>
+              <span className={s.factKey}>
+                Exit in profit
+                <small>only above your own cost basis · flat or at a loss: $0</small>
+              </span>
+              <span className={`${s.factVal} ${s.strong}`}>{feePct}% of profit</span>
+            </div>
+          </div>
+        </section>
+
+        {/* ── mechanics — five short rows, two lines max each ── */}
+        <section className={`${v4.glass} ${s.panel}`} aria-labelledby="mechanics">
+          <div className={s.panelHead}>
+            <h2 id="mechanics" className={s.panelTitle}>
+              How it works
+            </h2>
+          </div>
+          <div className={s.mechRows}>
+            <p className={s.mechRow}>
+              <b>Custody:</b> your own wallet holds every share — no wrapper token, no pooled
+              fund, no function that can touch your holdings.
+            </p>
+            <p className={s.mechRow}>
+              <b>Fee basis:</b> your own cost, per wallet, on-chain — the {feePct}% applies only
+              above it, never to principal, never twice on the same gain.
+            </p>
+            {/* the "never call trading free" guard — venue spread is always real */}
+            <p className={s.mechRow}>
+              <b>Venue spread:</b> priced into every quote you approve — paid to the market,
+              not to Monvera.
+            </p>
+            {/* ~$11 is OUR gas-economics floor, never a "venue minimum" —
+                no venue imposes one, and saying otherwise was inaccurate.
+                The {" "} after each expression is load-bearing: SWC drops a
+                multi-line text node's leading space after an expression. */}
+            <p className={s.mechRow}>
+              <b>Small buys:</b> below ~${MIN_LEG_USD}{" "}
+              a slice isn&apos;t worth its own gas, so they take the largest names first — our
+              floor, not any venue&apos;s. From {usdWhole(fullUsd)} every name is in
+              {RECOMMENDED_BUY_USD > fullUsd ? (
+                <>; {usdWhole(RECOMMENDED_BUY_USD)}+ keeps trading costs a small share.</>
+              ) : (
+                <> and trading costs stay a small share.</>
+              )}
+            </p>
+            <p className={s.mechRow}>
+              <b>Rebalancing:</b> {g.rebalancePolicy}.
+            </p>
+          </div>
+        </section>
+
+        {/* ── methodology — the one prose zone, kept short ── */}
+        <section className={`${v4.glass} ${s.panel}`} aria-labelledby="methodology">
+          <div className={s.panelHead}>
+            <h2 id="methodology" className={s.panelTitle}>
+              How this basket is built
+            </h2>
+          </div>
           {g.id === "tayyib" && (
             <div className={s.callout}>
               <b>Screened, not certified.</b> Every name passes our AAOIFI sector and ratio
-              screens, and every exclusion is published below with its reason. Formal
-              certification is in progress — until it lands, we will not use the word. A
-              per-holding impure-income estimate is published so holders can purify that
-              sliver.
+              screens; every exclusion is published with its reason. Formal certification is in
+              progress — until it lands, we won&apos;t use the word. A per-holding impure-income
+              estimate is published so holders can purify that sliver.
             </div>
           )}
           <div className={s.method}>
+            <p>{g.longThesis}</p>
             <Rich text={g.methodology} />
           </div>
         </section>
 
-        {/* ── exclusions ── */}
+        {/* ── exclusions — published instead of silently dropped ── */}
         {g.excluded && g.excluded.length > 0 && (
-          <section className={s.section} aria-labelledby="excluded">
-            <Eyebrow>Excluded</Eyebrow>
-            <h2 id="excluded" className={s.sectionTitle}>
-              What&apos;s not in, and why
-            </h2>
-            <p className={s.sectionLede}>
-              Names screened out or not yet buyable on-chain, published instead of silently
-              dropped.
-            </p>
+          <section className={`${v4.glass} ${s.panel}`} aria-labelledby="excluded">
+            <div className={s.panelHead}>
+              <h2 id="excluded" className={s.panelTitle}>
+                What&apos;s not in, and why
+              </h2>
+              <span className={s.panelCap}>published, not silently dropped</span>
+            </div>
             <ul className={s.exclList}>
               {g.excluded.map((e) => (
                 <li key={e.symbol} className={s.exclItem}>
@@ -348,86 +451,21 @@ export default async function GrovePage({ params }: { params: Promise<{ id: stri
           </section>
         )}
 
-        {/* ── fees & mechanics ── */}
-        <section className={s.section} aria-labelledby="fees">
-          <Eyebrow>Fees &amp; mechanics</Eyebrow>
-          <h2 id="fees" className={s.sectionTitle}>
-            Every fee, including the zeros
-          </h2>
-          <div className={s.feeTable}>
-            <div className={s.feeRow}>
-              <span className={s.feeName}>Entry fee</span>
-              <span className={`${s.feeVal} ${s.feeZero}`}>$0</span>
-            </div>
-            <div className={s.feeRow}>
-              <span className={s.feeName}>Management fee</span>
-              <span className={`${s.feeVal} ${s.feeZero}`}>$0</span>
-            </div>
-            <div className={s.feeRow}>
-              <span className={s.feeName}>Rebalancing fee</span>
-              <span className={`${s.feeVal} ${s.feeZero}`}>$0</span>
-            </div>
-            <div className={s.feeRow}>
-              <span className={s.feeName}>
-                Network fees
-                <small>Transactions are sponsored — the network cost is on us.</small>
-              </span>
-              <span className={`${s.feeVal} ${s.feeZero}`}>$0</span>
-            </div>
-            <div className={s.feeRow}>
-              <span className={s.feeName}>
-                Exit fee
-                <small>
-                  Charged only on profit above your own cost basis, only when you exit through
-                  the app. Exit flat or at a loss and it is $0.
-                </small>
-              </span>
-              <span className={s.feeVal}>{feePct}% of profit</span>
-            </div>
-          </div>
-          <ul className={s.mechanics}>
-            <li className={s.mechItem}>
-              <span className={s.mechDot} aria-hidden />
-              <span>
-                <b>Your own high-water mark.</b> The contract tracks your cost basis per
-                wallet, on-chain. The {feePct}% applies only to gains above everything you put
-                in — never to your principal, and never twice on the same gain.
-              </span>
-            </li>
-            <li className={s.mechItem}>
-              <span className={s.mechDot} aria-hidden />
-              <span>
-                <b>Venue costs vs Monvera&apos;s fee.</b> Every swap pays the trading
-                venue&apos;s spread and LP fees — always, priced into the quote you confirm,
-                and paid to the market, not to Monvera. Monvera&apos;s own fee stays $0 until
-                you exit with a profit. Under ~$50 the venue&apos;s share is visibly bigger —{" "}
-                {usdWhole(RECOMMENDED_BUY_USD)}+ recommended.
-              </span>
-            </li>
-            <li className={s.mechItem}>
-              <span className={s.mechDot} aria-hidden />
-              <span>
-                <b>Your wallet holds every share.</b> Monvera never takes custody. There is no
-                wrapper token and no pooled fund — you can see, move, or sell your holdings
-                like any other asset you own.
-              </span>
-            </li>
-            <li className={s.mechItem}>
-              <span className={s.mechDot} aria-hidden />
-              <span>
-                <b>Minimum buy: {usdWhole(g.minBuyUsd)}.</b>{" "}
-                Small amounts buy the largest holdings first — each placed order must clear
-                the venue&apos;s ~${MIN_LEG_USD} floor, so below {usdWhole(fullUsd)} the buy
-                concentrates into the biggest names. From {usdWhole(fullUsd)} every one of
-                the {g.components.length} names is included.
-              </span>
-            </li>
-          </ul>
-          <p className={s.rebalanceLine}>
-            <b>Rebalancing:</b> Vera checks hourly and trades only when needed — this grove is{" "}
-            {g.rebalancePolicy}. Every action lands on-chain, where anyone can verify it.
-          </p>
-        </section>
+        {/* ── mono facts footer — chain facts, nothing promotional ── */}
+        <p className={s.monoFoot}>
+          {GROVE_MANAGER && (
+            <a
+              className={s.footLink}
+              href={`https://robinhoodchain.blockscout.com/address/${GROVE_MANAGER}`}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              contract {GROVE_MANAGER.slice(0, 6)}…{GROVE_MANAGER.slice(-4)} ↗
+            </a>
+          )}
+          <span>composition changes wait 48h on-chain</span>
+          <span>non-custodial — only your wallet moves the basket</span>
+        </p>
       </main>
       <SiteFooterV4 />
     </div>

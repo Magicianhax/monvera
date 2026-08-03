@@ -8,6 +8,7 @@ import { useCallback, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createWalletClient, custom, parseUnits } from "viem";
 import type { StakingWallet } from "@/hooks/useStakingWallet";
+import { useRefreshBalances } from "@/hooks/useBalances";
 import {
   STAKING_ADDRESSES,
   seasonDistributorAbi,
@@ -109,22 +110,46 @@ async function readClaims(user: `0x${string}` | null): Promise<ClaimableSeason[]
   return out;
 }
 
+/** Claims-only read for surfaces OUTSIDE the Staking page (the app-top season
+ *  rewards banner). Shares the ["staking", "claims"] key with useStaking's own
+ *  claims query — so a claim write's invalidation clears the banner too — but
+ *  polls gently: claims change once per season, and a banner mounted on every
+ *  screen must not drag the heavy snapshot polling along with it. */
+export function useSeasonClaims(user: `0x${string}` | null): ClaimableSeason[] {
+  const query = useQuery({
+    queryKey: ["staking", "claims", user],
+    queryFn: () => readClaims(user),
+    staleTime: 5 * 60_000,
+    refetchInterval: 10 * 60_000,
+    enabled: !!user,
+  });
+  return query.data ?? [];
+}
+
 async function readSnapshot(user: `0x${string}` | null): Promise<StakingSnapshot> {
-  const [totalWeight, totalStaked, cooldown] = await Promise.all([
-    stakingClient.readContract({ address: A.staking, abi: stakingAbi, functionName: "totalWeight" }),
-    stakingClient.readContract({ address: A.staking, abi: stakingAbi, functionName: "totalStaked" }),
-    stakingClient.readContract({ address: A.staking, abi: stakingAbi, functionName: "cooldown" }),
+  // Fire every read in the same tick: stakingClient batches multicall, but only
+  // calls issued together fold into one eth_call — awaiting the totals before
+  // the user reads was silently paying two round trips per poll.
+  const [[totalWeight, totalStaked, cooldown], userReads] = await Promise.all([
+    Promise.all([
+      stakingClient.readContract({ address: A.staking, abi: stakingAbi, functionName: "totalWeight" }),
+      stakingClient.readContract({ address: A.staking, abi: stakingAbi, functionName: "totalStaked" }),
+      stakingClient.readContract({ address: A.staking, abi: stakingAbi, functionName: "cooldown" }),
+    ]),
+    user
+      ? Promise.all([
+          stakingClient.readContract({ address: A.token, abi: stakingTokenAbi, functionName: "balanceOf", args: [user] }),
+          stakingClient.readContract({ address: A.staking, abi: stakingAbi, functionName: "stakedOf", args: [user] }),
+          stakingClient.readContract({ address: A.staking, abi: stakingAbi, functionName: "pendingOf", args: [user] }),
+          stakingClient.readContract({ address: A.staking, abi: stakingAbi, functionName: "weightOf", args: [user] }),
+        ])
+      : null,
   ]);
 
   let wallet = BigInt(0), staked = BigInt(0), pending = BigInt(0), weight = BigInt(0);
   let unlockAt = 0;
-  if (user) {
-    const [w, s, p, wt] = await Promise.all([
-      stakingClient.readContract({ address: A.token, abi: stakingTokenAbi, functionName: "balanceOf", args: [user] }),
-      stakingClient.readContract({ address: A.staking, abi: stakingAbi, functionName: "stakedOf", args: [user] }),
-      stakingClient.readContract({ address: A.staking, abi: stakingAbi, functionName: "pendingOf", args: [user] }),
-      stakingClient.readContract({ address: A.staking, abi: stakingAbi, functionName: "weightOf", args: [user] }),
-    ]);
+  if (userReads) {
+    const [w, s, p, wt] = userReads;
     wallet = w; staked = s; pending = p[0]; unlockAt = Number(p[1]); weight = wt;
   }
 
@@ -182,6 +207,7 @@ export type StakingAction = "stake" | "unstake" | "cancel" | "withdraw" | "mint"
 
 export function useStaking(w: StakingWallet) {
   const qc = useQueryClient();
+  const refreshBalances = useRefreshBalances();
   const user = w.address;
   const [busy, setBusy] = useState<StakingAction | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -225,6 +251,11 @@ export function useStaking(w: StakingWallet) {
         setStep("Confirming on-chain…");
         await deadline(stakingClient.waitForTransactionReceipt({ hash }), 90_000, "Confirmation");
         await qc.invalidateQueries({ queryKey: ["staking"] });
+        // Staked/unstaking $MONVERA also renders in the /api/portfolio surfaces
+        // (holding rows, totals), so a staking write must refresh the money
+        // queries too — same list + delayed second pass as every other
+        // on-chain write, or the portfolio shows stale numbers until its poll.
+        refreshBalances();
       } catch (e) {
         console.error(`[staking] ${action}`, e);
         setError(explainError(e));
@@ -234,7 +265,7 @@ export function useStaking(w: StakingWallet) {
         setBusy(null);
       }
     },
-    [user, busy, qc, w],
+    [user, busy, qc, w, refreshBalances],
   );
 
   const stake = useCallback(async (amount: string) => {

@@ -14,6 +14,7 @@ import { priceAllWithFallback } from "@/lib/server/pricing";
 import { getMonveraSpot } from "@/lib/server/monveraPrice";
 import { MONVERA } from "@/lib/monveraToken";
 import { getWrapperEntries } from "@/lib/server/wrapperMap";
+import { STAKING_ADDRESSES, stakingAbi } from "@/lib/staking";
 import { fromUnits } from "@/lib/format";
 import { getDaySummary } from "@/lib/server/marketData";
 import { rateLimit, clientIp } from "@/lib/server/rateLimit";
@@ -61,6 +62,22 @@ interface PortfolioHolding {
   smartQty?: number;
   smartRaw?: string;
   smartUsd?: number | null;
+  /** $MONVERA sitting in MonveraStaking, keyed on the EOA. Same rule as
+      smartQty: the user's money, counted in totals, kept OUT of `raw` because
+      it is not sellable until withdrawn. */
+  stakedQty?: number;
+  stakedRaw?: string;
+  stakedUsd?: number | null;
+  /** $MONVERA in the unstake cooldown (or withdrawable) — owned, on its way
+      out, and NOT earning stake weight. Split from stakedQty because calling
+      cooling tokens "staked" misstates what the user's stake is doing. */
+  unstakingQty?: number;
+  unstakingRaw?: string;
+  unstakingUsd?: number | null;
+  /** Unix seconds when the cooling unstake unlocks. Past = withdrawable NOW —
+      the UI must say "ready to withdraw", not leave finished cooldowns
+      labeled "unstaking" forever. */
+  unstakeUnlockAt?: number;
 }
 
 export async function GET(req: NextRequest) {
@@ -130,8 +147,8 @@ export async function GET(req: NextRequest) {
           functionName: "balanceOf" as const,
           args: [address as `0x${string}`] as const,
         },
-        // Same asset sweep against the smart account, appended last so every
-        // index above is unchanged. Same tick, so viem folds it into the one
+        // Same asset sweep against the smart account, appended so every index
+        // above is unchanged. Same tick, so viem folds it into the one
         // Multicall3 call — a second address costs no extra RPC round trip.
         ...(smart
           ? assets.map((asset) => ({
@@ -141,19 +158,88 @@ export async function GET(req: NextRequest) {
               args: [smart] as const,
             }))
           : []),
+        // USDG parked at the smart account. Grove exits pay proceeds to
+        // msg.sender — the smart account — and no flow sweeps them back to the
+        // EOA, so without this read a user who exits a Grove watches that cash
+        // vanish from every screen.
+        ...(smart
+          ? [{
+              address: USDG.address as `0x${string}`,
+              abi: ERC20_ABI,
+              functionName: "balanceOf" as const,
+              args: [smart] as const,
+            }]
+          : []),
+        // $MONVERA at the smart account: Matcha-routed token buys pay the smart
+        // account and sweep only minOut home, so the slippage remainder parks
+        // here — real money that was invisible to every screen.
+        ...(smart
+          ? [{
+              address: MONVERA.address,
+              abi: ERC20_ABI,
+              functionName: "balanceOf" as const,
+              args: [smart] as const,
+            }]
+          : []),
+        // $MONVERA in the staking contract (stakedOf) plus any cooling unstake
+        // (pendingOf) — both keyed on the EOA, both still the user's tokens.
+        {
+          address: STAKING_ADDRESSES.staking,
+          abi: stakingAbi,
+          functionName: "stakedOf" as const,
+          args: [address as `0x${string}`] as const,
+        },
+        {
+          address: STAKING_ADDRESSES.staking,
+          abi: stakingAbi,
+          functionName: "pendingOf" as const,
+          args: [address as `0x${string}`] as const,
+        },
       ],
     });
 
-    // Explicit offsets — the layout is positional and there are now four
+    // Explicit offsets — the layout is positional and there are now six
     // sections, so "last slot" arithmetic is no longer safe.
     const IDX_ASSETS = 1;
     const IDX_WRAPPERS = IDX_ASSETS + assets.length;
     const IDX_MONVERA = IDX_WRAPPERS + wrapperEntries.length;
     const IDX_SMART = IDX_MONVERA + 1;
+    const IDX_SMART_USDG = IDX_SMART + (smart ? assets.length : 0);
+    const IDX_SMART_MONVERA = IDX_SMART_USDG + (smart ? 1 : 0);
+    const IDX_STAKED = IDX_SMART_MONVERA + (smart ? 1 : 0);
+    const IDX_PENDING = IDX_STAKED + 1;
 
     const usdcRead = results[0];
     const cashUsd =
       usdcRead.status === "success" ? fromUnits(usdcRead.result as bigint, USDG.decimals) : 0;
+
+    // Grove-exit proceeds parked at the smart account. Reported separately from
+    // cashUsd because the ordinary buy flows spend from the EOA — this is the
+    // user's cash, but not what a buy can pull today.
+    const smartUsdgRead = smart ? results[IDX_SMART_USDG] : null;
+    const smartCashUsd =
+      smartUsdgRead && smartUsdgRead.status === "success"
+        ? fromUnits(smartUsdgRead.result as bigint, USDG.decimals)
+        : 0;
+
+    // Staked and cooling $MONVERA, kept apart: "staked" earns weight, a
+    // cooling unstake doesn't — folding them together misstates the stake.
+    // Both reads are best-effort: a staking-contract hiccup must never blank
+    // the rest of the portfolio.
+    const stakedRead = results[IDX_STAKED];
+    const pendingRead = results[IDX_PENDING];
+    const stakedRaw = stakedRead.status === "success" ? (stakedRead.result as bigint) : BigInt(0);
+    const unstakingRaw =
+      pendingRead.status === "success" ? (pendingRead.result as readonly [bigint, bigint])[0] : BigInt(0);
+    // The unlock timestamp travels with the amount — throwing it away left
+    // finished cooldowns labeled "unstaking" forever.
+    const unstakeUnlockAt =
+      pendingRead.status === "success" ? Number((pendingRead.result as readonly [bigint, bigint])[1]) : 0;
+
+    // Matcha-buy remainder parked at the smart account.
+    const smartMonveraRead = smart ? results[IDX_SMART_MONVERA] : null;
+    const smartMonveraRaw =
+      smartMonveraRead && smartMonveraRead.status === "success" ? (smartMonveraRead.result as bigint) : BigInt(0);
 
     // Settling (wrapped) balance per asset index. Wrappers are 1:1 and share the
     // underlying's decimals.
@@ -227,11 +313,16 @@ export async function GET(req: NextRequest) {
 
     // $MONVERA — priced off its DEX pool (GeckoTerminal, cached), 1D move from
     // the same source. No spark series exists for it; the row shows without one.
+    // The row also exists when everything is staked (wallet zero): staked
+    // tokens are still the user's money and must not disappear from the list.
     const monveraRead = results[IDX_MONVERA];
     const monveraRaw = monveraRead.status === "success" ? (monveraRead.result as bigint) : BigInt(0);
-    if (monveraRaw > BigInt(0)) {
+    if (monveraRaw > BigInt(0) || stakedRaw > BigInt(0) || unstakingRaw > BigInt(0) || smartMonveraRaw > BigInt(0)) {
       const spot = await getMonveraSpot();
       const qty = fromUnits(monveraRaw, MONVERA.decimals);
+      const stakedQty = fromUnits(stakedRaw, MONVERA.decimals);
+      const unstakingQty = fromUnits(unstakingRaw, MONVERA.decimals);
+      const smartQty = fromUnits(smartMonveraRaw, MONVERA.decimals);
       holdings.push({
         symbol: "MONVERA",
         raw: monveraRaw.toString(),
@@ -240,22 +331,35 @@ export async function GET(req: NextRequest) {
         valueUsd: spot ? qty * spot.priceUsd : null,
         dayChangePct: spot?.change24h ?? null,
         spark: null,
+        ...(stakedQty > 0
+          ? { stakedQty, stakedRaw: stakedRaw.toString(), stakedUsd: spot ? stakedQty * spot.priceUsd : null }
+          : {}),
+        ...(unstakingQty > 0
+          ? { unstakingQty, unstakingRaw: unstakingRaw.toString(), unstakingUsd: spot ? unstakingQty * spot.priceUsd : null, unstakeUnlockAt }
+          : {}),
+        ...(smartQty > 0
+          ? { smartQty, smartRaw: smartMonveraRaw.toString(), smartUsd: spot ? smartQty * spot.priceUsd : null }
+          : {}),
       });
     }
 
-    // Largest value first (settled + settling + smart-account), unpriced last.
-    const worth = (h: PortfolioHolding) => (h.valueUsd ?? 0) + (h.settlingUsd ?? 0) + (h.smartUsd ?? 0);
+    // Largest value first (settled + settling + smart-account + staked +
+    // unstaking), unpriced last.
+    const worth = (h: PortfolioHolding) =>
+      (h.valueUsd ?? 0) + (h.settlingUsd ?? 0) + (h.smartUsd ?? 0) + (h.stakedUsd ?? 0) + (h.unstakingUsd ?? 0);
     holdings.sort((a, b) => worth(b) - worth(a));
-    // Smart-account shares count toward what the user owns even though they are
-    // not sellable from the EOA. Leaving them out would show a total lower than
-    // the user's actual money the moment they buy a Grove.
+    // Smart-account shares and staked tokens count toward what the user owns
+    // even though they are not sellable from the EOA. Leaving them out would
+    // show a total lower than the user's actual money the moment they buy a
+    // Grove or stake.
     const investedUsd = holdings.reduce((s, h) => s + worth(h), 0);
 
     return Response.json(
       {
         cashUsd,
+        smartCashUsd,
         investedUsd,
-        totalUsd: cashUsd + investedUsd,
+        totalUsd: cashUsd + smartCashUsd + investedUsd,
         holdings,
         asOf: new Date().toISOString(),
       },

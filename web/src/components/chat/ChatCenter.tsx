@@ -12,14 +12,15 @@ import { useSellAll, type SellSelection, type SellSuccess } from "@/hooks/useSel
 import { useMonveraSwap } from "@/hooks/useMonveraSwap";
 import { formatUnits, parseUnits } from "viem";
 import { useSmartAccount } from "@/hooks/useSmartAccount";
-import { usePortfolio, useBalanceHistory, type Portfolio } from "@/hooks/useBalances";
+import { useSmartAccountAddress } from "@/hooks/useSmartAccountAddress";
+import { holdingWorth, usePortfolio, useBalanceHistory, type Portfolio } from "@/hooks/useBalances";
 import { catFor, displayFor, toTile } from "@/lib/displayAssets";
 import { AssetTile, Confetti, RiskMeter } from "@/components/design";
 import type { useVeraChat } from "@/hooks/useVeraChat";
 import type { AllocateResult, InvestSuccess } from "@/lib/invest-types";
 import { authHeader } from "@/lib/authedFetch";
 import { setAutopilotPrefill, setOrderAmountPrefill, consumeAdoptedPlan, onAdoptedPlan } from "./autopilotPrefill";
-import { ChatOrb, PIcon, chartPaths, dcol, pctStr, usd, usd0, type ChatNav } from "./chatKit";
+import { ChatOrb, PIcon, SkeletonBar, chartPaths, dcol, pctStr, usd, usd0, type ChatNav } from "./chatKit";
 import { useAvatar, avatarCss } from "./avatar";
 import { FAQ } from "@/lib/faq";
 import { haptic } from "@/lib/haptics";
@@ -254,11 +255,14 @@ export function ChatCenter({ nav, chat, narrowed, pendingAsk, consumeAsk, mobile
   const { setColorMode } = useTheme();
   const { setColorStyle } = useColorStyle();
   const { address } = useSmartAccount();
+  // The real ERC-4337 account (`address` above is the EOA) — rides along on
+  // each turn so the user directory learns it for balance snapshots.
+  const smartAddress = useSmartAccountAddress();
   const portfolioQ = usePortfolio(address ?? undefined);
   const portfolio = portfolioQ.data;
 
   const { phase, error: investError, success: investSuccess, busy: investBusy, allocate, invest: placeInvest, reset } = invest;
-  const { activeId, messages, createThread, append } = chat;
+  const { activeId, messages, messagesLoading, createThread, append } = chat;
 
   // Chat-native $MONVERA orders: Vera proposes, the user confirms inline, the
   // token swap rails execute (its own gasless route — never the Arcus flow).
@@ -317,20 +321,24 @@ export function ChatCenter({ nav, chat, narrowed, pendingAsk, consumeAsk, mobile
   const [liveVenues, setLiveVenues] = useState<VenueName[]>([]);
   useEffect(() => {
     let alive = true;
-    fetch("/api/venues")
-      .then((r) => r.json())
-      .then((j) => { if (alive && Array.isArray(j?.venues)) setLiveVenues(j.venues.filter(isVenue)); })
-      .catch(() => { /* decorative only — never block the plan on it */ });
-    return () => { alive = false; };
+    const load = () =>
+      fetch("/api/venues")
+        .then((r) => r.json())
+        .then((j) => { if (alive && Array.isArray(j?.venues)) setLiveVenues(j.venues.filter(isVenue)); })
+        .catch(() => { /* decorative only — never block the plan on it */ });
+    void load();
+    // Venues can be toggled mid-session (a flag flip, an outage) — a session
+    // that only ever asked once kept showing a dead venue as "competing".
+    const t = setInterval(() => void load(), 5 * 60_000);
+    return () => { alive = false; clearInterval(t); };
   }, []);
   const [orderPreview, setOrderPreview] = useState<{ msgId: string; text: string } | null>(null);
   const lastMsg = chat.messages[chat.messages.length - 1];
   const lastOrder = (lastMsg?.payload as { tokenOrder?: { side: "buy" | "sell"; amountUsd: number } } | null)?.tokenOrder;
   useEffect(() => {
     if (!lastMsg || !lastOrder) return;
-    if (orderPreview?.msgId === lastMsg.id) return;
     let stale = false;
-    void (async () => {
+    const quote = async () => {
       try {
         if (lastOrder.side === "buy") {
           const out = await tokenSwap.quoteOut("buy", parseUnits(lastOrder.amountUsd.toFixed(6), 6));
@@ -342,8 +350,12 @@ export function ChatCenter({ nav, chat, narrowed, pendingAsk, consumeAsk, mobile
           if (!stale && out > BigInt(0)) setOrderPreview({ msgId: lastMsg.id, text: `${fmtTok(raw)} $MONVERA → ≈ ${usd(Number(formatUnits(out, 6)))}` });
         }
       } catch { /* preview is best-effort; the card still works without it */ }
-    })();
-    return () => { stale = true; };
+    };
+    void quote();
+    // The card can sit unconfirmed for minutes while the price moves — keep
+    // the "$10 → ≈ N" preview honest by re-quoting while it is on screen.
+    const t = setInterval(() => void quote(), 15_000);
+    return () => { stale = true; clearInterval(t); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lastMsg?.id, lastOrder?.side, lastOrder?.amountUsd]);
 
@@ -396,13 +408,24 @@ export function ChatCenter({ nav, chat, narrowed, pendingAsk, consumeAsk, mobile
       sellDoneGuard.current = true;
       haptic.success();
       setCelebrate(true);
-      if (threadId) append({
-        threadId, role: "vera", kind: "sellReceipt",
-        content: seller.success.anySettling
-          ? "Sold. Most of it is cash already; the rest is settling and lands in minutes. Your receipt:"
-          : "Sold. The cash is in your wallet. Your receipt:",
-        payload: seller.success,
-      }).catch(() => {});
+      if (threadId) {
+        // Honest copy on partial fills: naming what did NOT sell matters more
+        // than the celebration — it's market exposure the user may believe is
+        // closed. The receipt card lists the failed legs with a retry chip.
+        const failed = seller.success.failed ?? [];
+        const content = failed.length
+          ? `Sold ${seller.success.sold.length} of ${seller.success.sold.length + failed.length} — ${failed
+              .map((f) => f.symbol)
+              .join(", ")} didn't fill and ${failed.length === 1 ? "is" : "are"} still yours. Your receipt:`
+          : seller.success.anySettling
+            ? "Sold. Most of it is cash already; the rest is settling and lands in minutes. Your receipt:"
+            : "Sold. The cash is in your wallet. Your receipt:";
+        append({
+          threadId, role: "vera", kind: "sellReceipt",
+          content,
+          payload: seller.success,
+        }).catch(() => {});
+      }
       seller.reset();
     } else if (seller.phase === "error" && seller.error) {
       if (sellDoneGuard.current) return;
@@ -498,11 +521,18 @@ ${seller.error.slice(0, 160)}`, payload: { suggestions: ["Try again"] } }).catch
           text,
           cashUsd: portfolio?.cashUsd,
           investedUsd: portfolio?.investedUsd,
+          // Grove-exit USDG parked at the smart account — real cash, not
+          // spendable by the buy flows. Without it Vera under-counts the user.
+          smartCashUsd: portfolio?.smartCashUsd || undefined,
           holdings: (portfolio?.holdings ?? []).slice(0, 50).map((h) => ({
             symbol: h.asset.symbol, qty: h.qty, valueUsd: h.valueUsd, dayChangePct: h.dayChangePct, settlingUsd: h.settlingUsd,
+            // Grove-held and staked parts — Vera must see the user's FULL money
+            // or "review my portfolio" calls a grove holder empty.
+            smartUsd: h.smartUsd, stakedUsd: h.stakedUsd,
           })),
           recent,
           address: address ?? undefined,
+          smart: smartAddress ?? undefined,
         }),
       });
       if (res.status === 429) {
@@ -740,7 +770,14 @@ ${seller.error.slice(0, 160)}`, payload: { suggestions: ["Try again"] } }).catch
     if (errorGuard.current) return;
     errorGuard.current = true;
     const threadId = activeId ?? threadRef.current;
-    if (threadId) append({ threadId, role: "vera", content: investError }).catch(() => {});
+    // Same recovery affordance the sell path has: an error must leave the user
+    // something to tap, not a dead paragraph (the plan card's Invest button is
+    // gone by now — reset() clears the flow).
+    const goal = lastGoalRef.current;
+    if (threadId) append({
+      threadId, role: "vera", content: investError,
+      payload: { suggestions: goal ? [goal, "Try that again"] : ["Try that again"] },
+    }).catch(() => {});
     reset();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase, investError]);
@@ -795,6 +832,7 @@ ${seller.error.slice(0, 160)}`, payload: { suggestions: ["Try again"] } }).catch
           totalUsd={seller.progress.totalUsd}
           etaSeconds={seller.progress.etaSeconds}
           manual={seller.progress.mode === "manual"}
+          onStop={seller.stop}
         />
       )}
       {/* sell sign-mode chooser (auto vs approve-each), mirrors the invest one */}
@@ -820,6 +858,7 @@ ${seller.error.slice(0, 160)}`, payload: { suggestions: ["Try again"] } }).catch
           totalUsd={invest.progress?.totalUsd ?? placingPlan.amountUsd}
           etaSeconds={invest.progress?.etaSeconds ?? null}
           manual={invest.progress?.mode === "manual"}
+          onStop={invest.stop}
         />
       )}
       <main ref={scrollRef} className="scr" style={{ flex: 1, minHeight: 0, overflowY: "auto", display: "flex", flexDirection: "column" }}>
@@ -828,10 +867,19 @@ ${seller.error.slice(0, 160)}`, payload: { suggestions: ["Try again"] } }).catch
           {!activeId && (
             <VeraRow>
               <div style={{ fontSize: 15.5, lineHeight: 1.6, color: "var(--ink)" }}>{GREET}</div>
-              <PortfolioCard data={portfolio} nav={nav} />
+              <PortfolioCard data={portfolio} pending={portfolioQ.isPending} nav={nav} />
             </VeraRow>
           )}
 
+          {/* Opening a past thread used to render a BLANK conversation while
+              its messages loaded — messagesLoading existed but nothing consumed
+              it. Two ghost bubbles hold the shape until the history lands. */}
+          {activeId && messagesLoading && msgs.length === 0 && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 12, paddingLeft: 43 }} aria-label="Loading conversation" role="status">
+              <SkeletonBar w="55%" h={40} style={{ borderRadius: 16 }} />
+              <SkeletonBar w="70%" h={64} style={{ borderRadius: 16 }} />
+            </div>
+          )}
           {msgs.map((m, i) => {
             if (m.role === "user") {
               return (
@@ -988,7 +1036,7 @@ ${seller.error.slice(0, 160)}`, payload: { suggestions: ["Try again"] } }).catch
                     </div>
                   );
                 })()}
-                {m.kind === "portfolio" && <PortfolioCard data={portfolio} nav={nav} />}
+                {m.kind === "portfolio" && <PortfolioCard data={portfolio} pending={portfolioQ.isPending} nav={nav} />}
                 {plan && <PlanCard plan={plan} live={live} canInvest={canInvest} onInvest={() => setModeAsk(plan)} onNudge={(t) => void nudge(t, plan)} nav={nav} />}
                 {success && <SuccessCard s={success} nav={nav} />}
                 {review && <ReviewCard review={review} onAsk={(t) => void submit(t)} nav={nav} />}
@@ -1023,15 +1071,21 @@ ${seller.error.slice(0, 160)}`, payload: { suggestions: ["Try again"] } }).catch
                 {(() => {
                   const sr = m.kind === "sellReceipt" && m.payload ? (m.payload as SellSuccess) : null;
                   if (!sr) return null;
+                  const srFailed = sr.failed ?? [];
                   return (
                     <div style={{ marginTop: 12, background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 18, overflow: "hidden", maxWidth: 440 }}>
                       <div style={{ padding: "13px 16px", display: "flex", alignItems: "center", gap: 10, borderBottom: "1px solid var(--line)" }}>
                         <div style={{ width: 30, height: 30, borderRadius: 999, flex: "none", display: "grid", placeItems: "center", background: "color-mix(in oklab, var(--primary) 18%, transparent)", color: "var(--primary)" }}>
-                          <PIcon name="ph-check-circle" size={18} weight="fill" />
+                          <PIcon name={srFailed.length ? "ph-warning-circle" : "ph-check-circle"} size={18} weight="fill" style={srFailed.length ? { color: "var(--neg)" } : undefined} />
                         </div>
                         <div style={{ minWidth: 0 }}>
-                          <div style={{ fontSize: 14, fontWeight: 700 }}>Sold. {usd(sr.totalUsd)} to cash</div>
-                          <div style={{ fontSize: 11.5, color: "var(--ink-2)" }}>{sr.sold.length} holding{sr.sold.length === 1 ? "" : "s"} · gasless{sr.anySettling ? " · some proceeds settling" : ""}</div>
+                          <div style={{ fontSize: 14, fontWeight: 700 }}>
+                            {srFailed.length ? `Sold ${sr.sold.length} of ${sr.sold.length + srFailed.length}. ` : "Sold. "}{usd(sr.totalUsd)} to cash
+                          </div>
+                          <div style={{ fontSize: 11.5, color: "var(--ink-2)" }}>
+                            {sr.sold.length} holding{sr.sold.length === 1 ? "" : "s"} · gasless{sr.anySettling ? " · some proceeds settling" : ""}
+                            {srFailed.length ? <span style={{ color: "var(--neg)", fontWeight: 600 }}> · {srFailed.length} didn&rsquo;t fill</span> : null}
+                          </div>
                         </div>
                       </div>
                       <div style={{ padding: "6px 16px 12px" }}>
@@ -1051,6 +1105,25 @@ ${seller.error.slice(0, 160)}`, payload: { suggestions: ["Try again"] } }).catch
                             <span className="tnum" style={{ fontSize: 12.5, fontWeight: 650 }}>{usd(h.amountUsd)}</span>
                           </div>
                         ))}
+                        {/* Legs that did NOT sell — still the user's shares. Named, valued, retryable. */}
+                        {srFailed.map((f) => (
+                          <div key={`failed-${f.symbol}`} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderBottom: "1px solid var(--line-2)", opacity: 0.9 }}>
+                            <AssetTile asset={toTile(f.symbol, f.name)} size={28} radius={9} />
+                            <span style={{ flex: 1, minWidth: 0 }}>
+                              <span style={{ display: "block", fontWeight: 600, fontSize: 12.5 }}>{f.name}</span>
+                              <span style={{ display: "block", fontSize: 10.5, color: "var(--neg)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>didn&rsquo;t fill — still yours</span>
+                            </span>
+                            <span className="tnum" style={{ fontSize: 12.5, fontWeight: 650, color: "var(--ink-3)" }}>{usd(f.amountUsd)}</span>
+                          </div>
+                        ))}
+                        {srFailed.length > 0 && (
+                          <button
+                            onClick={() => void submit(`Sell my ${srFailed.map((f) => f.symbol).join(" and ")}`)}
+                            style={{ width: "100%", height: 38, marginTop: 10, borderRadius: 11, fontSize: 12.5, fontWeight: 700, border: "1px solid var(--line)", background: "var(--panel-2)", color: "var(--ink)" }}
+                          >
+                            Retry {srFailed.map((f) => f.symbol).join(", ")}
+                          </button>
+                        )}
                       </div>
                     </div>
                   );
@@ -1144,27 +1217,34 @@ function VeraRow({ children }: { children: ReactNode }) {
 
 // ── portfolio card (greeting) — real balances, design's mini chart ──────────
 
-function PortfolioCard({ data, nav }: { data?: Portfolio; nav: ChatNav }) {
+function PortfolioCard({ data, pending, nav }: { data?: Portfolio; pending?: boolean; nav: ChatNav }) {
   const holdings = (data?.holdings ?? [])
     .slice()
-    .sort((a, b) => ((b.valueUsd ?? b.settlingUsd ?? 0) - (a.valueUsd ?? a.settlingUsd ?? 0)));
+    .sort((a, b) => holdingWorth(b) - holdingWorth(a));
   const invested = data?.investedUsd ?? 0;
   const total = data?.totalUsd ?? 0;
-  const dayUsd = (data?.holdings ?? []).reduce((s, h) => s + ((h.valueUsd ?? 0) * (h.dayChangePct ?? 0)) / 100, 0);
+  const dayUsd = (data?.holdings ?? []).reduce((s, h) => s + (holdingWorth(h) * (h.dayChangePct ?? 0)) / 100, 0);
   // Real intraday value of the holdings — never a synthetic wave under money.
   const { address } = useSmartAccount();
   const { data: snaps } = useBalanceHistory(address ?? undefined);
   const day =
     equityCurveFrom(snaps ?? [], data?.totalUsd) ??
-    portfolioDayCurve(data?.holdings ?? [], data?.cashUsd ?? 0);
+    portfolioDayCurve(data?.holdings ?? [], (data?.cashUsd ?? 0) + (data?.smartCashUsd ?? 0));
   const mini = day ? chartPaths(day.curve, 200, 64, { minSpanFrac: 0.02 }) : null;
   return (
     <div style={{ background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 20, marginTop: 14, overflow: "hidden" }}>
       <button onClick={() => nav.openCanvas("portfolio")} style={{ width: "100%", textAlign: "left", padding: "18px 20px", display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 16, borderBottom: "1px solid var(--line)" }}>
         <div>
           <div style={{ fontSize: 12, fontWeight: 600, textTransform: "uppercase", letterSpacing: ".04em", color: "var(--ink-3)" }}>Total balance</div>
-          <div className="serif tnum" style={{ fontSize: 34, fontWeight: 500, marginTop: 2, color: "var(--ink)" }}>{usd(total)}</div>
-          <div className="tnum" style={{ fontSize: 13.5, fontWeight: 600, color: dcol(dayUsd), marginTop: 2 }}>{(dayUsd >= 0 ? "+" : "−") + "$" + Math.abs(dayUsd).toFixed(2)} today</div>
+          {/* Never $0.00 while the portfolio is still loading. */}
+          {pending ? (
+            <SkeletonBar w={140} h={28} style={{ margin: "6px 0" }} />
+          ) : (
+            <>
+              <div className="serif tnum" style={{ fontSize: 34, fontWeight: 500, marginTop: 2, color: "var(--ink)" }}>{usd(total)}</div>
+              <div className="tnum" style={{ fontSize: 13.5, fontWeight: 600, color: dcol(dayUsd), marginTop: 2 }}>{(dayUsd >= 0 ? "+" : "−") + "$" + Math.abs(dayUsd).toFixed(2)} today</div>
+            </>
+          )}
         </div>
         {mini ? (
           <svg viewBox="0 0 200 64" preserveAspectRatio="none" width={180} height={64} style={{ display: "block", flex: "none", maxWidth: "46%" }}>
@@ -1182,14 +1262,15 @@ function PortfolioCard({ data, nav }: { data?: Portfolio; nav: ChatNav }) {
       <div style={{ padding: "8px 10px" }}>
         {holdings.map((h) => {
           const sym = h.asset.symbol;
-          const value = h.valueUsd ?? h.settlingUsd ?? 0;
+          const value = holdingWorth(h);
           const day = h.dayChangePct ?? 0;
+          const inGrove = (h.smartUsd ?? 0) > 0;
           return (
             <button key={sym} className="hgl" onClick={() => nav.openCanvas("holding", sym)} style={{ width: "100%", textAlign: "left", display: "flex", alignItems: "center", gap: 12, padding: "10px 12px", borderRadius: 13 }}>
               <AssetTile asset={toTile(sym, h.asset.name)} size={34} radius={10} />
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontWeight: 600, fontSize: 14, color: "var(--ink)" }}>{displayFor(sym, h.asset.name).name}</div>
-                <div style={{ fontSize: 12, color: "var(--ink-3)" }}>{invested > 0 ? Math.round((value / invested) * 100) + "% of portfolio" : ""}</div>
+                <div style={{ fontSize: 12, color: "var(--ink-3)" }}>{invested > 0 ? Math.round((value / invested) * 100) + "% of portfolio" : ""}{inGrove ? " · in a Grove" : ""}{(h.stakedUsd ?? 0) > 0 ? " · staked" : ""}</div>
               </div>
               <div style={{ textAlign: "right" }}>
                 <div className="tnum" style={{ fontWeight: 600, fontSize: 14 }}>{usd(value)}</div>
@@ -1199,7 +1280,9 @@ function PortfolioCard({ data, nav }: { data?: Portfolio; nav: ChatNav }) {
           );
         })}
         {holdings.length === 0 && (
-          <div style={{ padding: "12px 12px 14px", fontSize: 13, color: "var(--ink-3)" }}>Nothing invested yet — tell me a goal below and I&rsquo;ll build your first plan.</div>
+          <div style={{ padding: "12px 12px 14px", fontSize: 13, color: "var(--ink-3)" }}>
+            {pending ? <SkeletonBar w="75%" h={13} /> : <>Nothing invested yet — tell me a goal below and I&rsquo;ll build your first plan.</>}
+          </div>
         )}
       </div>
     </div>
@@ -1499,25 +1582,25 @@ function ReviewCard({ review, onAsk, nav }: { review: ReviewPayload; onAsk: (tex
  *  These modals live inside the message list, which animates (transform) and so
  *  creates a stacking context — that scopes their z-index locally and lets chat
  *  content paint straight over the card, which is exactly what users saw on the
- *  receipt. A portal takes them out to the document root where fixed + z-index
- *  mean what they say. SSR-safe: renders nothing until mounted. */
+ *  receipt. A portal takes them out to the THEME ROOT where fixed + z-index
+ *  mean what they say and the CSS variables still apply. SSR-safe: renders
+ *  nothing until the host resolves. */
 function Overlay({ children, onClose }: { children: React.ReactNode; onClose: () => void }) {
-  const [mounted, setMounted] = useState(false);
-  // Every theme variable (--panel, --ink, --line, --primary) is defined on the
-  // app's `.mvc[data-mode][data-style]` root. Portalling to <body> escapes that
-  // scope, so the card loses all of them and renders as a washed-out white box.
-  // Carry the scope onto the portal container instead.
-  const [theme, setTheme] = useState<{ cls: string; mode: string; style: string }>({ cls: "mvc", mode: "light", style: "emerald" });
+  // Portal INTO the theme root (.mvm on phones, .mvc on desktop), never to
+  // <body> with the theme class copied onto the scrim: CHAT_THEME_CSS paints
+  // `.mvc[data-mode]{background:…!important}` — the full aurora — over any
+  // inline scrim color, so the "dimmed page" behind these money dialogs was
+  // actually an opaque wallpaper and the app seemed to vanish at confirm time.
+  // Inside the root the div carries no theme class, the variables inherit, the
+  // translucent veil renders, and phones resolve their own root (the old
+  // ".mvc"-only lookup left mobile dialogs in default light/emerald forever).
+  const [host, setHost] = useState<HTMLElement | null>(null);
   useEffect(() => {
-    setMounted(true);
-    const root = document.querySelector<HTMLElement>(".mvc[data-mode]");
-    if (root) {
-      setTheme({
-        cls: root.className,
-        mode: root.dataset.mode ?? "light",
-        style: root.dataset.style ?? "emerald",
-      });
-    }
+    setHost(
+      (document.querySelector(".mvm[data-mode]") as HTMLElement | null) ??
+        (document.querySelector(".mvc[data-mode]") as HTMLElement | null) ??
+        document.body,
+    );
     // Escape closes, and the page behind must not scroll under the sheet.
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
     const prev = document.body.style.overflow;
@@ -1528,20 +1611,17 @@ function Overlay({ children, onClose }: { children: React.ReactNode; onClose: ()
       window.removeEventListener("keydown", onKey);
     };
   }, [onClose]);
-  if (!mounted) return null;
+  if (!host) return null;
   return createPortal(
     <div
-      className={theme.cls}
-      data-mode={theme.mode}
-      data-style={theme.style}
       onClick={onClose}
-      // `background` (not the .mvc animated gradient) — this is a scrim, and the
-      // class above would otherwise paint the liquid backdrop over the page.
-      style={{ position: "fixed", inset: 0, zIndex: 1000, display: "grid", placeItems: "center", padding: 16, background: "color-mix(in srgb, #000 40%, transparent)", backdropFilter: "blur(6px)", WebkitBackdropFilter: "blur(6px)", animation: "none" }}
+      // Same solid veil as the Grove/staking dialogs — every money modal in
+      // the app dims the world the same way.
+      style={{ position: "fixed", inset: 0, zIndex: 1000, display: "grid", placeItems: "center", padding: 16, background: "rgba(4,10,7,.72)" }}
     >
       {children}
     </div>,
-    document.body,
+    host,
   );
 }
 
@@ -1554,7 +1634,7 @@ function ModeChooser({ plan, onChoose, onClose }: { plan: AllocateResult; onChoo
   ];
   return (
     <Overlay onClose={onClose}>
-      <div onClick={(e) => e.stopPropagation()} style={{ width: "min(430px, 100%)", borderRadius: 22, border: "1px solid var(--line)", background: "var(--panel)", boxShadow: "0 24px 70px rgba(0,0,0,.35)", padding: "18px 18px 16px" }}>
+      <div onClick={(e) => e.stopPropagation()} style={{ width: "min(430px, 100%)", borderRadius: 22, border: "1px solid var(--line)", background: "var(--panel), var(--bg)", boxShadow: "0 24px 70px rgba(0,0,0,.35)", padding: "18px 18px 16px" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <ChatOrb size={30} />
           <div style={{ flex: 1 }}>
@@ -1599,7 +1679,7 @@ function SellModeChooser({ totalUsd, count, onChoose, onClose }: { totalUsd: num
   ];
   return (
     <Overlay onClose={onClose}>
-      <div onClick={(e) => e.stopPropagation()} style={{ width: "min(430px, 100%)", borderRadius: 22, border: "1px solid var(--line)", background: "var(--panel)", boxShadow: "0 24px 70px rgba(0,0,0,.35)", padding: "18px 18px 16px" }}>
+      <div onClick={(e) => e.stopPropagation()} style={{ width: "min(430px, 100%)", borderRadius: 22, border: "1px solid var(--line)", background: "var(--panel), var(--bg)", boxShadow: "0 24px 70px rgba(0,0,0,.35)", padding: "18px 18px 16px" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <ChatOrb size={30} />
           <div style={{ flex: 1 }}>
@@ -1646,8 +1726,20 @@ function SuccessCard({ s, nav }: { s: InvestSuccess; nav: ChatNav }) {
           <PIcon name="ph-check" size={22} weight="bold" style={{ color: "var(--primary-ink)" }} />
         </span>
         <div style={{ flex: 1 }}>
-          <div className="serif" style={{ fontSize: 19, fontWeight: 500 }}>You&rsquo;re invested.</div>
-          <div style={{ fontSize: 13.5, color: "var(--ink-2)", marginTop: 1 }}>{usd(s.amountUsd)} across {(s.holdings ?? []).length} holdings, verified on-chain before the money moved.</div>
+          {(s.failed ?? []).length ? (
+            <>
+              <div className="serif" style={{ fontSize: 19, fontWeight: 500 }}>Invested — partly.</div>
+              <div style={{ fontSize: 13.5, color: "var(--ink-2)", marginTop: 1 }}>
+                {usd(s.amountUsd)} of {usd(s.plannedUsd ?? s.amountUsd)} filled across {(s.holdings ?? []).length} holdings.{" "}
+                <span style={{ color: "var(--neg)", fontWeight: 600 }}>{s.failed!.map((f) => f.symbol).join(", ")} didn&rsquo;t fill</span> — that cash is still yours.
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="serif" style={{ fontSize: 19, fontWeight: 500 }}>You&rsquo;re invested.</div>
+              <div style={{ fontSize: 13.5, color: "var(--ink-2)", marginTop: 1 }}>{usd(s.amountUsd)} across {(s.holdings ?? []).length} holdings, verified on-chain before the money moved.</div>
+            </>
+          )}
         </div>
         <button onClick={() => setReceipt(true)} style={{ flex: "none", height: 38, padding: "0 14px", borderRadius: 12, fontSize: 13, fontWeight: 600, background: "var(--primary)", color: "var(--primary-ink)" }}>View</button>
       </div>
@@ -1662,14 +1754,17 @@ function InvestReceiptPopup({ s, nav, onClose }: { s: InvestSuccess; nav: ChatNa
   const holdings = s.holdings ?? [];
   return (
     <Overlay onClose={onClose}>
-      <div onClick={(e) => e.stopPropagation()} style={{ width: "min(460px, 100%)", maxHeight: "86vh", overflowY: "auto", borderRadius: 22, border: "1px solid var(--line)", background: "var(--panel)", boxShadow: "0 24px 70px rgba(0,0,0,.35)" }}>
+      <div onClick={(e) => e.stopPropagation()} style={{ width: "min(460px, 100%)", maxHeight: "86vh", overflowY: "auto", borderRadius: 22, border: "1px solid var(--line)", background: "var(--panel), var(--bg)", boxShadow: "0 24px 70px rgba(0,0,0,.35)" }}>
         <div style={{ padding: "16px 18px 12px", display: "flex", alignItems: "center", gap: 11, borderBottom: "1px solid var(--line)" }}>
           <span style={{ width: 36, height: 36, borderRadius: "50%", flex: "none", background: "var(--primary)", display: "grid", placeItems: "center" }}>
             <PIcon name="ph-check" size={19} weight="bold" style={{ color: "var(--primary-ink)" }} />
           </span>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div className="serif" style={{ fontSize: 18, fontWeight: 500 }}>Your receipt</div>
-            <div style={{ fontSize: 12, color: "var(--ink-2)" }}>{usd(s.amountUsd)} · {holdings.length} holdings · gasless{s.anySettling ? " · some fills settling" : ""}</div>
+            <div style={{ fontSize: 12, color: "var(--ink-2)" }}>
+              {usd(s.amountUsd)}{(s.failed ?? []).length ? ` of ${usd(s.plannedUsd ?? s.amountUsd)}` : ""} · {holdings.length} holdings · gasless{s.anySettling ? " · some fills settling" : ""}
+              {(s.failed ?? []).length ? <span style={{ color: "var(--neg)", fontWeight: 600 }}> · {s.failed!.length} didn&rsquo;t fill</span> : null}
+            </div>
           </div>
           <button onClick={onClose} style={{ width: 32, height: 32, borderRadius: 10, background: "var(--panel-2)", display: "grid", placeItems: "center", color: "var(--ink-2)" }}>
             <PIcon name="ph-x" size={15} weight="bold" />
@@ -1702,6 +1797,25 @@ function InvestReceiptPopup({ s, nav, onClose }: { s: InvestSuccess; nav: ChatNa
               </span>
             </div>
           ))}
+          {/* legs that did NOT fill — the money stayed in cash, say so plainly */}
+          {(s.failed ?? []).map((f) => (
+            <div key={`failed-${f.symbol}`} style={{ display: "flex", alignItems: "center", gap: 11, padding: "11px 0", borderBottom: "1px solid var(--line-2)", opacity: 0.9 }}>
+              <AssetTile asset={toTile(f.symbol, f.symbol)} size={34} radius={10} />
+              <span style={{ flex: 1, minWidth: 0 }}>
+                <span style={{ display: "block", fontWeight: 600, fontSize: 13.5 }}>{f.symbol}</span>
+                <span style={{ display: "block", fontSize: 11, color: "var(--neg)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>didn&rsquo;t fill — kept as cash</span>
+              </span>
+              <span className="tnum" style={{ fontWeight: 650, fontSize: 13.5, color: "var(--ink-3)" }}>{usd(f.amountUsd)}</span>
+            </div>
+          ))}
+          {(s.failed ?? []).length > 0 && (
+            <button
+              onClick={() => { onClose(); nav.askVera(`Invest ${Math.round((s.failed ?? []).reduce((a, f) => a + f.amountUsd, 0))} dollars in ${s.failed!.map((f) => f.symbol).join(" and ")}`); }}
+              style={{ width: "100%", height: 40, marginTop: 10, borderRadius: 12, fontSize: 13, fontWeight: 700, border: "1px solid var(--line)", background: "var(--panel-2)", color: "var(--ink)" }}
+            >
+              Retry the missed {s.failed!.length === 1 ? "name" : "names"} with Vera
+            </button>
+          )}
           {/* the plan own on-chain record + the risk check it passed */}
           <div style={{ padding: "12px 0 14px", display: "flex", flexDirection: "column", gap: 7 }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, fontSize: 12.5 }}>

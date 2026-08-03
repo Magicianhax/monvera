@@ -173,7 +173,7 @@ export function PaySheet({ mode, onClose }: { mode: PayMode; onClose: () => void
       <div
         className={closing ? "glassin glassout" : "glassin"}
         onClick={(e) => e.stopPropagation()}
-        style={{ width: "100%", maxWidth: 380, maxHeight: "92%", overflowY: "auto", background: "linear-gradient(135deg,color-mix(in srgb,var(--primary) 10%,transparent),transparent 55%),var(--panel)", backdropFilter: "blur(14px) saturate(170%)", WebkitBackdropFilter: "blur(14px) saturate(170%)", border: "1px solid var(--line)", borderRadius: 22, boxShadow: "0 20px 60px rgba(8,20,12,.3)" }}
+        style={{ width: "100%", maxWidth: 380, maxHeight: "92%", overflowY: "auto", background: "linear-gradient(135deg,color-mix(in srgb,var(--primary) 10%,transparent),transparent 55%), var(--panel), var(--bg)", backdropFilter: "blur(14px) saturate(170%)", WebkitBackdropFilter: "blur(14px) saturate(170%)", border: "1px solid var(--line)", borderRadius: 22, boxShadow: "0 20px 60px rgba(8,20,12,.3)" }}
       >
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "15px 20px", borderBottom: "1px solid var(--line)" }}>
           <span style={{ fontSize: 16, fontWeight: 700 }}>{title}</span>
@@ -205,6 +205,17 @@ export function PaySheet({ mode, onClose }: { mode: PayMode; onClose: () => void
               <button onClick={close} style={{ width: "100%", height: 44, borderRadius: 13, fontSize: 14, fontWeight: 600, background: "var(--primary)", color: "var(--primary-ink)" }}>
                 Done
               </button>
+            </div>
+          ) : mode === "send" && transfer.busy ? (
+            // ── sending: the form disappears behind the beat. An irreversible
+            // transfer with a live, editable form under a button spinner let
+            // the user retarget an in-flight send — the fields must go away
+            // while money is moving. ──
+            <div style={{ textAlign: "center", padding: "26px 0 18px" }} role="status" aria-live="polite">
+              <span aria-hidden style={{ display: "inline-block", width: 42, height: 42, borderRadius: "50%", border: "3px solid var(--line)", borderTopColor: "var(--primary)", animation: "mvcspin .8s linear infinite" }} />
+              <div className="serif" style={{ fontSize: 19, fontWeight: 500, marginTop: 14 }}>Sending {sel ? `${usd(amtNum)} of ${sel.symbol}` : "…"}</div>
+              <div style={{ fontSize: 13, color: "var(--ink-2)", marginTop: 5 }}>One gasless transaction — usually a few seconds.</div>
+              <div style={{ fontSize: 11, color: "var(--ink-3)", marginTop: 12 }}>Keep this window open.</div>
             </div>
           ) : mode === "send" ? (
             // ── send ──

@@ -17,6 +17,14 @@ interface Rule {
   say: string;
 }
 
+/** True when the user themselves declined the wallet prompt. Batch flows must
+ *  treat this as "stop the whole run", never as a transient venue failure —
+ *  retrying re-prompts the person who just said no, over and over. */
+export function isUserRejection(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err);
+  return /rejected|denied|user (cancelled|canceled)|signature.*(declin|reject)/i.test(msg);
+}
+
 // Order matters: first match wins, so put specific patterns above general ones.
 const RULES: Rule[] = [
   {

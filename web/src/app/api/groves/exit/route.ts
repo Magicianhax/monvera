@@ -46,7 +46,17 @@ export async function POST(req: NextRequest) {
       await quoteGroveExit(body.groveId, body.user as `0x${string}`, body.fractionBps),
     );
   } catch (err) {
-    if (err instanceof GroveQuoteError) return badRequest(err.message);
+    if (err instanceof GroveQuoteError) {
+      // SHORT_BALANCE carries a recovery path (max exitable fraction + the
+      // closePosition hatch), so the client gets the structured fields too.
+      if (err.code) {
+        return Response.json(
+          { error: err.message, code: err.code, maxFractionBps: err.maxFractionBps ?? 0 },
+          { status: 400 },
+        );
+      }
+      return badRequest(err.message);
+    }
     return serverError("grove-exit", err);
   }
 }

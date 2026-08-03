@@ -15,7 +15,7 @@ import { createPublicClient, encodeFunctionData, http, parseAbi } from "viem";
 import { chain } from "@/lib/chain";
 import { SERVER_RPC_URL } from "@/lib/server/rpc";
 import { checkBounds, type AutopilotConfig } from "@/lib/autopilot";
-import { recordRun, logRun } from "@/lib/server/autopilotStore";
+import { recordRun, logRun, listRuns } from "@/lib/server/autopilotStore";
 import { addNotification } from "@/lib/server/notifyStore";
 import { buildAllocation } from "@/lib/server/allocate";
 import { getServerSmartAccountClient } from "@/lib/server/privySmartAccount";
@@ -45,6 +45,37 @@ export interface RunResult {
   ok: boolean;
   txHash?: string;
   reason?: string;
+}
+
+// A scheduled run that skips or errors otherwise fails silently — the app
+// badge still says "Running" while weeks of DCA don't happen. Only the first
+// failure/skip since the last success (or a changed reason) reaches the inbox,
+// so a daily cadence stuck on the same problem doesn't spam. The dedupe reads
+// the run log logRun already writes — call this BEFORE logging the current
+// run, or it would compare against itself. Best-effort like the other side
+// effects here: a notify failure never breaks the run.
+async function notifyRunIssue(
+  cfg: AutopilotConfig,
+  status: "skipped" | "error",
+  reason: string | undefined,
+  now: number,
+): Promise<void> {
+  try {
+    const [prior] = await listRuns(cfg.userId, 1);
+    if (prior && prior.status !== "success" && prior.reason === reason) return;
+    const detail = reason ? ` — ${reason}${reason.endsWith(".") ? "" : "."}` : ".";
+    await addNotification(cfg.userId, {
+      kind: "autopilot",
+      title: status === "skipped" ? "Autopilot skipped this run" : "Autopilot run failed",
+      body:
+        status === "skipped"
+          ? `Your ${cfg.cadence} auto-invest was skipped${detail}`
+          : `Your auto-invest failed${detail} I'll try again next run.`,
+      at: now,
+    });
+  } catch (e) {
+    console.error("[autopilot] notify failed:", e instanceof Error ? e.message : e);
+  }
 }
 
 /**
@@ -80,6 +111,7 @@ export async function runAutopilot(
   // 3. Hard bounds gate — the safety guarantee. Nothing below runs if this fails.
   const bounds = checkBounds(working, { availableUsd, assessedRiskBps });
   if (!bounds.ok) {
+    if (!opts.manual) await notifyRunIssue(working, "skipped", bounds.reason, now);
     await logRun({ userId: working.userId, ranAt: now, amountUsd: working.amountUsd, assessedRiskBps, status: "skipped", reason: bounds.reason });
     return { ok: false, reason: bounds.reason };
   }
@@ -90,6 +122,7 @@ export async function runAutopilot(
   const legAmounts = splitByWeights(grossMicro, legs.map((a) => a.weightPct));
   if (legAmounts.some((v) => v > BigInt(0) && v < MIN_LEG_MICRO)) {
     const reason = "Amount too small to split across the plan's holdings.";
+    if (!opts.manual) await notifyRunIssue(working, "skipped", reason, now);
     await logRun({ userId: working.userId, ranAt: now, amountUsd: working.amountUsd, assessedRiskBps, status: "skipped", reason });
     return { ok: false, reason };
   }
@@ -108,6 +141,7 @@ export async function runAutopilot(
   }
   if (quotes.length === 0) {
     const reason = "No tradable holdings in the plan.";
+    if (!opts.manual) await notifyRunIssue(working, "error", reason, now);
     await logRun({ userId: working.userId, ranAt: now, amountUsd: working.amountUsd, assessedRiskBps, status: "error", reason });
     return { ok: false, reason };
   }
@@ -203,6 +237,7 @@ export async function runAutopilot(
 
     if (filled.length === 0) {
       const reason = "Every holding failed to settle. No funds were moved.";
+      if (!opts.manual) await notifyRunIssue(working, "error", reason, now);
       await logRun({ userId: working.userId, ranAt: now, amountUsd: working.amountUsd, assessedRiskBps, status: "error", reason });
       return { ok: false, reason };
     }
@@ -235,6 +270,7 @@ export async function runAutopilot(
     // (which carries the Pimlico API key) in e.message. Strip URLs + truncate.
     const raw = e instanceof Error ? e.message : "Submission failed.";
     const reason = raw.replace(/https?:\/\/\S+/g, "[rpc]").slice(0, 240);
+    if (!opts.manual) await notifyRunIssue(working, "error", reason, now);
     await logRun({ userId: working.userId, ranAt: now, amountUsd: working.amountUsd, assessedRiskBps, status: "error", reason });
     return { ok: false, reason };
   }

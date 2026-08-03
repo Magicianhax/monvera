@@ -163,6 +163,39 @@ export function ChatMark({ size = 14, color = "var(--primary)" }: { size?: numbe
 // highlight selector to bite (see CHAT_THEME_CSS).
 export const panel = (extra?: CSSProperties): CSSProperties => ({ background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 20, ...extra });
 
+/** Short address + explorer link + one-tap copy. Every visible address gets
+ *  the copy affordance — squinting at 0x… without one is user-hostile. */
+export function AddrChip({ addr }: { addr: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+      <a href={addressUrl(addr)} target="_blank" rel="noreferrer" className="mono" style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11, color: "var(--ink-3)", textDecoration: "none" }}>
+        {shortAddress(addr)} <PIcon name="ph-arrow-square-out" size={10} weight="bold" />
+      </a>
+      <button
+        onClick={() => { void navigator.clipboard?.writeText(addr).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1400); }); }}
+        aria-label="Copy address"
+        title="Copy address"
+        style={{ width: 22, height: 22, borderRadius: 7, display: "grid", placeItems: "center", background: "var(--panel-2)", border: "1px solid var(--line)", color: copied ? "var(--primary)" : "var(--ink-3)" }}
+      >
+        <PIcon name={copied ? "ph-check" : "ph-copy"} size={11} weight="bold" />
+      </button>
+    </span>
+  );
+}
+
+/** Loading placeholder for a money slot. A pending portfolio must NEVER paint
+ *  "$0.00" — in a money app that first frame reads as "my funds are gone". */
+export function SkeletonBar({ w, h, style }: { w: number | string; h: number; style?: CSSProperties }) {
+  return (
+    <span
+      className="glassin"
+      aria-hidden
+      style={{ display: "inline-block", width: w, height: h, borderRadius: Math.min(9, h / 2), background: "var(--panel-2)", ...style }}
+    />
+  );
+}
+
 export function GlyphTile({ text, color, size = 34, radius = 10, fontSize = 13 }: { text: string; color: string; size?: number; radius?: number; fontSize?: number }) {
   return <span style={{ width: size, height: size, borderRadius: radius, flex: "none", display: "grid", placeItems: "center", fontSize, fontWeight: 700, color: "#fff", background: color }}>{text}</span>;
 }
@@ -296,6 +329,7 @@ export const CHAT_THEME_CSS = `
 // palette overrides the brand vars per mode. The aurora is color-mix'd off
 // --primary, so switching the palette recolors the whole liquid.
 import { COLOR_STYLES } from "@/lib/colorStyles";
+import { addressUrl, shortAddress } from "@/lib/format";
 export const CHAT_STYLE_CSS = COLOR_STYLES.filter((s) => s.key !== "emerald")
   .map(
     (s) =>

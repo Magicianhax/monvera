@@ -66,6 +66,10 @@ export function useMarketHistory(symbol: string | undefined, range: MarketRange)
     queryKey: ["market-history", symbol, range],
     enabled: Boolean(symbol),
     staleTime: 60_000,
+    // The headline price beside the chart ticks every poll — a chart frozen at
+    // mount while the number moves reads as broken. One minute matches the
+    // server cache, so this adds no upstream load.
+    refetchInterval: 60_000,
     placeholderData: keepPreviousData,
     queryFn: () =>
       getJson<MarketHistoryResponse>(

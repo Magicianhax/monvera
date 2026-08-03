@@ -21,6 +21,14 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
+  // Pin the project root to THIS app. The workspace has a stray root
+  // package-lock.json, so Next inferred F:\Tools\mantle as the root and
+  // Turbopack watched the entire tree — video renders, brand assets, and
+  // several unrelated node_modules — which is filesystem-watcher and memory
+  // poison in dev. Every command already runs from stax/web, so cwd is it.
+  turbopack: {
+    root: process.cwd(),
+  },
   async headers() {
     return [
       { source: "/(.*)", headers: securityHeaders },

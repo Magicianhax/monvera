@@ -77,8 +77,11 @@ async function matchaQuote(
   if (tx.to.toLowerCase() !== ALLOWANCE_HOLDER_4663) return null;
   const minOut = BigInt(json.minBuyAmount);
   // 0x delivers to the taker (the smart account); forward the guaranteed
-  // minimum on to the recipient EOA in the same batch. Positive slippage above
-  // minOut stays on the smart account (harmless dust, ≤ slippageBps).
+  // minimum on to the recipient EOA in the same batch. Static calldata can't
+  // name the actual fill — which typically lands near buyAmount, so up to
+  // slippageBps of real money would strand on the smart account. The client
+  // sweeps that remainder to the EOA right after a Matcha buy settles
+  // (see useMonveraSwap).
   const sweep =
     to.toLowerCase() === address.toLowerCase()
       ? undefined

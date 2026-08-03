@@ -19,6 +19,8 @@ import { useColorStyle } from "@/hooks/useColorStyle";
 import { useNotifications } from "@/hooks/useNotifications";
 import { useWatchlistSync } from "@/hooks/useWatchlistSync";
 import { HomeMobile } from "./HomeMobile";
+import { RecoverBanner } from "./RecoverBanner";
+import { SeasonRewardsBanner } from "./SeasonRewardsBanner";
 import { ChatCenter } from "./ChatCenter";
 import type { OrderState } from "./OrderTicket";
 import type { PayMode } from "./PaySheet";
@@ -90,6 +92,25 @@ export function ChatAppMobile() {
     setGrovesClosing(true);
     grovesTimer.current = setTimeout(() => { setGrovesView(null); setGrovesClosing(false); grovesTimer.current = null; }, 250);
   };
+
+  // "A full-screen sheet has settled over the home screen." Flips true 350ms
+  // after a sheet opens (past the .3s slide, so the base never vanishes behind
+  // the animation) and false the moment one starts closing — the reveal always
+  // has the base back underneath. Used to unmount HomeMobile so a covered
+  // screen stops polling data nobody can see.
+  const sheetOpen = Boolean((canvas && !sheetClosing) || (grovesView && !grovesClosing) || stakingOpen);
+  const [sheetSettled, setSheetSettled] = useState(false);
+  useEffect(() => {
+    if (!sheetOpen) return;
+    const t = setTimeout(() => setSheetSettled(true), 350);
+    // Cleanup fires the moment the sheet starts closing (or unmounts), so the
+    // reveal always finds the base remounted underneath.
+    return () => {
+      clearTimeout(t);
+      setSheetSettled(false);
+    };
+  }, [sheetOpen]);
+  const baseCovered = sheetOpen && sheetSettled;
 
   // True while the mount-time effects below are normalizing the arrival URL —
   // the first URL sync after that must replace, not push (see the sync effect).
@@ -302,12 +323,24 @@ export function ChatAppMobile() {
           )}
         </header>
 
-        {/* home | chat */}
-        {home === "menu" ? <HomeMobile nav={nav} /> : <ChatCenter nav={nav} chat={chat} narrowed={false} mobile pendingAsk={pendingAsk} consumeAsk={consumeAsk} />}
+        {/* home | chat. The home screen UNMOUNTS once a full-screen sheet has
+            settled over it (350ms > the .3s slide, so nothing flashes behind
+            the animation) — covered screens kept polling portfolio/market data
+            the user could not see. It remounts the instant a sheet starts
+            closing, so the reveal never shows a blank shell. */}
+        {/* Money waiting to move is an app-level fact, not a Wallet secret —
+            the bar rides above whichever screen is open. */}
+        <RecoverBanner />
+        {/* Claimable season rewards can EXPIRE — an app-level deadline, not a
+            Staking-page secret. The button jumps straight to the claim surface. */}
+        <SeasonRewardsBanner onOpen={() => nav.openStaking()} />
+        {home === "menu"
+          ? (baseCovered ? null : <HomeMobile nav={nav} />)
+          : <ChatCenter nav={nav} chat={chat} narrowed={false} mobile pendingAsk={pendingAsk} consumeAsk={consumeAsk} />}
 
         {/* floating bottom nav (home only; chat has the composer) */}
         {home === "menu" && !canvas && (
-          <div style={{ position: "absolute", left: 14, right: 14, bottom: 12, zIndex: 20, display: "grid", gridTemplateColumns: "1fr 1fr 72px 1fr 1fr", alignItems: "center", padding: "6px 8px", borderRadius: 999, background: "var(--glass)", backdropFilter: "blur(24px) saturate(180%)", WebkitBackdropFilter: "blur(24px) saturate(180%)", border: "1px solid var(--line)", boxShadow: "0 18px 48px rgba(12,58,36,.22),inset 0 2px 0 rgba(255,255,255,.5)" }}>
+          <div style={{ position: "absolute", left: 14, right: 14, bottom: "calc(12px + env(safe-area-inset-bottom, 0px))", zIndex: 20, display: "grid", gridTemplateColumns: "1fr 1fr 72px 1fr 1fr", alignItems: "center", padding: "6px 8px", borderRadius: 999, background: "var(--glass)", backdropFilter: "blur(24px) saturate(180%)", WebkitBackdropFilter: "blur(24px) saturate(180%)", border: "1px solid var(--line)", boxShadow: "0 18px 48px rgba(12,58,36,.22),inset 0 2px 0 rgba(255,255,255,.5)" }}>
             {navItem("ph-house", "Home", home === "menu" && !canvas, nav.goMenu)}
             {navItem("ph-squares-four", "Market", false, () => nav.openCanvas("market"))}
             <div style={{ display: "grid", placeItems: "center" }}>

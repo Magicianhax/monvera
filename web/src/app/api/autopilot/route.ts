@@ -82,6 +82,14 @@ export async function POST(req: NextRequest) {
 export async function DELETE(req: NextRequest) {
   const user = await verifyRequest(req);
   if (!user) return unauthorized();
-  await deleteAutopilot(user.userId);
-  return Response.json({ ok: true });
+  try {
+    // Same wrapping as POST — a store failure must surface as a structured 500,
+    // because the client only believes autopilot is off on a 2xx. An unwrapped
+    // throw here paired with a client that never checked res.ok once showed
+    // "Autopilot is off" while the cron kept spending.
+    await deleteAutopilot(user.userId);
+    return Response.json({ ok: true });
+  } catch (err) {
+    return serverError("autopilot", err);
+  }
 }

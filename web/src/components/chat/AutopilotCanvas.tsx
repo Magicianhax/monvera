@@ -4,10 +4,11 @@
 // classic AutopilotScreen). Same real rails: authorize Vera once (Privy session
 // signer), save a bounded plan (amount · cadence · risk ceiling) to
 // /api/autopilot, run it on demand, stop any time. Chat-glass styling.
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSessionSigners, usePrivy } from "@privy-io/react-auth";
 import { useSmartAccount } from "@/hooks/useSmartAccount";
-import { useUsdcBalance } from "@/hooks/useBalances";
+import { useUsdcBalance, useRefreshBalances } from "@/hooks/useBalances";
 import { useToast } from "@/components/design";
 import { authHeader } from "@/lib/authedFetch";
 import { CADENCE_LABEL, type Cadence, type AutopilotConfig } from "@/lib/autopilot";
@@ -33,6 +34,17 @@ type RunRow = {
   reason?: string;
   txHash?: string;
 };
+
+// Manual-run lifecycle. "Run now" signs and submits a REAL invest and can take
+// ~a minute to come back, so the canvas narrates each phase out loud: the
+// working beat replaces the status hero, and success/failure land as explicit
+// cards. The old dimmed button + info toast read as "nothing is happening"
+// while money moved.
+type RunPhase =
+  | { step: "idle" }
+  | { step: "working"; amountUsd: number }
+  | { step: "done"; amountUsd: number; txHash?: string }
+  | { step: "failed"; reason: string };
 
 // iOS-style solid chip on a translucent track (no glass-in-glass).
 const chip = (on: boolean): React.CSSProperties => ({
@@ -61,48 +73,75 @@ export function AutopilotCanvas({ nav }: { nav: ChatNav }) {
   // Chat handoff: if Vera collected the plan details in conversation, they
   // arrive here as the form's initial values (a saved config still overrides).
   const [prefill] = useState(() => consumeAutopilotPrefill());
-  const [loading, setLoading] = useState(true);
-  const [config, setConfig] = useState<AutopilotConfig | null>(null);
   const [busy, setBusy] = useState(false);
   const [goal, setGoal] = useState("Grow my long-term plan");
   const [amount, setAmount] = useState(() => (prefill ? String(prefill.amountUsd) : "25"));
   const [cadence, setCadence] = useState<Cadence>(() => prefill?.cadence ?? "weekly");
   const [risk, setRisk] = useState<number>(() => (prefill ? PREFILL_RISK_INDEX[prefill.risk] : 1));
-  const [runs, setRuns] = useState<RunRow[]>([]);
+  const [runState, setRunState] = useState<RunPhase>({ step: "idle" });
+  // A failed DELETE keeps the config on screen; this carries the message.
+  const [stopError, setStopError] = useState<string | null>(null);
+
+  const qc = useQueryClient();
+  const refreshBalances = useRefreshBalances();
+
+  // Config + run history follow the app's money-read policy (see useBalances):
+  // calm poll + focus refetch, so a CRON run that fires while this canvas is
+  // open shows up in the history without reopening it. The one-shot mount
+  // fetch this replaced went stale the moment the schedule ran.
+  const configQuery = useQuery({
+    queryKey: ["autopilot-config", user?.id],
+    enabled: Boolean(user?.id),
+    staleTime: 15_000,
+    refetchInterval: 30_000,
+    refetchOnWindowFocus: true,
+    queryFn: async (): Promise<AutopilotConfig | null> => {
+      const res = await fetch("/api/autopilot", { headers: { ...(await authHeader()) } });
+      const json = await res.json();
+      if (!res.ok) throw new Error(typeof json?.error === "string" ? json.error : "Couldn't load autopilot.");
+      return (json?.autopilot as AutopilotConfig | null) ?? null;
+    },
+  });
+  const config = configQuery.data ?? null;
+  const loading = configQuery.isPending;
 
   const amountNum = Number(amount) || 0;
   const active = Boolean(config?.active);
 
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const res = await fetch("/api/autopilot", { headers: { ...(await authHeader()) } });
-        const json = await res.json();
-        if (cancelled) return;
-        const ap = json?.autopilot as AutopilotConfig | null;
-        if (ap) {
-          setConfig(ap);
-          setGoal(ap.goal);
-          setAmount(String(ap.amountUsd));
-          setCadence(ap.cadence);
-          setRisk(Math.max(0, RISK_TIERS.findIndex((t) => t.bps === ap.riskCeilingBps)) || 1);
-        }
-      } catch { /* defaults stand */ } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, []);
-
-  const loadRuns = useCallback(async () => {
-    try {
+  const runsQuery = useQuery({
+    queryKey: ["autopilot-runs", user?.id],
+    enabled: Boolean(user?.id) && active,
+    staleTime: 15_000,
+    refetchInterval: 30_000,
+    refetchOnWindowFocus: true,
+    queryFn: async (): Promise<RunRow[]> => {
       const r = await fetch("/api/autopilot/runs", { headers: { ...(await authHeader()) } });
       const j = await r.json();
-      if (Array.isArray(j?.runs)) setRuns(j.runs as RunRow[]);
-    } catch { /* best-effort */ }
-  }, []);
-  useEffect(() => { if (active) void loadRuns(); }, [active, loadRuns]);
+      return Array.isArray(j?.runs) ? (j.runs as RunRow[]) : [];
+    },
+  });
+  const runs = runsQuery.data ?? [];
+
+  // Every mutation refreshes both reads immediately — the poll is only a
+  // safety net, same contract as useRefreshBalances for the money queries.
+  const refreshAutopilot = () => {
+    void qc.invalidateQueries({ queryKey: ["autopilot-config"] });
+    void qc.invalidateQueries({ queryKey: ["autopilot-runs"] });
+  };
+
+  // Seed the form from the saved config ONCE per open — the query now
+  // refetches on a poll, and re-seeding every refetch would stomp whatever
+  // the user is mid-editing below.
+  const seeded = useRef(false);
+  useEffect(() => {
+    const ap = configQuery.data;
+    if (seeded.current || !ap) return;
+    seeded.current = true;
+    setGoal(ap.goal);
+    setAmount(String(ap.amountUsd));
+    setCadence(ap.cadence);
+    setRisk(Math.max(0, RISK_TIERS.findIndex((t) => t.bps === ap.riskCeilingBps)) || 1);
+  }, [configQuery.data]);
 
   const authorize = async () => {
     if (!ownerAddress || busy) return;
@@ -129,7 +168,8 @@ export function AutopilotCanvas({ nav }: { nav: ChatNav }) {
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json?.error ?? "Couldn't save autopilot.");
-      setConfig(json.autopilot as AutopilotConfig);
+      qc.setQueryData(["autopilot-config", user?.id], json.autopilot as AutopilotConfig);
+      refreshAutopilot();
       notify("Autopilot is on", "check");
     } catch (e) {
       notify(e instanceof Error ? e.message : "Couldn't save autopilot.", "info");
@@ -139,28 +179,44 @@ export function AutopilotCanvas({ nav }: { nav: ChatNav }) {
   const stop = async () => {
     if (busy) return;
     setBusy(true);
+    setStopError(null);
     try {
-      await fetch("/api/autopilot", { method: "DELETE", headers: { ...(await authHeader()) } });
+      // Only a CONFIRMED delete may say "off" — clearing local state on a
+      // failed call once showed the green check while the cron kept spending.
+      const res = await fetch("/api/autopilot", { method: "DELETE", headers: { ...(await authHeader()) } });
+      if (!res.ok) throw new Error("delete failed");
       try { if (ownerAddress) await removeSessionSigners({ address: ownerAddress }); } catch { /* best-effort */ }
-      setConfig(null);
+      qc.setQueryData(["autopilot-config", user?.id], null);
+      refreshAutopilot();
       notify("Autopilot is off", "check");
+    } catch {
+      // Config stays on screen (query data untouched) so the badge keeps
+      // telling the truth: it is still running.
+      setStopError("Couldn't turn autopilot off — it is still running. Try again.");
     } finally { setBusy(false); }
   };
 
   const runNow = async () => {
-    if (busy) return;
+    if (busy || runState.step === "working") return;
+    // Capture the amount up front — the poll could swap the config mid-run.
+    const amountUsd = config?.amountUsd ?? amountNum;
     setBusy(true);
+    setRunState({ step: "working", amountUsd });
     try {
       const res = await fetch("/api/autopilot/run", { method: "POST", headers: { ...(await authHeader()) } });
       const json = await res.json();
       if (!res.ok || json?.ok === false) {
-        notify(json?.reason ?? json?.error ?? "The run didn't go through.", "info");
+        setRunState({ step: "failed", reason: json?.reason ?? json?.error ?? "The run didn't go through." });
       } else {
+        setRunState({ step: "done", amountUsd, txHash: typeof json?.txHash === "string" ? json.txHash : undefined });
         notify("Vera invested for you", "check");
-        void loadRuns();
+        // Money moved on-chain: pull fresh cash/portfolio/activity NOW, not at
+        // the next 30s poll, and refresh the run log + spent-this-period.
+        refreshBalances();
+        refreshAutopilot();
       }
     } catch {
-      notify("The run didn't go through.", "info");
+      setRunState({ step: "failed", reason: "The run didn't go through — check your connection and try again." });
     } finally { setBusy(false); }
   };
 
@@ -168,23 +224,70 @@ export function AutopilotCanvas({ nav }: { nav: ChatNav }) {
     <div>
       {/* status hero */}
       <div style={{ background: `linear-gradient(135deg,color-mix(in srgb,var(--primary) ${active ? 20 : 10}%,transparent),transparent 62%),var(--panel)`, border: "1px solid var(--line)", borderRadius: 22, padding: 20 }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <span style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "4px 11px", borderRadius: 999, background: active ? "var(--primary-soft)" : "var(--panel-2)", color: active ? "var(--primary)" : "var(--ink-3)", fontSize: 10.5, fontWeight: 800, letterSpacing: ".07em", textTransform: "uppercase" }}>
-            <span style={{ width: 6, height: 6, borderRadius: "50%", background: "currentColor" }} />{active ? "Running" : "Standby"}
-          </span>
-          {active && (
-            <button onClick={() => void runNow()} disabled={busy} style={{ height: 32, padding: "0 14px", borderRadius: 999, fontSize: 12.5, fontWeight: 700, background: "var(--primary)", color: "var(--primary-ink)", opacity: busy ? 0.6 : 1 }}>Run now</button>
-          )}
-        </div>
-        <div className="serif" style={{ fontSize: 23, fontWeight: 500, marginTop: 10, letterSpacing: "-.01em" }}>
-          {active ? `${usd(config?.amountUsd ?? 0)} · ${CADENCE_LABEL[config?.cadence ?? "weekly"]}` : "Invest on repeat"}
-        </div>
-        <div style={{ fontSize: 12.5, color: "var(--ink-2)", marginTop: 3, lineHeight: 1.5 }}>
-          {active
-            ? `Vera builds a fresh ${RISK_TIERS.find((t) => t.bps === config?.riskCeilingBps)?.label.toLowerCase() ?? "balanced"} plan each run — never more than you authorized.`
-            : "A set amount on a schedule. Vera re-allocates every run, signs it on-chain, and places it gasless — within hard limits you set."}
-        </div>
+        {runState.step === "working" ? (
+          /* in-flight beat (GroveModal's plain-spinner language): the hero
+             disappears while real money is being signed and placed, because a
+             frozen card with a dimmed button reads as "nothing is happening" */
+          <div role="status" aria-live="polite" style={{ textAlign: "center", padding: "14px 0 10px" }}>
+            <span aria-hidden style={{ display: "inline-block", width: 42, height: 42, borderRadius: "50%", border: "3px solid var(--line)", borderTopColor: "var(--primary)", animation: "mvcspin .8s linear infinite" }} />
+            <div className="serif" style={{ fontSize: 20, fontWeight: 500, marginTop: 12 }}>Vera is investing {usd(runState.amountUsd)}…</div>
+            <div style={{ fontSize: 12.5, color: "var(--ink-2)", marginTop: 4 }}>Signing and placing it on-chain — usually under a minute. Keep this open.</div>
+          </div>
+        ) : (
+          <>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "4px 11px", borderRadius: 999, background: active ? "var(--primary-soft)" : "var(--panel-2)", color: active ? "var(--primary)" : "var(--ink-3)", fontSize: 10.5, fontWeight: 800, letterSpacing: ".07em", textTransform: "uppercase" }}>
+                <span style={{ width: 6, height: 6, borderRadius: "50%", background: "currentColor" }} />{active ? "Running" : "Standby"}
+              </span>
+              {active && (
+                <button onClick={() => void runNow()} disabled={busy} style={{ height: 32, padding: "0 14px", borderRadius: 999, fontSize: 12.5, fontWeight: 700, background: "var(--primary)", color: "var(--primary-ink)", opacity: busy ? 0.6 : 1 }}>Run now</button>
+              )}
+            </div>
+            <div className="serif" style={{ fontSize: 23, fontWeight: 500, marginTop: 10, letterSpacing: "-.01em" }}>
+              {active ? `${usd(config?.amountUsd ?? 0)} · ${CADENCE_LABEL[config?.cadence ?? "weekly"]}` : "Invest on repeat"}
+            </div>
+            <div style={{ fontSize: 12.5, color: "var(--ink-2)", marginTop: 3, lineHeight: 1.5 }}>
+              {active
+                ? `Vera builds a fresh ${RISK_TIERS.find((t) => t.bps === config?.riskCeilingBps)?.label.toLowerCase() ?? "balanced"} plan each run — never more than you authorized.`
+                : "A set amount on a schedule. Vera re-allocates every run, signs it on-chain, and places it gasless — within hard limits you set."}
+            </div>
+          </>
+        )}
       </div>
+
+      {/* run result — an explicit beat in the canvas, not a toast that slides
+          away while the balances still look unchanged */}
+      {runState.step === "done" && (
+        <div style={{ marginTop: 12, padding: "14px 16px", borderRadius: 16, border: "1px solid color-mix(in srgb,var(--pos) 40%,var(--line))", background: "color-mix(in srgb,var(--pos) 9%,var(--panel))", display: "flex", alignItems: "center", gap: 12 }}>
+          <style>{`@keyframes appop{0%{transform:scale(.4);opacity:0}60%{transform:scale(1.12)}100%{transform:scale(1);opacity:1}}@media (prefers-reduced-motion: reduce){.appop{animation:none!important}}`}</style>
+          <span className="appop" style={{ width: 38, height: 38, borderRadius: "50%", flex: "none", display: "grid", placeItems: "center", background: "color-mix(in srgb,var(--pos) 18%,transparent)", color: "var(--pos)", animation: "appop .5s cubic-bezier(.34,1.56,.64,1) both" }}>
+            <PIcon name="ph-check-circle" size={24} weight="fill" />
+          </span>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 13.5, fontWeight: 700 }}>Vera invested {usd(runState.amountUsd)}</div>
+            <div style={{ fontSize: 11.5, color: "var(--ink-2)", marginTop: 2 }}>
+              {runState.txHash ? (
+                <a href={txUrl(runState.txHash)} target="_blank" rel="noreferrer" style={{ display: "inline-flex", alignItems: "center", gap: 4, color: "var(--primary)", textDecoration: "none", fontWeight: 600 }}>
+                  View the transaction <PIcon name="ph-arrow-square-out" size={11} style={{ display: "inline-block" }} />
+                </a>
+              ) : "Placed on-chain — it will show in your activity in a moment."}
+            </div>
+          </div>
+          <button onClick={() => setRunState({ step: "idle" })} aria-label="Dismiss" style={{ width: 28, height: 28, borderRadius: 999, flex: "none", display: "grid", placeItems: "center", background: "transparent", color: "var(--ink-3)" }}>
+            <PIcon name="ph-x" size={14} />
+          </button>
+        </div>
+      )}
+      {runState.step === "failed" && (
+        <div role="alert" style={{ marginTop: 12, padding: "14px 16px", borderRadius: 16, border: "1px solid color-mix(in srgb,var(--neg) 40%,var(--line))", background: "color-mix(in srgb,var(--neg) 8%,var(--panel))", display: "flex", alignItems: "center", gap: 12 }}>
+          <PIcon name="ph-warning-circle" size={22} weight="fill" style={{ color: "var(--neg)", flex: "none" }} />
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 13.5, fontWeight: 700, color: "var(--neg)" }}>The run didn&apos;t go through</div>
+            <div style={{ fontSize: 12, color: "var(--ink-2)", marginTop: 2, lineHeight: 1.45 }}>{runState.reason}</div>
+          </div>
+          <button onClick={() => void runNow()} disabled={busy} style={{ height: 32, padding: "0 14px", borderRadius: 999, flex: "none", fontSize: 12.5, fontWeight: 700, border: "1px solid color-mix(in srgb,var(--neg) 35%,var(--line))", background: "transparent", color: "var(--neg)", opacity: busy ? 0.6 : 1 }}>Retry</button>
+        </div>
+      )}
 
       {/* step 1 — authorize */}
       {!delegated && (
@@ -257,6 +360,15 @@ export function AutopilotCanvas({ nav }: { nav: ChatNav }) {
             <button onClick={() => void stop()} disabled={busy} style={{ height: 48, padding: "0 16px", borderRadius: 14, fontSize: 13.5, fontWeight: 600, border: "1px solid color-mix(in srgb,var(--neg) 35%,var(--line))", background: "transparent", color: "var(--neg)" }}>Stop</button>
           )}
         </div>
+        {/* a failed stop must NOT pretend it worked — the cron would keep
+            spending behind a green check */}
+        {stopError && (
+          <div role="alert" style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 10, padding: "11px 13px", borderRadius: 13, border: "1px solid color-mix(in srgb,var(--neg) 40%,var(--line))", background: "color-mix(in srgb,var(--neg) 8%,var(--panel-2))" }}>
+            <PIcon name="ph-warning-circle" size={18} weight="fill" style={{ color: "var(--neg)", flex: "none" }} />
+            <span style={{ flex: 1, minWidth: 0, fontSize: 12.5, lineHeight: 1.45 }}>{stopError}</span>
+            <button onClick={() => void stop()} disabled={busy} style={{ height: 30, padding: "0 13px", borderRadius: 999, flex: "none", fontSize: 12, fontWeight: 700, border: "1px solid color-mix(in srgb,var(--neg) 35%,var(--line))", background: "transparent", color: "var(--neg)", opacity: busy ? 0.6 : 1 }}>Retry</button>
+          </div>
+        )}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, fontSize: 11.5, color: "var(--ink-2)", marginTop: 9 }}>
           <PIcon name="ph-lock-key" size={13} weight="fill" style={{ color: "var(--primary)" }} /> Bounded · revocable · every run signed on-chain
         </div>

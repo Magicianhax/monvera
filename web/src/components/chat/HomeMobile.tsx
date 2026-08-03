@@ -3,21 +3,21 @@
 // Mobile home menu ("Monvera Chat Mobile" design L88-109): balance card, Scan
 // banner, a horizontal Top-movers strip, and the holdings card. Same live hooks
 // as the desktop HomeMenu — only the composition is phone-native.
-import { usePortfolio, useBalanceHistory, type Holding } from "@/hooks/useBalances";
+import { holdingWorth, usePortfolio, useBalanceHistory, type Holding } from "@/hooks/useBalances";
 import { useSmartAccount } from "@/hooks/useSmartAccount";
 import { usePrices } from "@/hooks/usePrices";
 import { useMarketSummary } from "@/hooks/useMarket";
 import { STOCKS } from "@/lib/tokens";
 import { toTile } from "@/lib/displayAssets";
 import { AssetTile } from "@/components/design";
-import { PIcon, usd, pctStr, priceStr, dcol, chartPaths, panel, type ChatNav } from "./chatKit";
+import { PIcon, SkeletonBar, usd, pctStr, priceStr, dcol, chartPaths, panel, type ChatNav } from "./chatKit";
 import { portfolioDayCurve, equityCurveFrom } from "@/lib/portfolioCurve";
 import { useHidden, setHidden, money } from "./privacy";
 
 export function HomeMobile({ nav }: { nav: ChatNav }) {
   const hidden = useHidden();
   const { address } = useSmartAccount();
-  const { data: port } = usePortfolio(address ?? undefined);
+  const { data: port, isPending } = usePortfolio(address ?? undefined);
   const { data: snaps } = useBalanceHistory(address ?? undefined);
   const { data: prices } = usePrices();
   const { data: market } = useMarketSummary();
@@ -26,12 +26,13 @@ export function HomeMobile({ nav }: { nav: ChatNav }) {
   const invested = port?.investedUsd ?? 0;
   const total = port?.totalUsd ?? 0;
   const monQty = (port?.holdings ?? []).find((h) => h.asset.symbol === "MONVERA")?.qty ?? 0;
-  const holdings: Holding[] = (port?.holdings ?? []).filter((h) => h.asset.symbol !== "MONVERA").slice().sort((a, b) => (b.valueUsd ?? 0) - (a.valueUsd ?? 0));
-  const dayU = holdings.reduce((s, h) => s + (h.valueUsd ?? 0) * ((h.dayChangePct ?? 0) / 100), 0);
+  // Full worth (settled + Grove-held + settling) so grove baskets show up here.
+  const holdings: Holding[] = (port?.holdings ?? []).filter((h) => h.asset.symbol !== "MONVERA").slice().sort((a, b) => holdingWorth(b) - holdingWorth(a));
+  const dayU = holdings.reduce((s, h) => s + holdingWorth(h) * ((h.dayChangePct ?? 0) / 100), 0);
 
   // Real equity curve (hourly snapshots incl. deposits/trades) once enough
   // history exists; real intraday holdings curve until then. Never synthetic.
-  const day = equityCurveFrom(snaps ?? [], port?.totalUsd) ?? portfolioDayCurve(port?.holdings ?? [], cash);
+  const day = equityCurveFrom(snaps ?? [], port?.totalUsd) ?? portfolioDayCurve(port?.holdings ?? [], cash + (port?.smartCashUsd ?? 0));
   const home = day ? chartPaths(day.curve, 380, 90, { minSpanFrac: 0.02 }) : null;
 
   const strip = STOCKS.map((a) => ({ sym: a.symbol, name: a.name, day: market?.summary[a.symbol]?.dayChangePct ?? 0, price: prices?.prices[a.symbol]?.priceUsd }))
@@ -50,11 +51,21 @@ export function HomeMobile({ nav }: { nav: ChatNav }) {
           </button>
         </div>
         <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginTop: 2 }}>
-          <span className="serif tnum" style={{ fontSize: 34, fontWeight: 500, letterSpacing: "-.02em", lineHeight: 1 }}>{money(total, hidden)}</span>
-          <span className="tnum" style={{ fontSize: 12.5, fontWeight: 600, color: dcol(dayU) }}>{(dayU >= 0 ? "+" : "−") + "$" + Math.abs(dayU).toFixed(2)}</span>
+          {/* Never $0.00 while loading — a funded account's first frame must
+              not read as "my funds are gone". */}
+          {isPending ? (
+            <SkeletonBar w={150} h={30} style={{ margin: "2px 0" }} />
+          ) : (
+            <>
+              <span className="serif tnum" style={{ fontSize: 34, fontWeight: 500, letterSpacing: "-.02em", lineHeight: 1 }}>{money(total, hidden)}</span>
+              <span className="tnum" style={{ fontSize: 12.5, fontWeight: 600, color: dcol(dayU) }}>{(dayU >= 0 ? "+" : "−") + "$" + Math.abs(dayU).toFixed(2)}</span>
+            </>
+          )}
         </div>
         <div style={{ marginTop: 10 }}>
-          {home ? (
+          {isPending ? (
+            <div style={{ height: 90, display: "flex", alignItems: "center" }}><SkeletonBar w="100%" h={70} /></div>
+          ) : home ? (
             <svg viewBox="0 0 380 90" preserveAspectRatio="none" width="100%" height={90} style={{ display: "block" }}>
               <defs><linearGradient id="mvmHome" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="var(--primary)" stopOpacity={0.22} /><stop offset="100%" stopColor="var(--primary)" stopOpacity={0} /></linearGradient></defs>
               <path d={home.area} fill="url(#mvmHome)" />
@@ -67,8 +78,10 @@ export function HomeMobile({ nav }: { nav: ChatNav }) {
           )}
         </div>
         <div style={{ display: "flex", marginTop: 8, paddingTop: 14, borderTop: "1px solid var(--line-2)" }}>
-          <div style={{ flex: 1 }}><div style={{ fontSize: 10.5, fontWeight: 600, textTransform: "uppercase", color: "var(--ink-3)" }}>Cash</div><div className="tnum" style={{ fontSize: 16, fontWeight: 600, marginTop: 1 }}>{money(cash, hidden)}</div></div>
-          <div style={{ flex: 1, paddingLeft: 14, borderLeft: "1px solid var(--line-2)" }}><div style={{ fontSize: 10.5, fontWeight: 600, textTransform: "uppercase", color: "var(--ink-3)" }}>Invested</div><div className="tnum" style={{ fontSize: 16, fontWeight: 600, marginTop: 1 }}>{money(invested, hidden)}</div></div>
+          {/* ALL cash — EOA plus grove-exit USDG — so Cash + Invested matches
+              the Total above instead of silently missing money. */}
+          <div style={{ flex: 1 }}><div style={{ fontSize: 10.5, fontWeight: 600, textTransform: "uppercase", color: "var(--ink-3)" }}>Cash</div><div className="tnum" style={{ fontSize: 16, fontWeight: 600, marginTop: 1 }}>{isPending ? <SkeletonBar w={64} h={16} /> : money(cash + (port?.smartCashUsd ?? 0), hidden)}</div>{!isPending && (port?.smartCashUsd ?? 0) >= 0.01 && (<div className="tnum" style={{ fontSize: 9.5, color: "var(--ink-3)", marginTop: 1 }}>incl. {money(port?.smartCashUsd ?? 0, hidden)} from Groves</div>)}</div>
+          <div style={{ flex: 1, paddingLeft: 14, borderLeft: "1px solid var(--line-2)" }}><div style={{ fontSize: 10.5, fontWeight: 600, textTransform: "uppercase", color: "var(--ink-3)" }}>Invested</div><div className="tnum" style={{ fontSize: 16, fontWeight: 600, marginTop: 1 }}>{isPending ? <SkeletonBar w={64} h={16} /> : money(invested, hidden)}</div></div>
         </div>
         <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
           <button onClick={nav.openSend} style={{ flex: 1, height: 42, border: "1px solid var(--line)", borderRadius: 999, background: "var(--panel)", color: "var(--ink)", fontSize: 13, fontWeight: 600, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 7 }}><PIcon name="ph-paper-plane-tilt" size={16} style={{ color: "var(--primary)" }} /> Send</button>
@@ -116,16 +129,20 @@ export function HomeMobile({ nav }: { nav: ChatNav }) {
           <button onClick={() => nav.openCanvas("portfolio")} style={{ fontSize: 12, fontWeight: 600, color: "var(--primary)" }}>View all</button>
         </div>
         {holdings.length === 0 ? (
-          <div style={{ padding: "12px 0", fontSize: 13, color: "var(--ink-2)" }}>Nothing yet — ask Vera to put your cash to work.</div>
+          <div style={{ padding: "12px 0", fontSize: 13, color: "var(--ink-2)" }}>
+            {isPending ? <SkeletonBar w="70%" h={13} /> : "Nothing yet — ask Vera to put your cash to work."}
+          </div>
         ) : holdings.map((h, i) => {
           const tile = toTile(h.asset.symbol, h.asset.name);
           const day = h.dayChangePct ?? 0;
-          const w = invested > 0 ? ((h.valueUsd ?? 0) / invested) * 100 : 0;
+          const worthUsd = holdingWorth(h);
+          const w = invested > 0 ? (worthUsd / invested) * 100 : 0;
+          const inGrove = (h.smartUsd ?? 0) > 0;
           return (
             <button key={h.asset.symbol} onClick={() => nav.openCanvas("holding", h.asset.symbol)} style={{ display: "flex", alignItems: "center", gap: 11, width: "100%", padding: "12px 2px", borderTop: i === 0 ? "none" : "1px solid var(--line-2)", textAlign: "left" }}>
               <AssetTile asset={tile} size={34} radius={10} />
-              <span style={{ flex: 1, minWidth: 0 }}><span style={{ display: "block", fontWeight: 500, fontSize: 14 }}>{tile.name}</span><span style={{ display: "block", fontSize: 11, color: "var(--ink-3)" }}>{w.toFixed(0)}% of portfolio</span></span>
-              <span style={{ textAlign: "right" }}><span className="tnum" style={{ display: "block", fontSize: 14, fontWeight: 600 }}>{h.valueUsd !== undefined ? usd(h.valueUsd) : "—"}</span><span className="tnum" style={{ display: "block", fontSize: 11, fontWeight: 600, color: dcol(day) }}>{pctStr(day)}</span></span>
+              <span style={{ flex: 1, minWidth: 0 }}><span style={{ display: "block", fontWeight: 500, fontSize: 14 }}>{tile.name}</span><span style={{ display: "block", fontSize: 11, color: "var(--ink-3)" }}>{w.toFixed(0)}% of portfolio{inGrove ? " · in a Grove" : ""}</span></span>
+              <span style={{ textAlign: "right" }}><span className="tnum" style={{ display: "block", fontSize: 14, fontWeight: 600 }}>{worthUsd > 0 ? usd(worthUsd) : "—"}</span><span className="tnum" style={{ display: "block", fontSize: 11, fontWeight: 600, color: dcol(day) }}>{pctStr(day)}</span></span>
             </button>
           );
         })}

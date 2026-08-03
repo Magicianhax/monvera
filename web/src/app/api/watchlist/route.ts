@@ -28,8 +28,13 @@ export async function GET(req: NextRequest) {
   // is where "which wallet does this user hold?" stays current — which is what
   // the hourly balance-snapshot cron reads. Authed, so nobody can inject a
   // stranger's address. Never blocks or fails the watchlist read.
+  // `smart` = the ERC-4337 smart account, client-derived (lib/aa.ts) — without
+  // it the cron's snapshots can't see grove baskets or grove-exit USDG.
   const addr = req.nextUrl.searchParams.get("address");
-  if (addr && ADDR.test(addr)) void touchUser(user.userId, addr);
+  const smart = req.nextUrl.searchParams.get("smart");
+  if (addr && ADDR.test(addr)) {
+    void touchUser(user.userId, addr, smart && ADDR.test(smart) ? smart : undefined);
+  }
   try {
     return Response.json({ symbols: await listWatchlist(user.userId) });
   } catch (err) {
