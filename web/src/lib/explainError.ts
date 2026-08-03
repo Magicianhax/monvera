@@ -28,8 +28,15 @@ export function isUserRejection(err: unknown): boolean {
 // Order matters: first match wins, so put specific patterns above general ones.
 const RULES: Rule[] = [
   {
+    // ERC-4337 validation-phase failures (AA2x: nonce race, signature check,
+    // prefund). NOT sponsorship — mapping these to the paymaster copy sent a
+    // user hunting a "sponsorship outage" that didn't exist (2026-08-04).
+    match: /\baa2[0-9]\b/i,
+    say: "The transaction was rejected in pre-flight checks, so nothing was sent and nothing moved. Trying again usually clears it.",
+  },
+  {
     // Pimlico paymaster out of balance / sponsorship policy rejection.
-    match: /paymaster|sponsor|aa2[0-9]|gas sponsor|insufficient (funds|balance) (for|in) (the )?paymaster|policy/i,
+    match: /paymaster|sponsor|gas sponsor|insufficient (funds|balance) (for|in) (the )?paymaster|policy/i,
     say: "Gas sponsorship is temporarily unavailable, so the transaction couldn't be submitted. Nothing left your wallet — this is on our side and usually clears within minutes.",
   },
   {

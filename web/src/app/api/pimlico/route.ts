@@ -79,6 +79,20 @@ export async function POST(req: NextRequest) {
     // Pass the JSON-RPC envelope straight through (errors included — the client
     // RPC layer interprets them). Never leak upstream headers.
     const text = await upstream.text();
+    // Log every upstream refusal server-side: sponsorship failures used to be
+    // visible only in the user's browser console, which made "gas sponsorship
+    // unavailable" undiagnosable from our end (2026-08-04). The envelope's
+    // request ids and error text carry no user secrets.
+    if (upstream.status !== 200 || text.includes('"error"')) {
+      try {
+        const items = JSON.parse(text) as { error?: { code?: number; message?: string } } | { error?: { code?: number; message?: string } }[];
+        for (const it of Array.isArray(items) ? items : [items]) {
+          if (it?.error) console.error("[pimlico]", methods.join(","), it.error.code, it.error.message?.slice(0, 300));
+        }
+      } catch {
+        console.error("[pimlico] upstream", upstream.status, text.slice(0, 200));
+      }
+    }
     return new Response(text, {
       status: upstream.status,
       headers: { "content-type": "application/json" },
