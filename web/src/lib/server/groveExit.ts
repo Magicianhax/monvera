@@ -25,7 +25,7 @@ import { ALL_ASSETS, MULTICALL3, USDG } from "@/lib/tokens";
 import { chain } from "@/lib/chain";
 import { SERVER_RPC_URL } from "./rpc";
 import { kyberQuote } from "./kyber";
-import { GROVE_MANAGER, GroveQuoteError, MAX_LEGS } from "./groveQuote";
+import { GROVE_MANAGER, GROVE_LEG_SLIPPAGE_BPS, GroveQuoteError, MAX_LEGS } from "./groveQuote";
 
 const client = createPublicClient({
   chain: { id: chain.id, name: chain.name, nativeCurrency: chain.nativeCurrency, rpcUrls: chain.rpcUrls, contracts: { multicall3: { address: MULTICALL3 } } },
@@ -183,7 +183,8 @@ export async function quoteGroveExit(
     sized.map(async (s) => {
       try {
         // sender AND recipient are the CONTRACT — it measures its own delta.
-        const q = await kyberQuote(s.token, USDG.address as Address, s.amountIn, manager, manager, "none");
+        // Same widened bound as the buy legs: one tripped leg reverts them all.
+        const q = await kyberQuote(s.token, USDG.address as Address, s.amountIn, manager, manager, "none", GROVE_LEG_SLIPPAGE_BPS);
         return q ? { s, quote: q } : { s, error: "no route right now" as const };
       } catch {
         return { s, error: "the venue did not respond" as const };

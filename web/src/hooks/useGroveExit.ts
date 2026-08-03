@@ -17,6 +17,7 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 import type { Address } from "viem";
 import { authHeader } from "@/lib/authedFetch";
+import { explainError } from "@/lib/explainError";
 import { useActiveWallet } from "@/hooks/useActiveWallet";
 import { useRefreshBalances } from "@/hooks/useBalances";
 import { asViemProvider } from "@/lib/provider";
@@ -121,7 +122,7 @@ export function useGroveExit(): UseGroveExit {
         return json as GroveExitQuoteJson;
       } catch (err) {
         if (seq !== quoteSeq.current) return null;
-        setError(err instanceof Error ? err.message : String(err));
+        setError(explainError(err));
         setPhase("error");
         return null;
       }
@@ -167,7 +168,7 @@ export function useGroveExit(): UseGroveExit {
         // grove-cash bar, and the activity feed must all say so NOW.
         refreshBalances();
       } catch (err) {
-        setError(err instanceof Error ? err.message : String(err));
+        setError(explainError(err));
         setPhase("error");
       }
     },
@@ -204,7 +205,7 @@ export function useGroveExit(): UseGroveExit {
         setPhase("done");
         refreshBalances();
       } catch (err) {
-        setError(err instanceof Error ? err.message : String(err));
+        setError(explainError(err));
         setPhase("error");
       }
     },

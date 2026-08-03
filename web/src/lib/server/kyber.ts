@@ -171,8 +171,13 @@ export interface KyberQuote {
 
 /**
  * Firm quote + the post-pull call sequence.
- * @param executor the smart account that holds the sell token and executes
- * @param taker    the user's EOA, which receives the bought token
+ * @param executor    the smart account that holds the sell token and executes
+ * @param taker       the user's EOA, which receives the bought token
+ * @param slippageBps router-enforced floor below the quoted output. The default
+ *                    suits a swap settled seconds after quoting; multi-leg
+ *                    atomic calls (grove buy/exit) pass a wider bound because
+ *                    one leg tripping "Return amount is not enough" reverts
+ *                    every leg.
  */
 export async function kyberQuote(
   sellToken: Address,
@@ -181,6 +186,7 @@ export async function kyberQuote(
   executor: Address,
   taker: Address,
   feeMode: KyberFeeMode = "integrator",
+  slippageBps: number = SLIPPAGE_BPS,
 ): Promise<KyberQuote | null> {
   const summary = await routes(sellToken, buyToken, sellAmount, feeMode);
   if (!summary) return null;
@@ -195,7 +201,7 @@ export async function kyberQuote(
         routeSummary: summary,
         sender: executor,
         recipient: taker,
-        slippageTolerance: SLIPPAGE_BPS,
+        slippageTolerance: slippageBps,
         deadline: Math.floor(Date.now() / 1000) + 1200,
         source: CLIENT_ID,
       }),
@@ -246,10 +252,10 @@ export async function kyberQuote(
   if (buyAmount <= BigInt(0)) return null;
 
   // /route/build returns no minAmountOut — the bound is baked into the calldata
-  // from the SAME `SLIPPAGE_BPS` we posted above, so this mirrors the floor the
-  // router will actually enforce. Both uses must stay on that one constant: if
+  // from the SAME `slippageBps` we posted above, so this mirrors the floor the
+  // router will actually enforce. Both uses must stay on that one value: if
   // they ever diverge the UI would promise a floor the router doesn't hold.
-  const minBuyAmount = (buyAmount * (BPS - BigInt(SLIPPAGE_BPS))) / BPS;
+  const minBuyAmount = (buyAmount * (BPS - BigInt(slippageBps))) / BPS;
 
   return {
     buyAmount,

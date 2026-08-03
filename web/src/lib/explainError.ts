@@ -57,6 +57,13 @@ const RULES: Rule[] = [
     say: "The network took too long to answer, so this was stopped before anything was placed.",
   },
   {
+    // KyberSwap's router: the swap's output fell below the floor baked into
+    // its route while it settled. Inside a raw UserOp simulation error the
+    // string arrives hex-encoded, so match that form too ("Return amount…").
+    match: /return amount is not enough|52657475726e20616d6f756e74/i,
+    say: "The price moved more than the quote allowed while it settled, so it stopped before spending anything. Try again — the next quote is fresh.",
+  },
+  {
     match: /revert|InvalidAction|execution reverted/i,
     say: "The trade was rejected by the venue's contract when it ran, so nothing was placed. Retrying usually routes it through a different venue.",
   },

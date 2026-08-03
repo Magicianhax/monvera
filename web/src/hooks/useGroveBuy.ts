@@ -13,6 +13,7 @@ import { createPublicClient, erc20Abi, http, type Address } from "viem";
 import { chain, RPC_URL } from "@/lib/chain";
 import { USDG } from "@/lib/tokens";
 import { authHeader } from "@/lib/authedFetch";
+import { explainError } from "@/lib/explainError";
 import { useActiveWallet } from "@/hooks/useActiveWallet";
 import { useRefreshBalances } from "@/hooks/useBalances";
 import { asViemProvider } from "@/lib/provider";
@@ -146,7 +147,7 @@ export function useGroveBuy(): UseGroveBuy {
       return json as GroveBuyQuoteJson;
     } catch (err) {
       if (seq !== quoteSeq.current) return null;
-      setError(err instanceof Error ? err.message : String(err));
+      setError(explainError(err));
       setPhase("error");
       return null;
     }
@@ -205,7 +206,10 @@ export function useGroveBuy(): UseGroveBuy {
         setPhase("buying");
         const receipt = await sendSponsoredCalls(viemProvider, calls);
         if (!receipt.success) {
-          throw new Error(`The buy reverted on-chain (tx ${receipt.receipt.transactionHash}). Nothing was spent.`);
+          // The hash goes to the console, not the message: hex in the message
+          // stops explainError's pass-through and lands on the wrong rule.
+          console.error("[grove-buy] reverted on-chain", receipt.receipt.transactionHash);
+          throw new Error("The buy reverted on-chain, so nothing was spent. Try again — the next quote is fresh.");
         }
 
         setSuccess({
@@ -222,7 +226,10 @@ export function useGroveBuy(): UseGroveBuy {
         // The basket (and any spent grove cash) just moved — refetch now.
         refreshBalances();
       } catch (err) {
-        setError(err instanceof Error ? err.message : String(err));
+        // Raw provider/bundler errors arrive as pages of calldata hex — a real
+        // user saw one. explainError passes our own copy through untouched and
+        // turns everything else into one honest sentence.
+        setError(explainError(err));
         setPhase("error");
       }
     },
