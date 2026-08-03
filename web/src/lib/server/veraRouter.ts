@@ -1124,21 +1124,26 @@ export async function routeVera(ctx: VeraContext): Promise<VeraResult> {
     case "grove_auto": {
       const g = resolveGrove(turn.groveId);
       if (!g) return unknownGroveReply(turn.groveId);
-      // Auto-manage is INERT for every grove, launched or not. The contract
-      // supports it (enableAuto + managedRebalance with per-user caps) but
-      // nothing drives it: there is no scheduler, no drift watcher, and no
-      // enableAuto UI. Gating this on `launched` would let a live grove claim a
-      // switch that does not exist, so it refuses unconditionally until the
-      // machinery is actually built.
-      {
+      // The switch is on the grove page, never in chat: consent is a signature
+      // with four contract-enforced caps, and Vera only opens the page at that
+      // section. The hourly driver (api/cron/rebalance) acts strictly inside
+      // whatever the user signed there.
+      if (g.onChainId === undefined) {
         return {
           intent: "reply",
-          message: turn.action === "enable"
-            ? `Auto-manage isn't running yet — for the ${g.name} or any other. The contract can authorize it with your own caps, but nothing is driving the rebalances today, and I won't flip a switch that does nothing. Your basket sits exactly as you bought it until you change it.`
-            : `There's nothing to switch off — auto-manage isn't running for the ${g.name}, or any Grove.`,
-          suggestions: [`What's in the ${g.name}?`, "What Groves do you have?"],
+          message: `${g.name} isn't open on-chain yet, so there's nothing to auto-manage there. Titan Grove is live today.`,
+          suggestions: ["Open the Titan Grove", "What Groves do you have?"],
         };
       }
+      return {
+        intent: "open",
+        target: "grove_auto",
+        symbol: g.id,
+        message:
+          turn.action === "enable"
+            ? `Auto-manage is a switch only you can flip — I've opened the ${g.name}'s page at that section. You set the caps (per action, cadence, per-holding limit, lifetime budget), the contract enforces them on every action, and switching it off is instant. Nothing changes until you sign.`
+            : `Switching auto-manage off is instant and yours alone — I've opened the ${g.name}'s page at the switch. One signature and nothing can touch the basket.`,
+      };
     }
     case "watchlist": {
       if (!ctx.userId) return { intent: "reply", message: "I couldn't reach your watchlist just now — try again in a moment." };

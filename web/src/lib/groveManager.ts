@@ -22,6 +22,9 @@ export const GROVE_MANAGER_ABI = parseAbi([
   "function buy(uint256 groveId, SwapLeg[] legs, uint256 deadline)",
   "function exit(uint256 groveId, SwapLeg[] legs, uint16 fractionBps, uint256 deadline)",
   "function closePosition(uint256 groveId)",
+  "function enableAuto(uint256 groveId, uint256 maxPerBuyUsdg, uint256 maxTotalUsdg, uint256 minSecondsBetween, uint16 maxRebalanceFractionBps)",
+  "function revokeAuto(uint256 groveId)",
+  "function autoConfigs(address user, uint256 groveId) view returns (bool enabled, uint256 maxPerBuyUsdg, uint256 maxTotalUsdg, uint256 managerMovedUsdg, uint256 minSecondsBetween, uint256 lastManagerAction, uint16 maxRebalanceFractionBps)",
   "function positionOf(address user, uint256 groveId) view returns (uint256 costBasisUsdg, address[] tokens, uint256[] amounts)",
   "function paused() view returns (bool)",
   "function callTargetAllowed(address) view returns (bool)",
@@ -165,6 +168,76 @@ export function buildClosePositionCall(onChainId: number): Call {
       args: [BigInt(onChainId)],
     }),
   };
+}
+
+/** The four hard caps a user consents to when switching auto-manage on. All
+ *  enforced BY THE CONTRACT against the manager on every action — the manager
+ *  key is never trusted (AutoConfig in GroveManager.sol). */
+export interface AutoCaps {
+  /** Max oracle value the manager may move in ONE action, USDG 6dp. */
+  maxPerBuyUsdg: bigint;
+  /** Lifetime budget across all manager actions, USDG 6dp. */
+  maxTotalUsdg: bigint;
+  /** Cooldown between any two manager actions, seconds (contract floor: 1h). */
+  minSecondsBetween: bigint;
+  /** Max fraction of any single holding sold per rebalance, bps. */
+  maxRebalanceFractionBps: number;
+}
+
+/**
+ * The sponsored batch that switches auto-manage ON for one grove:
+ *
+ *   1. One standing ERC-20 approval per composition token, smart account ->
+ *      GroveManager. Rebalance SELL legs pull the stock from the user while
+ *      the user is away — that is the whole point of auto-manage — so unlike
+ *      an exit these approvals must outlive the transaction. They are only
+ *      spendable through managedRebalance, which the contract gates on
+ *      `enabled` + the caps below; revoking zeroes them again.
+ *   2. enableAuto with the four caps.
+ */
+export function buildEnableAutoCalls(onChainId: number, caps: AutoCaps, compositionTokens: Address[]): Call[] {
+  const MAX = BigInt("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
+  return [
+    ...compositionTokens.map((t) => ({
+      to: t,
+      data: encodeFunctionData({
+        abi: ERC20_MINI_ABI,
+        functionName: "approve" as const,
+        args: [GROVE_MANAGER as Address, MAX],
+      }),
+    })),
+    {
+      to: GROVE_MANAGER as Address,
+      data: encodeFunctionData({
+        abi: GROVE_MANAGER_ABI,
+        functionName: "enableAuto",
+        args: [BigInt(onChainId), caps.maxPerBuyUsdg, caps.maxTotalUsdg, caps.minSecondsBetween, caps.maxRebalanceFractionBps],
+      }),
+    },
+  ];
+}
+
+/** Switch auto-manage OFF: revoke consent (instant, works even while paused)
+ *  and zero every standing approval the enable batch granted. */
+export function buildRevokeAutoCalls(onChainId: number, compositionTokens: Address[]): Call[] {
+  return [
+    {
+      to: GROVE_MANAGER as Address,
+      data: encodeFunctionData({
+        abi: GROVE_MANAGER_ABI,
+        functionName: "revokeAuto",
+        args: [BigInt(onChainId)],
+      }),
+    },
+    ...compositionTokens.map((t) => ({
+      to: t,
+      data: encodeFunctionData({
+        abi: ERC20_MINI_ABI,
+        functionName: "approve" as const,
+        args: [GROVE_MANAGER as Address, BigInt(0)],
+      }),
+    })),
+  ];
 }
 
 /**

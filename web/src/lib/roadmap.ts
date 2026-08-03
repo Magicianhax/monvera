@@ -29,7 +29,7 @@ export const ROADMAP: RoadmapPhase[] = [
       { name: "Plans from plain words", note: "Tell Vera a goal and an amount. She returns a named basket of real companies, each with a reason." },
       { name: "One-tap invest", note: "Every holding is priced at a live quote and bought in a single transaction. The network cost is on us." },
       { name: "A signed, on-chain record", note: "Vera signs the risk assessment behind each plan, recorded in the same transaction that buys the stocks." },
-      { name: "Groves", note: "Curated stock baskets bought whole into your own wallet — $0 entry, $0 management, the only fee is 10% of profit at exit. Titan Grove is live." },
+      { name: "Groves", note: "Curated stock baskets bought whole into your own wallet — $0 entry, $0 management, the only fee is 10% of profit at exit. Opt-in auto-manage rebalances drifted baskets inside caps you sign. Titan Grove is live." },
       { name: "Autopilot", note: "Invest a set amount on a schedule, inside four limits you set and can switch off at any time." },
       { name: "Live Screener", note: "All 95 companies and funds ranked by a year of real returns, momentum, volatility, and drawdown." },
       { name: "Discover", note: "Browse the market by theme instead of hunting for tickers." },

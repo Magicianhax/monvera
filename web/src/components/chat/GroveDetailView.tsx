@@ -27,6 +27,7 @@ import { assetBySymbol } from "@/lib/tokens";
 import { toTile, displayFor } from "@/lib/displayAssets";
 import { AssetTile } from "@/components/design";
 import { AddrChip, PIcon, usd, usd0, dcol } from "./chatKit";
+import { GroveAutoPanel } from "./GroveAutoPanel";
 
 const EXPLORER = "https://robinhoodchain.blockscout.com";
 
@@ -149,12 +150,15 @@ export function GroveDetailView({
   smartAccount,
   onBuy,
   onExit,
+  autoFocus,
 }: {
   g: GroveLive;
   position?: GrovePositionLive;
   smartAccount?: `0x${string}`;
   onBuy: () => void;
   onExit: () => void;
+  /** Deep link (?auto=1 / chat): scroll the Auto-manage panel into view. */
+  autoFocus?: boolean;
 }) {
   const feePct = g.feeBps / 100;
   const open = g.onChainId !== undefined;
@@ -444,7 +448,7 @@ export function GroveDetailView({
             <Faq q="How is the basket chosen and weighted?" a={g.methodology.replace(/\*\*/g, "")} />
             <Faq
               q="Does it rebalance?"
-              a={`Not yet. ${g.rebalancePolicy.charAt(0).toUpperCase()}${g.rebalancePolicy.slice(1)}.\n\nThe contract supports automated management — hard caps you set yourself, your explicit opt-in — but nothing is driving it today, so no rebalance has ever run. When that changes it will be announced first. Every rebalance is its own transaction and appears in the Rebalances panel on this page the moment it lands.`}
+              a={`Only if you switch it on. ${g.rebalancePolicy.charAt(0).toUpperCase()}${g.rebalancePolicy.slice(1)}.\n\nAuto-manage is off by default. Flip it on in the Auto-manage panel on this page and Vera checks the basket hourly, realigning it only when it has genuinely drifted — inside caps the contract enforces on every action: your per-action budget, a lifetime budget, your cadence, and at most 20% of any single holding per rebalance. Switching it off is instant.\n\nEvery rebalance is its own transaction and appears in the Rebalances panel on this page the moment it lands — if that list is empty, nothing has ever touched the basket.`}
             />
             <Faq
               q="How do I get my money out?"
@@ -554,6 +558,8 @@ export function GroveDetailView({
               {held ? "One transaction each way, gas covered" : open ? `From ${usd0(g.minBuyUsd)} · all ${g.components.length} names from ${usd0(fullDiversificationUsd(g))}` : "Buys open when the contract is live"}
             </div>
           </div>
+
+          <GroveAutoPanel g={g} held={held} autoFocus={autoFocus} />
 
           <div style={panel({ padding: "15px 18px 8px" })}>
             <div style={label}>Terms and custody</div>

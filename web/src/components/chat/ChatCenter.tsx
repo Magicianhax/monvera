@@ -669,6 +669,7 @@ ${seller.error.slice(0, 160)}`, payload: { suggestions: ["Try again"] } }).catch
     else if (target === "receive") nav.openReceive();
     else if (target === "settings") nav.openSettings();
     else if (target === "groves") nav.openGroves(symbol);
+    else if (target === "grove_auto") nav.openGroves(symbol, { auto: true });
     else nav.openCanvas(target as Parameters<typeof nav.openCanvas>[0], symbol);
   };
 

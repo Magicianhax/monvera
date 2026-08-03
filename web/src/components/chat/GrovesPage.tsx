@@ -214,7 +214,7 @@ function GroveShelf({ onOpen }: { onOpen: (id: string) => void }) {
 
 // Buy and exit now happen in-page against the contract, so this no longer needs
 // `nav` to hand off to chat — the props stay for the caller's signature.
-function GroveDetail({ id }: { id: string; autoManage: boolean; nav: ChatNav }) {
+function GroveDetail({ id, autoManage }: { id: string; autoManage: boolean; nav: ChatNav }) {
   const { data: g, isLoading, isError, refetch } = useGroveLive(id);
   // Buy and exit are POPUPS (PaySheet idiom): fixed-position modals, so no
   // scroll-into-view choreography and the page never reflows under them.
@@ -237,6 +237,7 @@ function GroveDetail({ id }: { id: string; autoManage: boolean; nav: ChatNav }) 
         smartAccount={smartAccount}
         onBuy={() => setBuyOpen(true)}
         onExit={() => setExitOpen(true)}
+        autoFocus={autoManage}
       />
 
       {buyOpen && g.onChainId !== undefined && <GroveBuyPanel g={g} onClose={() => setBuyOpen(false)} />}
