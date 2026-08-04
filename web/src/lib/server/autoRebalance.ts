@@ -236,7 +236,7 @@ async function sendBudgetNotice(
       title: `${def.name} auto-manage budget running low`,
       body:
         `About $${remaining.toFixed(2)} of the $${total.toFixed(2)} lifetime budget you approved for ${def.name} remains — under 25%. ` +
-        "It only refills when you renew it with a new signature; nothing renews on its own.",
+        "This is an early, limited setting. One signature in the grove's Managed card upgrades it to full management; nothing changes on its own.",
       at: Date.now(),
     });
   } else {
@@ -245,7 +245,7 @@ async function sendBudgetNotice(
       title: `${def.name} auto-manage budget spent`,
       body:
         `Auto-manage has stopped for your ${def.name} basket: less than one of our $15 minimum moves remains of the $${total.toFixed(2)} lifetime budget you approved. ` +
-        "Renewing takes a deliberate new signature; nothing renews on its own.",
+        "This is an early, limited setting. One signature in the grove's Managed card upgrades it to full management; nothing changes on its own.",
       at: Date.now(),
     });
   }
@@ -343,21 +343,34 @@ async function planOne(def: GroveDef, user: Address, ctx: RunCtx): Promise<Outco
   // the planner never plans a pull the transferFrom would revert.
   const held = tokens.map((t, i) => ({ token: t, amountRaw: amounts[i] })).filter((x) => x.amountRaw > BigInt(0));
   if (!held.length) return out("skipped", "empty position");
-  const allowances = await Promise.all(
-    held.map((x) =>
-      client.readContract({ address: x.token, abi: erc20Abi, functionName: "allowance", args: [user, managerAddr] }),
+  // Sells are bounded by what the wallet can actually deliver: the standing
+  // allowance AND the live balance. The contract's position ledger can exceed
+  // the wallet (the user may have sold a name through the ordinary flows), and
+  // a plan that ignores that quotes doomed legs — every one a simulation
+  // refusal that pages the owner for nothing.
+  const [allowances, balances] = await Promise.all([
+    Promise.all(
+      held.map((x) =>
+        client.readContract({ address: x.token, abi: erc20Abi, functionName: "allowance", args: [user, managerAddr] }),
+      ),
     ),
-  );
+    Promise.all(
+      held.map((x) =>
+        client.readContract({ address: x.token, abi: erc20Abi, functionName: "balanceOf", args: [user] }),
+      ),
+    ),
+  ]);
 
   const holdings: PlanHolding[] = [];
   for (let i = 0; i < held.length; i++) {
     const asset = byAddress.get(held[i].token.toLowerCase());
     if (!asset) return out("skipped", `unknown token ${held[i].token} in position`);
+    const deliverable = [held[i].amountRaw, allowances[i], balances[i]].reduce((a, b) => (a < b ? a : b));
     holdings.push({
       token: held[i].token,
       symbol: asset.symbol,
       amountRaw: held[i].amountRaw,
-      sellableRaw: allowances[i] < held[i].amountRaw ? allowances[i] : held[i].amountRaw,
+      sellableRaw: deliverable,
       priceUsd: ctx.prices[asset.symbol]?.priceUsd ?? 0,
       targetWeightBps: def.components.find((c) => c.symbol === asset.symbol)?.weightBps ?? 0,
     });
@@ -596,7 +609,7 @@ async function repairUnconfirmed(bySmart: Map<string, string>): Promise<{ repair
           const delivered = await addNotification(userId, {
             kind: "system",
             title: `${name} rebalanced (confirmed late)`,
-            body: `Your ${name} rebalance took longer than usual to confirm — it has now landed. About $${(row.turnoverUsd ?? 0).toFixed(2)} realigned toward its published weights, inside your caps.${read} The transaction is in the grove's Rebalances list.`,
+            body: `Your ${name} rebalance took longer than usual to confirm — it has now landed. About $${(row.turnoverUsd ?? 0).toFixed(2)} realigned toward its published weights. Price-checked on-chain, as always.${read} The transaction is in the grove's Rebalances list.`,
             txHash: row.txHash,
             at: Date.now(),
           });
@@ -974,7 +987,7 @@ export async function runAutoRebalance(): Promise<AutoRebalanceReport> {
       delivered = await addNotification(userId, {
         kind: "system",
         title: `${name} rebalanced`,
-        body: `Your ${name} basket: about $${(o.turnoverUsd ?? 0).toFixed(2)} realigned toward its published weights, inside your caps.${read} The transaction is in the grove's Rebalances list.`,
+        body: `Your ${name} basket: about $${(o.turnoverUsd ?? 0).toFixed(2)} realigned toward its published weights. Price-checked on-chain, as always.${read} The transaction is in the grove's Rebalances list.`,
         txHash: o.txHash,
         at: Date.now(),
       });

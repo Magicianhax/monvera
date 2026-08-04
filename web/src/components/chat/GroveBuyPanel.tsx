@@ -8,16 +8,24 @@
 // shown is one the contract will enforce: the per-leg amounts are what it
 // pulls, "at least" is the venue floor each leg reverts below.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useGroveBuy } from "@/hooks/useGroveBuy";
+import { useGroveAutoState } from "@/hooks/useGroveAuto";
 import { usePortfolio, useUsdcBalance } from "@/hooks/useBalances";
 import { useActiveWallet } from "@/hooks/useActiveWallet";
 import type { GroveLive } from "@/hooks/useGroves";
 import { assetBySymbol } from "@/lib/tokens";
-import { defaultAutoPerActionUsd } from "@/lib/groveManager";
 import { toTile } from "@/lib/displayAssets";
 import { AssetTile } from "@/components/design";
 import { GroveModal, ModalCard, ModalSuccessIcon, ModalWorking, ReceiptRow, TrustCaption, ModalButtons, ModalDoneButton } from "./GroveModal";
+import { isLegacyAutoConfig } from "@/lib/groveManager";
 import { usd } from "./chatKit";
+
+const GVBP_CSS = `
+.gvbp-press{transition:transform .16s ease-out}
+.gvbp-press:active{transform:scale(.97)}
+@media (prefers-reduced-motion: reduce){.gvbp-press{transition:none}.gvbp-press:active{transform:none}}
+`;
 
 /** Trim a token amount to something readable without lying about size. */
 function tokenStr(raw: string): string {
@@ -33,10 +41,26 @@ export function GroveBuyPanel({ g, onClose }: { g: GroveLive; onClose: () => voi
   const { data: bal } = useUsdcBalance(wallet?.address);
   const { data: port } = usePortfolio(wallet?.address);
   const [amount, setAmount] = useState(String(Math.max(g.minBuyUsd, 100)));
-  // Auto-manage is on by default for a NEW buy: consent + caps ride inside
-  // the same signature. The tick is real — unticking buys unmanaged.
+  // Managed is on by default for a FIRST buy: consent rides inside the same
+  // signature. The tick is real — unticking buys unmanaged — so it may only
+  // render where it is real: useGroveBuy never removes a standing consent, so
+  // against a live AutoConfig the checkbox would be a silently ignored
+  // control and a static note renders instead. Loading or errored config
+  // reads also suppress it, and the buy then passes no autoManage at all
+  // (the hook's already-enabled guard stays the backstop).
   const [autoOn, setAutoOn] = useState(true);
+  const autoState = useGroveAutoState(g.onChainId);
+  const standing = autoState.isSuccess && (autoState.data?.enabled ?? false);
+  const standingLegacy = standing && !!autoState.data && isLegacyAutoConfig(autoState.data);
+  const offerTick = autoState.isSuccess && !standing;
   const { phase, busy, error, quote, success, getQuote, buy } = useGroveBuy();
+
+  // This buy's UserOp may have switched management on; the Managed card and a
+  // re-opened buy panel must not show a stale "off" for the next 30s.
+  const qc = useQueryClient();
+  useEffect(() => {
+    if (success?.autoEnabled) void qc.invalidateQueries({ queryKey: ["grove-auto"] });
+  }, [success, qc]);
 
   const cash = bal?.value ?? 0;
   // Grove-exit proceeds park at the smart account and fund a re-buy FIRST
@@ -81,11 +105,12 @@ export function GroveBuyPanel({ g, onClose }: { g: GroveLive; onClose: () => voi
 
   const onBuy = useCallback(() => {
     if (!valid || overCash) return;
-    const tokens = autoOn
+    const consent = offerTick && autoOn;
+    const tokens = consent
       ? g.components.map((c) => assetBySymbol(c.symbol)?.address as `0x${string}` | undefined).filter((a): a is `0x${string}` => !!a)
       : [];
-    void buy(g.id, amountNum, autoOn ? { tokens } : undefined);
-  }, [valid, overCash, buy, g.id, amountNum, autoOn, g.components]);
+    void buy(g.id, amountNum, consent ? { tokens } : undefined);
+  }, [valid, overCash, buy, g.id, amountNum, autoOn, offerTick, g.components]);
 
   const phaseLabel = useMemo(
     () =>
@@ -106,6 +131,7 @@ export function GroveBuyPanel({ g, onClose }: { g: GroveLive; onClose: () => voi
 
   return (
     <GroveModal title={done ? "Bought" : `Buy ${g.name}`} onClose={onClose} busy={busy}>
+      <style>{GVBP_CSS}</style>
       {working ? (
         <ModalWorking
           title={`Buying ${g.name}`}
@@ -120,14 +146,18 @@ export function GroveBuyPanel({ g, onClose }: { g: GroveLive; onClose: () => voi
           <p style={{ fontSize: 13, color: "var(--ink-2)", margin: "6px 0 12px", lineHeight: 1.55 }}>
             <span className="tnum">{usd(success.totalUsd)}</span> across {success.legs.length} {success.legs.length === 1 ? "holding" : "holdings"}, settled in your own wallet.
             The only fee is {g.feeBps / 100}% of profit when you exit.
-            {success.autoEnabled ? " Auto-manage is on — Vera keeps it aligned, inside your caps." : ""}
+            {success.autoEnabled
+              ? " Vera is managing it, and you can stop that any time."
+              : standing
+                ? " It joins your managed position."
+                : ""}
           </p>
           <a
             href={`https://robinhoodchain.blockscout.com/tx/${success.txHash}`}
             target="_blank"
             rel="noopener noreferrer"
-            className="mono"
-            style={{ fontSize: 12.5, fontWeight: 600, color: "var(--ink-2)", textDecoration: "underline", textUnderlineOffset: 3 }}
+            className="mono gvbp-press"
+            style={{ display: "inline-block", fontSize: 12.5, fontWeight: 600, color: "var(--ink-2)", textDecoration: "underline", textUnderlineOffset: 3 }}
           >
             View transaction
           </a>
@@ -137,7 +167,7 @@ export function GroveBuyPanel({ g, onClose }: { g: GroveLive; onClose: () => voi
         <>
           {/* ── amount ── */}
           <ModalCard>
-            <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--ink-3)" }}>
+            <div style={{ fontSize: 11.5, fontWeight: 600, color: "var(--ink-3)" }}>
               You pay
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 6 }}>
@@ -153,6 +183,7 @@ export function GroveBuyPanel({ g, onClose }: { g: GroveLive; onClose: () => voi
               />
               {spendable >= g.minBuyUsd && (
                 <button
+                  className="gvbp-press"
                   onClick={() => setAmount(String(Math.floor(spendable)))}
                   disabled={busy}
                   style={{ flex: "none", padding: "5px 12px", borderRadius: 999, fontSize: 11.5, fontWeight: 700, background: "var(--panel-2)", border: "1px solid var(--line)", color: "var(--ink-2)", cursor: busy ? "default" : "pointer" }}
@@ -173,7 +204,7 @@ export function GroveBuyPanel({ g, onClose }: { g: GroveLive; onClose: () => voi
           {/* ── what this buys ── */}
           {fresh && valid && (
             <ModalCard style={{ marginTop: 10 }}>
-              <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--ink-3)", marginBottom: 2 }}>
+              <div style={{ fontSize: 11.5, fontWeight: 600, color: "var(--ink-3)", marginBottom: 2 }}>
                 You receive
               </div>
               {quote.legs.map((l) => (
@@ -201,22 +232,42 @@ export function GroveBuyPanel({ g, onClose }: { g: GroveLive; onClose: () => voi
             </div>
           )}
 
-          {/* ── auto-manage, on by default, in the same signature ── */}
-          <label style={{ display: "flex", alignItems: "flex-start", gap: 9, margin: "12px 2px 0", cursor: busy ? "default" : "pointer" }}>
-            <input
-              type="checkbox"
-              checked={autoOn}
-              disabled={busy}
-              onChange={(e) => setAutoOn(e.target.checked)}
-              style={{ marginTop: 2, width: 15, height: 15, accentColor: "var(--primary)" }}
-            />
-            <span style={{ fontSize: 11.5, lineHeight: 1.55, color: "var(--ink-2)" }}>
-              <span style={{ fontWeight: 700, color: "var(--ink)" }}>Auto-manage</span> — Vera realigns the basket
-              when it genuinely drifts, inside caps this signature sets, sized to this buy:{" "}
-              <span className="tnum">{usd(defaultAutoPerActionUsd(valid ? amountNum : 0))}</span> per action, weekly
-              at most, never more than 20% of a holding. Off any time, instantly.
-            </span>
-          </label>
+          {/* ── the consent slot: a checkbox only where the tick is real ── */}
+          {offerTick ? (
+            <label style={{ display: "flex", alignItems: "flex-start", gap: 9, margin: "12px 2px 0", cursor: busy ? "default" : "pointer" }}>
+              <input
+                type="checkbox"
+                checked={autoOn}
+                disabled={busy}
+                onChange={(e) => setAutoOn(e.target.checked)}
+                style={{ marginTop: 2, width: 15, height: 15, accentColor: "var(--primary)" }}
+              />
+              <span style={{ fontSize: 11.5, lineHeight: 1.55, color: "var(--ink-2)" }}>
+                <span style={{ fontWeight: 700, color: "var(--ink)" }}>Managed by Vera</span>. She keeps this
+                basket at its published weights, and every move is a public transaction. Off any time,
+                instantly.
+              </span>
+            </label>
+          ) : standingLegacy ? (
+            <div style={{ fontSize: 11.5, lineHeight: 1.55, color: "var(--ink-2)", margin: "12px 2px 0" }}>
+              <span style={{ fontWeight: 700, color: "var(--ink)" }}>Managed on an early, limited setting</span>.
+              This deposit joins it. You can upgrade to full management in the Managed card.
+            </div>
+          ) : standing ? (
+            <div style={{ fontSize: 11.5, lineHeight: 1.55, color: "var(--ink-2)", margin: "12px 2px 0" }}>
+              <span style={{ fontWeight: 700, color: "var(--ink)" }}>Already managed</span>. This deposit joins
+              your managed position; stop any time in the Managed card.
+            </div>
+          ) : autoState.isError ? (
+            <div style={{ fontSize: 11.5, lineHeight: 1.55, color: "var(--ink-3)", margin: "12px 2px 0" }}>
+              Couldn&rsquo;t check whether this basket is managed. This buy leaves that unchanged; the Managed
+              card can turn it on or off any time.
+            </div>
+          ) : (
+            <div style={{ fontSize: 11.5, lineHeight: 1.55, color: "var(--ink-3)", margin: "12px 2px 0" }}>
+              Checking whether this basket is already managed&hellip;
+            </div>
+          )}
 
           {error && (
             <div style={{ fontSize: 12.5, lineHeight: 1.55, color: "var(--neg)", marginTop: 10 }}>
@@ -226,6 +277,7 @@ export function GroveBuyPanel({ g, onClose }: { g: GroveLive; onClose: () => voi
                   the user edited the number. The error itself must be a retry. */}
               {valid && !busy && (
                 <button
+                  className="gvbp-press"
                   onClick={() => void getQuote(g.id, amountNum)}
                   style={{ display: "block", width: "100%", height: 38, marginTop: 8, borderRadius: 11, fontSize: 12.5, fontWeight: 700, border: "1px solid var(--line)", background: "var(--panel-2)", color: "var(--ink)" }}
                 >

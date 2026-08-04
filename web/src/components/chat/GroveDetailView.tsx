@@ -1,18 +1,20 @@
 "use client";
 
-// The Grove detail page. Three zones and a footer, no strips:
+// The Grove detail page. Four zones and a footer, no strips:
 //
-//   1  identity header, naked on the background: logo stack, serif name, chips
-//   2  stats band: ONE panel, 5 cells (position + the grove's public record)
-//   3  the split: [holdings ledger + questions] left, [manage + terms] right —
+//   1  identity header, naked on the background: logo stack, chips, serif name
+//   2  stats band: ONE panel, 4 cells (the grove's public record + the fee)
+//   3  the split: [holdings ledger + questions] left, [money + managed] right —
 //      the questions live under the ledger so the content column always
 //      outruns the rail, and the rail is sticky so it follows the reader
 //      instead of leaving a void (the dead-space bug this layout replaces)
 //   4  a mono facts footer: contract, timelock, rebalance status
 //
 // Chromatic vocabulary, complete: green fills the page Buy button and nothing
-// else. --pos/--neg carry deltas. Fraunces serif appears exactly twice, the
-// grove name and the YOUR POSITION value. Every other numeral is mono/tnum.
+// else. --pos/--neg carry deltas. Fraunces serif appears exactly ONCE, the
+// grove name. Every other numeral is mono/tnum. Every fact has ONE home on
+// this page: the fee in the stats band, the rebalance cadence in its FAQ,
+// the last-rebalance date in the footer.
 //
 // Everything shown is read from the chain or the registry. Where a thing is
 // not running (rebalancing) the row says so instead of being hidden.
@@ -33,9 +35,9 @@ const EXPLORER = "https://robinhoodchain.blockscout.com";
 
 const GVD_CSS = `
 .gvd{container-type:inline-size}
-/* Five cells, ONE row, always. No wrapping into 3+2 or 2+2+1 — a stat strip
-   that re-stacks reads as a broken table. When the container is narrower than
-   five readable cells (~146px each), the strip scrolls sideways instead:
+/* Four cells, ONE row, always. No wrapping into 2+2 — a stat strip that
+   re-stacks reads as a broken table. When the container is narrower than
+   four readable cells (~146px each), the strip scrolls sideways instead:
    native swipe on phones, cells at full legibility, dividers always vertical.
    This also deletes the whole breakpoint/divider cascade a wrap needs. */
 .gvd-stats{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(146px,1fr);overflow-x:auto;scrollbar-width:none}
@@ -55,8 +57,23 @@ const GVD_CSS = `
    mobile context .mvm .fadein doubles as the bottom-sheet scrim override and
    sets padding:0!important, which would crush these rows. */
 @keyframes gvdrise{from{opacity:.001;transform:translateY(8px)}to{opacity:1;transform:none}}
-.gvd-row{animation:gvdrise .32s cubic-bezier(.23,1,.32,1) both}
-@media (prefers-reduced-motion: reduce){.gvd-row{animation:none}}
+.gvd-row{animation:gvdrise .28s cubic-bezier(.23,1,.32,1) both}
+/* Press affordance: transform only, never "all". */
+.gvd-press{transition:transform .16s ease-out}
+.gvd-press:active{transform:scale(.97)}
+/* Expand/collapse: always-mounted grid rows, so the transition is
+   interruptible by construction. Opens at 220ms, closes at 180ms (exits
+   faster than enters); the chevron turns on the open clock both ways. */
+.gvd-clp{display:grid;grid-template-rows:0fr;transition:grid-template-rows .18s cubic-bezier(.23,1,.32,1)}
+.gvd-clp[data-open="true"]{grid-template-rows:1fr;transition-duration:.22s}
+.gvd-clp>div{overflow:hidden;min-height:0}
+.gvd-chev{display:inline-flex;color:var(--ink-3);transition:transform .22s cubic-bezier(.23,1,.32,1)}
+.gvd-chev[data-open="true"]{transform:rotate(180deg)}
+@media (prefers-reduced-motion: reduce){
+  .gvd-row{animation:none}
+  .gvd-clp,.gvd-chev,.gvd-press{transition:none}
+  .gvd-press:active{transform:none}
+}
 `;
 
 // ── primitives ───────────────────────────────────────────────────────────────
@@ -68,13 +85,10 @@ const panel = (extra?: CSSProperties): CSSProperties => ({
   ...extra,
 });
 
-const label: CSSProperties = {
-  fontSize: 11,
-  fontWeight: 700,
-  letterSpacing: ".06em",
-  textTransform: "uppercase",
-  color: "var(--ink-3)",
-};
+// Headings carry their own weight: real size and color, sentence case — no
+// uppercase, no tracking, anywhere on this page.
+const heading: CSSProperties = { fontSize: 14, fontWeight: 700, color: "var(--ink)" };
+const caption: CSSProperties = { fontSize: 11.5, fontWeight: 500, color: "var(--ink-3)" };
 
 /** A labelled fact row. */
 function Row({ k, v, sub, strong, color }: { k: ReactNode; v: ReactNode; sub?: ReactNode; strong?: boolean; color?: string }) {
@@ -99,24 +113,29 @@ function short(a: string) {
   return `${a.slice(0, 6)}…${a.slice(-4)}`;
 }
 
-/** Collapsed by default. Background and argument live here, not on the page. */
+/** Collapsed by default. Background and argument live here, not on the page.
+ *  The answer stays mounted (the .gvd-clp grid collapse); when closed it is
+ *  inert + aria-hidden so its links drop out of the tab order. */
 function Faq({ q, a }: { q: string; a: ReactNode }) {
   const [open, setOpen] = useState(false);
   return (
     <div style={{ borderTop: "1px solid var(--line-2)" }}>
       <button
+        className="gvd-press"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
         style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "12px 0", background: "none", border: "none", textAlign: "left", cursor: "pointer", color: "var(--ink)" }}
       >
         <span style={{ fontSize: 13, fontWeight: 600, flex: 1 }}>{q}</span>
-        <span style={{ color: "var(--ink-3)", transform: open ? "rotate(180deg)" : "none", transition: "transform .18s ease", display: "grid", placeItems: "center", flex: "none" }}>
+        <span className="gvd-chev" data-open={open} style={{ flex: "none" }}>
           <PIcon name="ph-caret-down" size={14} />
         </span>
       </button>
-      {open && (
-        <div style={{ fontSize: 12.5, lineHeight: 1.65, color: "var(--ink-2)", padding: "0 0 14px", whiteSpace: "pre-line" }}>{a}</div>
-      )}
+      <div className="gvd-clp" data-open={open}>
+        <div aria-hidden={!open} inert={!open}>
+          <div style={{ fontSize: 12.5, lineHeight: 1.65, color: "var(--ink-2)", padding: "0 0 14px", whiteSpace: "pre-line" }}>{a}</div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -245,9 +264,9 @@ export function GroveDetailView({
             )}
           </div>
           <span className="tnum" style={{ fontSize: 12, fontWeight: 700, color: "var(--ink-3)" }}>{g.ticker}</span>
-          <span style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: ".05em", textTransform: "uppercase", color: "var(--ink-3)", padding: "3px 9px", borderRadius: 999, border: "1px solid var(--line)" }}>{g.category}</span>
+          <span style={{ fontSize: 11, fontWeight: 600, color: "var(--ink-3)", padding: "3px 9px", borderRadius: 999, border: "1px solid var(--line)" }}>{g.category}</span>
           {!open && (
-            <span style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: ".05em", textTransform: "uppercase", color: "var(--ink-3)", padding: "3px 9px", borderRadius: 999, border: "1px solid var(--line)" }}>
+            <span style={{ fontSize: 11, fontWeight: 600, color: "var(--ink-3)", padding: "3px 9px", borderRadius: 999, border: "1px solid var(--line)" }}>
               Opens soon
             </span>
           )}
@@ -265,7 +284,7 @@ export function GroveDetailView({
       <div style={panel({ overflow: "hidden" })}>
         <div className="gvd-stats">
           <div>
-            <div style={label}>1y vs S&amp;P</div>
+            <div style={caption}>1y vs S&amp;P</div>
             <div className="tnum" style={{ fontSize: 21, fontWeight: 600, marginTop: 6, color: bt ? dcol(bt.portfolio.returnPct) : "var(--ink)" }}>
               {bt ? `${bt.portfolio.returnPct >= 0 ? "+" : "−"}${Math.abs(bt.portfolio.returnPct).toFixed(1)}%` : "—"}
             </div>
@@ -274,17 +293,17 @@ export function GroveDetailView({
             </div>
           </div>
           <div>
-            <div style={label}>Investors</div>
+            <div style={caption}>Investors</div>
             <div className="tnum" style={{ fontSize: 21, fontWeight: 600, marginTop: 6 }}>{g.stats.users.toLocaleString("en-US")}</div>
             <div style={{ fontSize: 11, color: "var(--ink-3)", marginTop: 2 }}>open positions, on-chain</div>
           </div>
           <div>
-            <div style={label}>Total invested</div>
+            <div style={caption}>Total invested</div>
             <div className="tnum" style={{ fontSize: 21, fontWeight: 600, marginTop: 6 }}>{usd0(g.stats.managedUsd)}</div>
             <div style={{ fontSize: 11, color: "var(--ink-3)", marginTop: 2 }}>cost basis, all holders</div>
           </div>
           <div>
-            <div style={label}>The only fee</div>
+            <div style={caption}>The only fee</div>
             <div className="tnum" style={{ fontSize: 21, fontWeight: 600, marginTop: 6 }}>{feePct}%</div>
             <div style={{ fontSize: 11, color: "var(--ink-3)", marginTop: 2 }}>of profit, only at exit</div>
           </div>
@@ -301,7 +320,7 @@ export function GroveDetailView({
           {/* This is the grove's published RECIPE, not anyone's holdings —
               "Your basket" in the right rail is what the user owns. */}
           <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
-            <div style={{ fontSize: 14, fontWeight: 700 }}>What&rsquo;s inside</div>
+            <div style={heading}>What&rsquo;s inside</div>
             <div className="tnum" style={{ marginLeft: "auto", fontSize: 11, color: "var(--ink-3)" }}>
               {g.components.length} names · fixed weights
             </div>
@@ -327,8 +346,8 @@ export function GroveDetailView({
                     <span style={{ fontSize: 11.5, color: "var(--ink-3)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.name}</span>
                   </div>
                   {/* Which names are YOURS, at a glance: held rows get a green
-                      mark + dollar value; a position that skipped a name (small
-                      buys take the largest weights first) says so honestly. */}
+                      mark + dollar value; a skipped name says so honestly (the
+                      why lives in the FAQ, once). */}
                   {held && qty > 0 && (
                     <div className="tnum" style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 10.5, marginTop: 1 }}>
                       <span aria-hidden style={{ width: 6, height: 6, borderRadius: "50%", flex: "none", background: "var(--pos)" }} />
@@ -338,7 +357,7 @@ export function GroveDetailView({
                     </div>
                   )}
                   {held && qty === 0 && (
-                    <div style={{ fontSize: 10.5, color: "var(--ink-3)", marginTop: 1 }}>not in your position · small buys take the largest weights first</div>
+                    <div style={{ fontSize: 10.5, color: "var(--ink-3)", marginTop: 1 }}>not in your position yet</div>
                   )}
                 </div>
                 <div className="gvd-px tnum" style={{ fontSize: 12, color: "var(--ink-3)", flex: "none" }}>
@@ -357,15 +376,18 @@ export function GroveDetailView({
 
         {/* Rebalance history, collapsed to its one-line truth by default: the
             summary IS the claim ("nothing has ever touched this basket", or
-            the count and last date). The receipts are one tap away, each row
-            linking to its transaction. */}
-        <div style={panel({ padding: rebalOpen ? "15px 18px 12px" : "15px 18px" })}>
+            the count — the last DATE lives in the footer, once). The receipts
+            are one tap away, each row linking to its transaction. Panel
+            padding never changes with open state; the collapse owns all the
+            moving height. */}
+        <div style={panel({ padding: "15px 18px" })}>
           <button
+            className="gvd-press"
             onClick={() => setRebalOpen((v) => !v)}
             aria-expanded={rebalOpen}
             style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", background: "none", border: "none", padding: 0, cursor: "pointer", textAlign: "left" }}
           >
-            <span style={{ fontSize: 14, fontWeight: 700, color: "var(--ink)" }}>Rebalances</span>
+            <span style={heading}>Rebalances</span>
             <span className="tnum" style={{ marginLeft: "auto", fontSize: 11, color: "var(--ink-3)" }}>
               {!open
                 ? "starts when the grove opens"
@@ -373,65 +395,70 @@ export function GroveDetailView({
                   ? "reading the chain…"
                   : historyRows.length === 0
                     ? "none yet, straight from the chain"
-                    : `${historyRows.length} on-chain · last ${fmtWhen(historyRows[0].at)}`}
+                    : `${historyRows.length} on-chain`}
             </span>
-            <span style={{ color: "var(--ink-3)", display: "inline-flex" }}>
-              <PIcon name={rebalOpen ? "ph-caret-up" : "ph-caret-down"} size={13} />
+            <span className="gvd-chev" data-open={rebalOpen}>
+              <PIcon name="ph-caret-down" size={13} />
             </span>
           </button>
-          {rebalOpen && (!open ? (
-            <div style={{ fontSize: 12, color: "var(--ink-3)", lineHeight: 1.55, marginTop: 8 }}>
-              Starts recording the moment this grove opens on-chain.
-            </div>
-          ) : history.isError ? (
-            <div style={{ fontSize: 12, color: "var(--ink-3)", lineHeight: 1.55, marginTop: 8 }}>
-              Couldn&rsquo;t read the chain just now. The history is still there; this page just can&rsquo;t show it this minute.
-            </div>
-          ) : historyRows === null ? (
-            <div style={{ fontSize: 12, color: "var(--ink-3)", marginTop: 8 }}>reading the chain&hellip;</div>
-          ) : historyRows.length === 0 ? (
-            <div style={{ fontSize: 12, color: "var(--ink-2)", lineHeight: 1.55, marginTop: 8 }}>
-              Nothing has ever touched this basket. Every rebalance is its own transaction, and each one lands here the moment it happens.
-            </div>
-          ) : (
-            <>
-              {historyRows.slice(0, 8).map((r, i) => (
-                <div key={`${r.txHash}-${r.kind}-${i}`} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderTop: i === 0 ? "none" : "1px solid var(--line-2)" }}>
-                  <span aria-hidden style={{ width: 28, height: 28, borderRadius: 9, flex: "none", display: "grid", placeItems: "center", background: "var(--panel-2)", border: "1px solid var(--line)", color: "var(--ink-2)" }}>
-                    <PIcon name={r.kind === "rebalance" ? "ph-arrows-clockwise" : "ph-sliders-horizontal"} size={14} />
-                  </span>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 12.5, fontWeight: 650 }}>
-                      {r.kind === "rebalance" ? "Basket realigned" : `Recipe updated to v${r.version}`}
-                    </div>
-                    <div className="tnum" style={{ fontSize: 10.5, color: "var(--ink-3)" }}>
-                      {r.kind === "rebalance" ? (r.user ? `for ${short(r.user)}` : "") : r.names ? `${r.names} names` : ""}
-                    </div>
-                  </div>
-                  <div style={{ textAlign: "right", flex: "none" }}>
-                    <div className="tnum" style={{ fontSize: 11.5, color: "var(--ink-2)" }}>{fmtWhen(r.at)}</div>
-                    <a className="tnum" href={`${EXPLORER}/tx/${r.txHash}`} target="_blank" rel="noopener noreferrer" style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 10.5, color: "var(--ink-3)", textDecoration: "none" }}>
-                      transaction <PIcon name="ph-arrow-square-out" size={10} />
-                    </a>
-                  </div>
+          <div className="gvd-clp" data-open={rebalOpen}>
+            <div aria-hidden={!rebalOpen} inert={!rebalOpen}>
+              {!open ? (
+                <div style={{ fontSize: 12, color: "var(--ink-3)", lineHeight: 1.55, marginTop: 8 }}>
+                  Starts recording the moment this grove opens on-chain.
                 </div>
-              ))}
-              {historyRows.length > 8 && GROVE_MANAGER && (
-                <a
-                  href={`${EXPLORER}/address/${GROVE_MANAGER}?tab=logs`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  style={{ display: "block", fontSize: 11, color: "var(--ink-3)", paddingTop: 8, borderTop: "1px solid var(--line-2)", textDecoration: "none" }}
-                >
-                  and {historyRows.length - 8} more on the explorer
-                </a>
+              ) : history.isError ? (
+                <div style={{ fontSize: 12, color: "var(--ink-3)", lineHeight: 1.55, marginTop: 8 }}>
+                  Couldn&rsquo;t read the chain just now. The history is still there; this page just can&rsquo;t show it this minute.
+                </div>
+              ) : historyRows === null ? (
+                <div style={{ fontSize: 12, color: "var(--ink-3)", marginTop: 8 }}>reading the chain&hellip;</div>
+              ) : historyRows.length === 0 ? (
+                <div style={{ fontSize: 12, color: "var(--ink-2)", lineHeight: 1.55, marginTop: 8 }}>
+                  Nothing has ever touched this basket. Every rebalance is its own transaction, and each one lands here the moment it happens.
+                </div>
+              ) : (
+                <>
+                  {historyRows.slice(0, 8).map((r, i) => (
+                    <div key={`${r.txHash}-${r.kind}-${i}`} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderTop: i === 0 ? "none" : "1px solid var(--line-2)" }}>
+                      <span aria-hidden style={{ width: 28, height: 28, borderRadius: 9, flex: "none", display: "grid", placeItems: "center", background: "var(--panel-2)", border: "1px solid var(--line)", color: "var(--ink-2)" }}>
+                        <PIcon name={r.kind === "rebalance" ? "ph-arrows-clockwise" : "ph-sliders-horizontal"} size={14} />
+                      </span>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 12.5, fontWeight: 650 }}>
+                          {r.kind === "rebalance" ? "Basket realigned" : `Recipe updated to v${r.version}`}
+                        </div>
+                        <div className="tnum" style={{ fontSize: 10.5, color: "var(--ink-3)" }}>
+                          {r.kind === "rebalance" ? (r.user ? `for ${short(r.user)}` : "") : r.names ? `${r.names} names` : ""}
+                        </div>
+                      </div>
+                      <div style={{ textAlign: "right", flex: "none" }}>
+                        <div className="tnum" style={{ fontSize: 11.5, color: "var(--ink-2)" }}>{fmtWhen(r.at)}</div>
+                        <a className="tnum gvd-press" href={`${EXPLORER}/tx/${r.txHash}`} target="_blank" rel="noopener noreferrer" style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 10.5, color: "var(--ink-3)", textDecoration: "none" }}>
+                          transaction <PIcon name="ph-arrow-square-out" size={10} />
+                        </a>
+                      </div>
+                    </div>
+                  ))}
+                  {historyRows.length > 8 && GROVE_MANAGER && (
+                    <a
+                      className="gvd-press"
+                      href={`${EXPLORER}/address/${GROVE_MANAGER}?tab=logs`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{ display: "block", fontSize: 11, color: "var(--ink-3)", paddingTop: 8, borderTop: "1px solid var(--line-2)", textDecoration: "none" }}
+                    >
+                      and {historyRows.length - 8} more on the explorer
+                    </a>
+                  )}
+                </>
               )}
-            </>
-          ))}
+            </div>
+          </div>
         </div>
 
       <div style={panel({ padding: "15px 18px 4px" })}>
-          <div style={label}>Questions</div>
+          <div style={heading}>Questions</div>
           <div style={{ marginTop: 6 }}>
             <Faq q="What am I actually buying?" a={g.longThesis} />
             {bt && (
@@ -458,22 +485,26 @@ export function GroveDetailView({
               q="Who actually holds my basket?"
               a={
                 <div>
-                  <div style={{ marginBottom: 6 }}>
-                    You do. The stocks sit in your own account{smartAccount ? <> (<AddrChip addr={smartAccount} />)</> : null}, and only you can move
-                    them. We can pause new buys as a safety switch, and that is all: no function exists that lets
-                    us touch your holdings.
-                  </div>
-                  <div>Buying, holding, and exiting at a loss cost $0. The only fee is {feePct}% of profit, taken at exit, never from the principal.</div>
+                  You do. The stocks sit in your own account{smartAccount ? <> (<AddrChip addr={smartAccount} />)</> : null}, not in a pool and not
+                  behind a wrapper token. If management is on, the GroveManager contract holds one standing
+                  permission: it can sell and rebuy inside this basket to hold the published weights. Every
+                  price it trades at is checked against Chainlink on-chain, every trade runs on a whitelisted
+                  venue, and it cannot send anything anywhere but your own account. You can revoke that
+                  permission instantly, even while the contract is paused, and only you can withdraw.
                 </div>
               }
             />
             <Faq
               q="Does it rebalance?"
-              a={`Only if you switch it on, in the Auto-manage card on this page. ${g.rebalancePolicy.charAt(0).toUpperCase()}${g.rebalancePolicy.slice(1)}.\n\nWhen it is on, Vera checks the basket every six hours and realigns it only when it has genuinely drifted, inside caps the contract enforces. Every rebalance is its own transaction in the Rebalances list above; an empty list means nothing has ever touched the basket.`}
+              a={
+                open
+                  ? "Yes. From the moment you buy, Vera keeps your position at the published weights: she checks every six hours and acts during US market hours when the basket has genuinely drifted. Everyone in the grove is managed together, in proportion to what they hold.\n\nYou can switch management off at buy time or any time after, instantly, in the Managed card. Every rebalance is its own transaction in the list above; an empty list means nothing has ever touched the basket."
+                  : "Yes, once it opens. Management begins when the grove opens on-chain: from your first buy, Vera keeps your position at the published weights, checking every six hours and acting during US market hours when it has genuinely drifted.\n\nYou can switch management off at buy time or any time after, instantly, in the Managed card."
+              }
             />
             <Faq
               q="How do I get my money out?"
-              a={"Press Exit and choose how much: a quarter, half, three quarters, or everything. It sells in one transaction and returns cash to your account.\n\nSelling everything closes the position. The fee applies only to profit above what you paid, and is zero at a loss."}
+              a={"Press Exit and choose how much: a quarter, half, three quarters, or everything. It sells in one transaction and returns cash to your account.\n\nSelling everything closes the position."}
             />
             <Faq
               q="What are the risks?"
@@ -497,8 +528,8 @@ export function GroveDetailView({
           <div style={panel({ padding: "16px 18px" })}>
             {held ? (
               <>
-                <div style={label}>Your position</div>
-                <div className="serif" style={{ fontSize: 27, fontWeight: 500, marginTop: 5, letterSpacing: "-.01em" }}>
+                <div style={caption}>Your position</div>
+                <div className="tnum" style={{ fontSize: 26, fontWeight: 650, marginTop: 5, letterSpacing: "-.01em" }}>
                   {unpriced ? "—" : usd(marketValue)}
                 </div>
                 <div className="tnum" style={{ fontSize: 11.5, color: unpriced ? "var(--ink-3)" : dcol(pnl), marginTop: 2 }}>
@@ -506,22 +537,24 @@ export function GroveDetailView({
                 </div>
                 <div style={{ margin: "8px 0 2px" }}>
                   <Row k="You put in" v={usd(basis)} />
+                  {/* The user's own computed number, not fee terms — the terms
+                      live in the stats band, once. */}
                   {!unpriced && (
-                    <Row k="Fee if you exit now" v={feeNow > 0 ? usd(feeNow) : "$0.00"} sub={feeNow > 0 ? `${feePct}% of profit` : "no profit, no fee"} />
+                    <Row k="Fee if you exit now" v={feeNow > 0 ? usd(feeNow) : "$0.00"} sub={feeNow > 0 ? undefined : "no profit, no fee"} />
                   )}
                 </div>
               </>
             ) : (
               <>
-                <div style={label}>Start</div>
+                <div style={{ fontSize: 15, fontWeight: 700, marginTop: 0 }}>Own this basket</div>
                 <p style={{ margin: "8px 0 2px", fontSize: 12.5, lineHeight: 1.55, color: "var(--ink-2)" }}>
-                  From {usd0(g.minBuyUsd)}. No entry fee, gas on us. The only fee is {feePct}% of profit when
-                  you exit.
+                  From {usd0(g.minBuyUsd)}, settled straight into your own wallet.
                 </p>
               </>
             )}
             <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
               <button
+                className="gvd-press"
                 onClick={onBuy}
                 disabled={!open}
                 style={{
@@ -541,6 +574,7 @@ export function GroveDetailView({
               </button>
               {held && (
                 <button
+                  className="gvd-press"
                   onClick={onExit}
                   style={{ flex: 1, height: 46, borderRadius: 13, fontSize: 13.5, fontWeight: 600, border: "1px solid var(--line)", background: "transparent", color: "var(--ink)", cursor: "pointer" }}
                 >
@@ -553,6 +587,7 @@ export function GroveDetailView({
                 {/* The per-name breakdown, one tap away. Most visits only need
                     the headline above. */}
                 <button
+                  className="gvd-press"
                   onClick={() => setBasketOpen((v) => !v)}
                   aria-expanded={basketOpen}
                   style={{ display: "flex", alignItems: "center", gap: 6, width: "100%", marginTop: 12, paddingTop: 10, border: "none", borderTop: "1px solid var(--line-2)", background: "none", cursor: "pointer", textAlign: "left" }}
@@ -560,12 +595,12 @@ export function GroveDetailView({
                   <span style={{ fontSize: 11.5, fontWeight: 700, color: "var(--ink-2)" }}>
                     Your {heldBySymbol.size} {heldBySymbol.size === 1 ? "holding" : "holdings"}
                   </span>
-                  <span style={{ marginLeft: "auto", color: "var(--ink-3)", display: "inline-flex" }}>
-                    <PIcon name={basketOpen ? "ph-caret-up" : "ph-caret-down"} size={13} />
+                  <span className="gvd-chev" data-open={basketOpen} style={{ marginLeft: "auto" }}>
+                    <PIcon name="ph-caret-down" size={13} />
                   </span>
                 </button>
-                {basketOpen && (
-                  <>
+                <div className="gvd-clp" data-open={basketOpen}>
+                  <div aria-hidden={!basketOpen} inert={!basketOpen}>
                     <div style={{ marginTop: 4 }}>
                       {[...heldBySymbol.entries()]
                         .map(([sym, qty]) => {
@@ -591,11 +626,11 @@ export function GroveDetailView({
                     </div>
                     {heldBySymbol.size < g.components.length && (
                       <div style={{ fontSize: 10.5, color: "var(--ink-3)", lineHeight: 1.5, marginTop: 5 }}>
-                        {g.components.length - heldBySymbol.size} of the grove&rsquo;s names aren&rsquo;t in your position yet. Small buys take the largest weights first; buying more adds them.
+                        {g.components.length - heldBySymbol.size} of the grove&rsquo;s names aren&rsquo;t in your position yet. Buying more adds them.
                       </div>
                     )}
-                  </>
-                )}
+                  </div>
+                </div>
                 <div className="tnum" style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 5, fontSize: 10.5, color: "var(--ink-3)", marginTop: 10 }}>
                   in your own account{smartAccount ? <AddrChip addr={smartAccount} /> : null}
                 </div>
@@ -607,7 +642,7 @@ export function GroveDetailView({
             )}
           </div>
 
-          <GroveAutoPanel g={g} held={held} autoFocus={autoFocus} positionUsd={held && !unpriced ? marketValue : undefined} />
+          <GroveAutoPanel g={g} held={held} autoFocus={autoFocus} />
         </div>
       </div>
 
@@ -615,7 +650,7 @@ export function GroveDetailView({
       {/* ── facts footer ── */}
       <div className="mono" style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap", padding: "2px 6px 4px", fontSize: 11.5, color: "var(--ink-3)", borderTop: "1px solid var(--line-2)", paddingTop: 12 }}>
         {GROVE_MANAGER && (
-          <a href={`${EXPLORER}/address/${GROVE_MANAGER}`} target="_blank" rel="noopener noreferrer" style={{ display: "inline-flex", alignItems: "center", gap: 5, color: "var(--ink-3)", textDecoration: "none" }}>
+          <a className="gvd-press" href={`${EXPLORER}/address/${GROVE_MANAGER}`} target="_blank" rel="noopener noreferrer" style={{ display: "inline-flex", alignItems: "center", gap: 5, color: "var(--ink-3)", textDecoration: "none" }}>
             <PIcon name="ph-arrow-square-out" size={13} /> contract {short(GROVE_MANAGER)}
           </a>
         )}

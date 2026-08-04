@@ -371,29 +371,6 @@ export async function latestRuns(limit = 30): Promise<RebalanceRunRow[]> {
   return (results ?? []).map(rowToRun);
 }
 
-/** Consent-meter dedup read (R8): was this notice already sent for this exact
- *  on-chain managerMovedUsdg value? Re-signing enableAuto resets the spent
- *  counter, so the value doubles as the budget epoch. Returns true on ledger
- *  failure — suppressing during an outage beats duplicate sends; the notice
- *  retries next pass. */
-export async function wasBudgetNoticeSent(
-  user: string,
-  groveId: string,
-  movedUsdg: bigint,
-  kind: BudgetNoticeKind,
-): Promise<boolean> {
-  try {
-    const row = await db()
-      .prepare("SELECT 1 AS one FROM rebalance_budget_notices WHERE user = ? AND grove_id = ? AND kind = ? AND moved_usdg = ?")
-      .bind(user.toLowerCase(), groveId, kind, movedUsdg.toString())
-      .first<{ one: number }>();
-    return row !== null;
-  } catch (e) {
-    console.error("[rebalance-ledger] budget notice read failed:", e instanceof Error ? e.message : e);
-    return true;
-  }
-}
-
 /** Was ANY notice of this kind sent recently, regardless of the moved value?
  *  The low-water dedup needs this: every budget-consuming action changes
  *  managerMovedUsdg, so the exact-value key alone would re-notice after each

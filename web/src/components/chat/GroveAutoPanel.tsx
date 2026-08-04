@@ -1,120 +1,114 @@
 "use client";
 
-// Auto-manage, the switch: consent lives on the grove page, never in chat.
+// The managed switch. A grove is a curated vault: depositing IS the consent
+// to manage, so this card is a light switch, not a settings page. ON means
+// Vera keeps the whole position aligned to the published weights until the
+// user exits or flips it off. No budgets, no meters, no renewal chores: the
+// contract's required cap fields are signed at values that never bind
+// (MANAGED_AUTO_CAPS), and the protections that actually guard the money are
+// cap-free anyway (Chainlink band per leg, venue whitelist, non-custody,
+// instant revoke, guardian pause).
 //
-// OFF -> the user picks a per-action budget and a cadence, sees all four hard
-// caps spelled out, and signs ONE sponsored UserOp (standing approvals for the
-// composition + enableAuto). ON -> the caps and usage read back from the
-// contract, and one click revokes instantly — no cooldown, works while paused.
-// SPENT -> the lifetime budget is a consent meter only the user can refill:
-// renewal is its own explicit re-signature (enableAuto resets the spent
-// counter, GroveManager.sol) — never auto-renewed, never pre-checked, never
-// folded into another flow. The contract enforces every cap against the
-// manager; this panel only writes the consent.
+// Five states, HELD consulted first — a live config over an exited position
+// must never pitch management of a basket that no longer exists:
+//   1 grove not open          2 managed and held
+//   3 managed but exited (the orphan a full exit leaves — exits never revoke)
+//   4 held, not managed       5 neither
+// Configs signed in the early narrow-caps era still bind on-chain and
+// throttle Vera; state 2 alone offers the one "Upgrade" re-signature.
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { GroveLive } from "@/hooks/useGroves";
 import { useGroveAuto, useGroveAutoState } from "@/hooks/useGroveAuto";
-import { defaultAutoPerActionUsd } from "@/lib/groveManager";
-import { usd } from "./chatKit";
+import { MANAGED_AUTO_CAPS, isLegacyAutoConfig } from "@/lib/groveManager";
 import { GroveModal, ModalWorking, ModalSuccessIcon, ReceiptRow, ModalButtons, ModalDoneButton, TrustCaption } from "./GroveModal";
 
-const CADENCES = [
-  { label: "Daily", seconds: 86_400 },
-  { label: "Weekly", seconds: 604_800 },
-  { label: "Monthly", seconds: 2_592_000 },
-] as const;
-
-/** Per-holding sell cap per rebalance — fixed, oracle-free blast radius. */
-const FRACTION_BPS = 2_000;
-/** Lifetime budget = this many per-action budgets. A year of monthlies. */
-const LIFETIME_MULTIPLE = 12;
-
-const label: React.CSSProperties = { fontSize: 11, fontWeight: 700, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--ink-3)" };
-
-function cadenceLabel(seconds: number): string {
-  const hit = CADENCES.find((c) => c.seconds === seconds);
-  if (hit) return hit.label.toLowerCase();
-  if (seconds % 86_400 === 0) return `every ${seconds / 86_400} days`;
-  return `every ${Math.round(seconds / 3600)}h`;
+const GVAP_CSS = `
+.gvap-press{transition:transform .16s ease-out}
+.gvap-press:active{transform:scale(.97)}
+@keyframes gvapnote{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+.gvap-note{animation:gvapnote .2s ease-out both}
+@media (prefers-reduced-motion: reduce){
+  .gvap-press{transition:none}
+  .gvap-press:active{transform:none}
+  .gvap-note{animation:none}
 }
+`;
 
-export function GroveAutoPanel({ g, held, autoFocus, positionUsd }: { g: GroveLive; held: boolean; autoFocus?: boolean; positionUsd?: number }) {
+
+export function GroveAutoPanel({ g, held, autoFocus }: { g: GroveLive; held: boolean; autoFocus?: boolean }) {
   const open = g.onChainId !== undefined;
   const state = useGroveAutoState(open ? g.onChainId : undefined);
   const auto = useGroveAuto(g.onChainId, useMemo(() => g.components.map((c) => c.symbol), [g.components]));
 
-  // The suggested per-action budget scales with the position — a flat number
-  // was bigger than a small basket and useless for a large one. The user's
-  // own edit always wins.
-  const [perActionEdit, setPerActionEdit] = useState<number | null>(null);
-  const perAction = perActionEdit ?? (positionUsd && positionUsd > 0 ? defaultAutoPerActionUsd(positionUsd) : 250);
-  const [cadence, setCadence] = useState<number>(604_800);
   const [confirmOpen, setConfirmOpen] = useState(false);
-  // The off-state matches the buy screen's weight: one button over plain
-  // facts; the caps form appears only for the few who want to change them.
-  const [adjusting, setAdjusting] = useState(false);
-  const [renewOpen, setRenewOpen] = useState(false);
+  // True from the moment Stop/Turn it off is pressed, until the next enable.
+  // revoke() resolves without throwing even on failure, so the outcome is
+  // read from the PHASE, never the promise: while set, phase "done" means the
+  // revoke landed and auto.error is a revoke failure that must stay visible.
   const [revoking, setRevoking] = useState(false);
+  // One-time confirmation after a successful revoke, shown instead of the
+  // pitch — a fresh opt-out must not be re-pitched.
+  const justRevoked = revoking && auto.phase === "done";
 
-  // Deep link (?auto=1 / "turn on auto-manage" in chat) lands the eye here.
+  // Deep link (?auto=1 / "manage my basket" in chat) lands the eye here.
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (autoFocus) ref.current?.scrollIntoView({ behavior: "smooth", block: "center" });
   }, [autoFocus]);
 
   const enabled = state.data?.enabled ?? false;
-  const lifetime = perAction * LIFETIME_MULTIPLE;
-  // $50 floor: at $50 the 0.98 cap haircut still clears our $15 minimum move
-  // with real room; the old $20 left $4.60 of plannable headroom and the
-  // feature felt dead. Ours — no venue imposes any minimum.
-  const capOk = Number.isFinite(perAction) && perAction >= 50;
-
-  // The consent meter, from the on-chain numbers. Exhaustion restates the
-  // driver's skip condition VERBATIM (autoRebalance.ts: min(perAction,
-  // remaining) × CAP_HAIRCUT 0.98 < $15 → "lifetime budget exhausted") so this
-  // panel and the driver can never disagree about whether Vera can still act.
-  // The $15 is OUR minimum move, never a venue's.
-  const cfg = enabled ? state.data : undefined;
-  const remainingUsd = cfg ? Math.max(0, cfg.maxTotalUsd - cfg.movedUsd) : 0;
-  const exhausted = !!cfg && Math.min(cfg.maxPerActionUsd, remainingUsd) * 0.98 < 15;
-  const lowWater = !!cfg && !exhausted && cfg.maxTotalUsd > 0 && remainingUsd / cfg.maxTotalUsd <= 0.25;
+  const legacy = !!state.data && isLegacyAutoConfig(state.data);
 
   const startEnable = () => {
+    setRevoking(false);
     auto.reset();
     setConfirmOpen(true);
   };
   const confirmEnable = () => {
-    void auto.enable({
-      maxPerBuyUsdg: BigInt(Math.round(perAction * 1e6)),
-      maxTotalUsdg: BigInt(Math.round(lifetime * 1e6)),
-      minSecondsBetween: BigInt(cadence),
-      maxRebalanceFractionBps: FRACTION_BPS,
-    });
+    void auto.enable(MANAGED_AUTO_CAPS);
   };
-  const startRenew = () => {
-    auto.reset();
-    setRenewOpen(true);
-  };
-  // Renewal re-signs enableAuto with the caps EXACTLY as they sit on-chain —
-  // same consent, and the contract resets the spent counter to zero.
-  const confirmRenew = () => {
-    if (state.data) void auto.enable(state.data.caps);
-  };
-  const doRevoke = async () => {
+  const doRevoke = () => {
     setRevoking(true);
-    await auto.revoke();
-    setRevoking(false);
+    void auto.revoke();
   };
+
+  const ghostBtn: React.CSSProperties = {
+    width: "100%",
+    height: 40,
+    marginTop: 10,
+    borderRadius: 12,
+    fontSize: 13,
+    fontWeight: 600,
+    border: "1px solid var(--line)",
+    background: "transparent",
+    color: auto.busy ? "var(--ink-3)" : "var(--ink)",
+    cursor: auto.busy ? "default" : "pointer",
+  };
+  const solidBtn: React.CSSProperties = {
+    width: "100%",
+    height: 42,
+    marginTop: 10,
+    borderRadius: 12,
+    fontSize: 13.5,
+    fontWeight: 700,
+    background: "var(--panel-2)",
+    border: "1px solid var(--line)",
+    color: auto.busy ? "var(--ink-3)" : "var(--ink)",
+    cursor: auto.busy ? "default" : "pointer",
+  };
+  const revokeError = revoking && auto.error && (
+    <div style={{ fontSize: 11.5, color: "var(--neg)", marginTop: 8, lineHeight: 1.5 }}>{auto.error}</div>
+  );
 
   return (
     <div ref={ref} style={{ background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 20, padding: "15px 18px 16px" }}>
+      <style>{GVAP_CSS}</style>
       <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
-        <div style={label}>Auto-manage</div>
+        <div style={{ fontSize: 14, fontWeight: 700, color: "var(--ink)" }}>Managed</div>
         <span
-          className="tnum"
-          style={{ marginLeft: "auto", fontSize: 10.5, fontWeight: 700, letterSpacing: ".05em", textTransform: "uppercase", padding: "2px 8px", borderRadius: 999, border: "1px solid var(--line)", color: enabled ? "var(--pos)" : "var(--ink-3)" }}
+          style={{ marginLeft: "auto", fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 999, border: "1px solid var(--line)", color: enabled ? "var(--pos)" : "var(--ink-3)", transition: "color .16s ease-out" }}
         >
-          {enabled ? "on" : "off"}
+          {enabled ? "On" : "Off"}
         </span>
       </div>
 
@@ -122,196 +116,102 @@ export function GroveAutoPanel({ g, held, autoFocus, positionUsd }: { g: GroveLi
         <p style={{ margin: "8px 0 0", fontSize: 12, lineHeight: 1.55, color: "var(--ink-3)" }}>
           Available once this grove opens on-chain.
         </p>
-      ) : !held && !enabled ? (
-        <p style={{ margin: "8px 0 0", fontSize: 12, lineHeight: 1.55, color: "var(--ink-3)" }}>
-          Vera realigns a drifted basket back to the published weights, inside hard caps you set. Every action is a
-          transaction in the Rebalances list. Buy this grove first; auto-manage works on an existing basket.
-        </p>
       ) : enabled && state.data ? (
-        <>
-          <div style={{ marginTop: 4 }}>
-            <ReceiptRow k="Per action, at most" v={usd(state.data.maxPerActionUsd)} />
-            <ReceiptRow k="Lifetime budget" v={`${usd(state.data.movedUsd)} used of ${usd(state.data.maxTotalUsd)}`} />
-            <ReceiptRow k="At most every" v={cadenceLabel(state.data.cooldownSeconds)} />
-            <ReceiptRow k="Per holding, per rebalance" v={`${state.data.maxRebalanceFractionBps / 100}% max`} />
-            <ReceiptRow
-              k="Last action"
-              v={state.data.lastActionAt ? new Date(state.data.lastActionAt * 1000).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : "never yet"}
-              muted
-            />
-          </div>
-          {exhausted ? (
-            <>
-              <div style={{ marginTop: 10, padding: "9px 12px", borderRadius: 11, border: "1px solid var(--line)", background: "var(--panel-2)", fontSize: 12, lineHeight: 1.55, color: "var(--ink-2)" }}>
-                <span style={{ fontWeight: 700, color: "var(--ink)" }}>Budget spent. Renew to continue.</span>{" "}
-                Vera moved {usd(state.data.movedUsd)} under this consent and won&apos;t act again until you renew it.
-              </div>
-              <button
-                onClick={startRenew}
-                disabled={auto.busy}
-                style={{ width: "100%", height: 42, marginTop: 10, borderRadius: 12, fontSize: 13.5, fontWeight: 700, background: "var(--panel-2)", border: "1px solid var(--line)", color: auto.busy ? "var(--ink-3)" : "var(--ink)", cursor: auto.busy ? "default" : "pointer" }}
-              >
-                Renew budget
-              </button>
-            </>
-          ) : lowWater ? (
-            <div style={{ fontSize: 11.5, color: "var(--ink-3)", lineHeight: 1.5, marginTop: 8 }}>
-              Budget running down: {usd(remainingUsd)} of {usd(state.data.maxTotalUsd)} left.
+        held ? (
+          <>
+            <p style={{ margin: "8px 0 2px", fontSize: 12, lineHeight: 1.55, color: "var(--ink-2)" }}>
+              Vera holds one revocable permission: keep this position at the published weights. Every move is
+              a public transaction in the Rebalances list.
+            </p>
+            <div style={{ marginTop: 4 }}>
+              <ReceiptRow
+                k="Last action"
+                v={state.data.lastActionAt ? new Date(state.data.lastActionAt * 1000).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : "never yet"}
+                muted
+              />
             </div>
-          ) : null}
-          <button
-            onClick={() => void doRevoke()}
-            disabled={auto.busy}
-            style={{ width: "100%", height: 40, marginTop: 10, borderRadius: 12, fontSize: 13, fontWeight: 600, border: "1px solid var(--line)", background: "transparent", color: auto.busy ? "var(--ink-3)" : "var(--ink)", cursor: auto.busy ? "default" : "pointer" }}
-          >
-            {revoking && auto.busy ? "Turning off…" : "Turn off auto-manage"}
-          </button>
-          <div style={{ fontSize: 10.5, color: "var(--ink-3)", textAlign: "center", marginTop: 6 }}>
-            Instant. No cooldown, works even while the contract is paused.
-          </div>
-          {revoking && auto.error && (
-            <div style={{ fontSize: 11.5, color: "var(--neg)", marginTop: 8, lineHeight: 1.5 }}>{auto.error}</div>
+            {legacy && (
+              <>
+                <div style={{ marginTop: 8, padding: "9px 12px", borderRadius: 11, border: "1px solid var(--line)", background: "var(--panel-2)", fontSize: 12, lineHeight: 1.55, color: "var(--ink-2)" }}>
+                  This position still runs on an early, limited permission: Vera can only move part of it at a
+                  time. One signature replaces the old limits with full management.
+                </div>
+                <button className="gvap-press" onClick={startEnable} disabled={auto.busy} style={{ ...solidBtn, marginTop: 8 }}>
+                  Upgrade to full management
+                </button>
+              </>
+            )}
+            <button className="gvap-press" onClick={doRevoke} disabled={auto.busy} style={ghostBtn}>
+              {revoking && auto.busy ? "Stopping…" : "Stop managing"}
+            </button>
+            <div style={{ fontSize: 10.5, color: "var(--ink-3)", textAlign: "center", marginTop: 6 }}>
+              Instant. No cooldown, works even while the contract is paused.
+            </div>
+            {revokeError}
+          </>
+        ) : (
+          <>
+            <p style={{ margin: "8px 0 2px", fontSize: 12, lineHeight: 1.55, color: "var(--ink-2)" }}>
+              You have exited this grove, but the management permission from your old position is still
+              switched on. It does nothing while you hold nothing. Turn it off now, or leave it for your next
+              deposit.
+            </p>
+            <button className="gvap-press" onClick={doRevoke} disabled={auto.busy} style={ghostBtn}>
+              {revoking && auto.busy ? "Stopping…" : "Turn it off"}
+            </button>
+            {revokeError}
+          </>
+        )
+      ) : held ? (
+        <>
+          {justRevoked ? (
+            <p className="gvap-note" style={{ margin: "8px 0 2px", fontSize: 12, lineHeight: 1.55, color: "var(--ink-2)" }}>
+              Management is off. Your basket stays exactly as you left it.
+            </p>
+          ) : (
+            <p style={{ margin: "8px 0 2px", fontSize: 12, lineHeight: 1.55, color: "var(--ink-2)" }}>
+              Nothing manages this basket right now. It holds exactly what you bought until you say otherwise.
+              One signature turns management on; stopping is always instant.
+            </p>
           )}
+          <button className="gvap-press" onClick={startEnable} disabled={auto.busy} style={solidBtn}>
+            Manage my basket
+          </button>
         </>
       ) : (
-        <>
-          {/* New buys carry this consent inside the buy signature; this card
-              exists for baskets from before that, changed minds, and renewals
-              — so it matches the buy screen's weight: one button over plain
-              facts, the form only behind "Adjust". */}
-          <p style={{ margin: "8px 0 6px", fontSize: 12, lineHeight: 1.55, color: "var(--ink-2)" }}>
-            Every six hours Vera checks this basket against its published weights; she acts during US market
-            hours on weekdays, only on genuine drift, and only after reading the market first: a drift
-            mid-storm waits rather than churns. Every action is a transaction in the Rebalances list, and every
-            cap below is enforced by the contract, not by us.
-          </p>
-          {!adjusting ? (
-            <div style={{ marginTop: 2 }}>
-              <ReceiptRow k="Per action, at most" v={usd(perAction)} />
-              <ReceiptRow k="At most" v={cadenceLabel(cadence)} />
-              <ReceiptRow k="Per holding, per rebalance" v={`${FRACTION_BPS / 100}% max`} muted />
-              <ReceiptRow k="Lifetime budget" v={`${capOk ? usd(lifetime) : "—"} (${LIFETIME_MULTIPLE}× per action)`} muted />
-            </div>
-          ) : (
-            <>
-              <div style={{ display: "flex", gap: 8 }}>
-                <label style={{ flex: 1 }}>
-                  <span style={{ display: "block", fontSize: 10.5, color: "var(--ink-3)", marginBottom: 4 }}>Per action, at most</span>
-                  <div style={{ display: "flex", alignItems: "center", gap: 4, height: 38, padding: "0 10px", borderRadius: 11, border: "1px solid var(--line)", background: "var(--panel-2)" }}>
-                    <span className="tnum" style={{ fontSize: 13, color: "var(--ink-3)" }}>$</span>
-                    <input
-                      className="tnum"
-                      type="number"
-                      min={50}
-                      value={perAction}
-                      onChange={(e) => setPerActionEdit(Number(e.target.value))}
-                      style={{ width: "100%", border: "none", outline: "none", background: "transparent", fontSize: 13.5, fontWeight: 650, color: "var(--ink)" }}
-                    />
-                  </div>
-                </label>
-                <label style={{ flex: 1 }}>
-                  <span style={{ display: "block", fontSize: 10.5, color: "var(--ink-3)", marginBottom: 4 }}>At most</span>
-                  <select
-                    value={cadence}
-                    onChange={(e) => setCadence(Number(e.target.value))}
-                    style={{ width: "100%", height: 38, padding: "0 8px", borderRadius: 11, border: "1px solid var(--line)", background: "var(--panel-2)", fontSize: 13, fontWeight: 600, color: "var(--ink)" }}
-                  >
-                    {CADENCES.map((c) => (
-                      <option key={c.seconds} value={c.seconds}>{c.label}</option>
-                    ))}
-                  </select>
-                </label>
-              </div>
-              <div style={{ fontSize: 10.5, color: "var(--ink-3)", lineHeight: 1.6, marginTop: 8 }}>
-                Also fixed: at most {FRACTION_BPS / 100}% of any single holding per rebalance, and a lifetime budget of{" "}
-                {capOk ? usd(lifetime) : "—"} ({LIFETIME_MULTIPLE}× per action). Turn it off any time, instantly.
-              </div>
-            </>
-          )}
-          <button
-            onClick={startEnable}
-            disabled={!capOk}
-            style={{ width: "100%", height: 42, marginTop: 10, borderRadius: 12, fontSize: 13.5, fontWeight: 700, background: capOk ? "var(--panel-2)" : "var(--line)", border: "1px solid var(--line)", color: capOk ? "var(--ink)" : "var(--ink-3)", cursor: capOk ? "pointer" : "default" }}
-          >
-            Turn on auto-manage
-          </button>
-          {!adjusting && (
-            <button
-              onClick={() => setAdjusting(true)}
-              style={{ display: "block", width: "100%", marginTop: 7, background: "none", border: "none", fontSize: 11, fontWeight: 600, color: "var(--ink-3)", cursor: "pointer", textAlign: "center" }}
-            >
-              Adjust the caps
-            </button>
-          )}
-          {!capOk && <div style={{ fontSize: 11, color: "var(--ink-3)", marginTop: 6, textAlign: "center" }}>Below $50, most actions fall under our $15 minimum move.</div>}
-        </>
+        <p style={{ margin: "8px 0 0", fontSize: 12, lineHeight: 1.55, color: "var(--ink-3)" }}>
+          Every deposit here is managed: Vera keeps it at the published weights. Off at buy time, or any time
+          after, instantly.
+        </p>
       )}
 
       {confirmOpen && (
-        <GroveModal title="Auto-manage" onClose={() => setConfirmOpen(false)} busy={auto.busy}>
+        <GroveModal title="Manage this basket" onClose={() => setConfirmOpen(false)} busy={auto.busy}>
           {auto.phase === "done" ? (
             <>
               <ModalSuccessIcon />
-              <div style={{ textAlign: "center", fontSize: 14.5, fontWeight: 700, marginTop: 10 }}>Auto-manage is on</div>
+              <div style={{ textAlign: "center", fontSize: 14.5, fontWeight: 700, marginTop: 10 }}>Vera is managing it</div>
               <p style={{ margin: "6px 0 0", fontSize: 12.5, lineHeight: 1.55, color: "var(--ink-2)", textAlign: "center" }}>
-                Vera acts only when the basket drifts, only inside your caps, and every action lands in the
-                Rebalances list on this page.
+                Your whole {g.name} position stays aligned to its published weights. Every action lands in the
+                Rebalances list, and you can stop any time, instantly.
               </p>
               <ModalDoneButton />
             </>
           ) : auto.busy ? (
-            <ModalWorking title="Switching auto-manage on" step="One signature: consent and caps, recorded on-chain" />
+            <ModalWorking title="Switching management on" step="One signature: your consent, recorded on-chain" />
           ) : (
             <>
               <p style={{ margin: "2px 0 8px", fontSize: 12.5, lineHeight: 1.55, color: "var(--ink-2)" }}>
-                You are consenting to manager rebalances of your {g.name} basket, inside these caps, each one
-                enforced by the contract on every action:
+                You are authorizing Vera to manage your whole {g.name} basket. She realigns it to the
+                published weights when it genuinely drifts, the same way for everyone in the grove.
               </p>
-              <ReceiptRow k="Per action, at most" v={usd(perAction)} strong />
-              <ReceiptRow k="At most" v={cadenceLabel(cadence)} />
-              <ReceiptRow k="Per holding, per rebalance" v={`${FRACTION_BPS / 100}% max`} />
-              <ReceiptRow k="Lifetime budget" v={usd(lifetime)} />
-              <ReceiptRow k="Withdrawing consent" v="instant, any time" muted />
+              <ReceiptRow k="Every action" v="a public transaction" />
+              <ReceiptRow k="Every price" v="checked against Chainlink on-chain" />
+              <ReceiptRow k="Your funds" v="stay in your own account" />
+              <ReceiptRow k="Stopping" v="instant, any time" strong />
               {auto.error && <div style={{ fontSize: 11.5, color: "var(--neg)", margin: "8px 0 0", lineHeight: 1.5 }}>{auto.error}</div>}
-              <TrustCaption>Only you can revoke, and selling always stays yours.</TrustCaption>
+              <TrustCaption>Only you can stop it, and only you can withdraw.</TrustCaption>
               <ModalButtons confirmLabel="Confirm and sign" onConfirm={confirmEnable} />
-            </>
-          )}
-        </GroveModal>
-      )}
-
-      {/* Renewal is a deliberate re-signature and nothing else: it restates
-          every cap and the spend before asking, and it never rides inside
-          another flow. ("N actions" is not on-chain — only the moved total is,
-          so only the total is stated.) */}
-      {renewOpen && state.data && (
-        <GroveModal title="Renew auto-manage" onClose={() => setRenewOpen(false)} busy={auto.busy}>
-          {auto.phase === "done" ? (
-            <>
-              <ModalSuccessIcon />
-              <div style={{ textAlign: "center", fontSize: 14.5, fontWeight: 700, marginTop: 10 }}>Budget renewed</div>
-              <p style={{ margin: "6px 0 0", fontSize: 12.5, lineHeight: 1.55, color: "var(--ink-2)", textAlign: "center" }}>
-                Same caps, a fresh {usd(state.data.maxTotalUsd)} lifetime budget. The spent counter is back to
-                zero, on-chain.
-              </p>
-              <ModalDoneButton />
-            </>
-          ) : auto.busy ? (
-            <ModalWorking title="Renewing auto-manage" step="One signature: same caps, a fresh lifetime budget" />
-          ) : (
-            <>
-              <p style={{ margin: "2px 0 8px", fontSize: 12.5, lineHeight: 1.55, color: "var(--ink-2)" }}>
-                Vera moved {usd(state.data.movedUsd)} under the old budget. Renewing signs the same consent
-                again, with the same caps, and starts a fresh budget: the old one&apos;s spend resets to zero.
-              </p>
-              <ReceiptRow k="Per action, at most" v={usd(state.data.maxPerActionUsd)} strong />
-              <ReceiptRow k="At most" v={cadenceLabel(state.data.cooldownSeconds)} />
-              <ReceiptRow k="Per holding, per rebalance" v={`${state.data.maxRebalanceFractionBps / 100}% max`} />
-              <ReceiptRow k="Fresh lifetime budget" v={usd(state.data.maxTotalUsd)} />
-              <ReceiptRow k="Withdrawing consent" v="instant, any time" muted />
-              {auto.error && <div style={{ fontSize: 11.5, color: "var(--neg)", margin: "8px 0 0", lineHeight: 1.5 }}>{auto.error}</div>}
-              <TrustCaption>Only you can revoke — and selling always stays yours.</TrustCaption>
-              <ModalButtons confirmLabel="Renew and sign" onConfirm={confirmRenew} />
             </>
           )}
         </GroveModal>

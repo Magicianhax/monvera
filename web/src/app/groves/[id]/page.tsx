@@ -378,8 +378,9 @@ export default async function GrovePage({ params }: { params: Promise<{ id: stri
           </div>
           <div className={s.mechRows}>
             <p className={s.mechRow}>
-              <b>Custody:</b> your own wallet holds every share — no wrapper token, no pooled
-              fund, no function that can touch your holdings.
+              <b>Custody:</b> your own wallet holds every share, with no wrapper token and no
+              pooled fund. Management is a permission you grant at deposit and can revoke
+              instantly; every move it makes is a public transaction, price-checked on-chain.
             </p>
             <p className={s.mechRow}>
               <b>Fee basis:</b> your own cost, per wallet, on-chain — the {feePct}% applies only

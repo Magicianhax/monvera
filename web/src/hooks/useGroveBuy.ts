@@ -21,7 +21,7 @@ import { getSmartAccountClient, sendSponsoredCalls } from "@/lib/aa";
 import { buildPermitCall } from "@/lib/permit";
 import { typedDataSigner } from "@/lib/arcusTrade";
 import {
-  defaultAutoCaps,
+  MANAGED_AUTO_CAPS,
   GROVE_MANAGER,
   GROVE_MANAGER_ABI,
   buildEnableAutoCalls,
@@ -213,22 +213,29 @@ export function useGroveBuy(): UseGroveBuy {
           smartUsdg,
         );
 
-        // Default-on auto-manage rides in the SAME UserOp as the buy: consent,
-        // caps, and standing approvals land atomically with the basket, so
-        // every depositor is managed from the first block — unless they
-        // unticked, or already carry an AutoConfig (re-signing would RESET
-        // their lifetime budget without them asking).
+        // The managed-vault consent rides in the SAME UserOp as the buy:
+        // deposit = managed, whole position, from the first block — unless
+        // they unticked, or already carry an AutoConfig (never re-sign one
+        // unasked).
         let autoEnabled = false;
         if (autoManage) {
-          const [alreadyOn] = await client.readContract({
-            address: GROVE_MANAGER as Address,
-            abi: GROVE_MANAGER_ABI,
-            functionName: "autoConfigs",
-            args: [smartAccount as Address, BigInt(q.onChainId)],
-          });
-          if (!alreadyOn) {
-            calls.push(...buildEnableAutoCalls(q.onChainId, defaultAutoCaps(Number(q.totalInUsdg) / 1e6), autoManage.tokens));
-            autoEnabled = true;
+          // Never abort a signed buy over this read: a transient RPC failure
+          // skips the enable (the buy proceeds unmanaged, autoEnabled stays
+          // false so the success copy claims nothing, and the Managed card
+          // can switch it on any time).
+          try {
+            const [alreadyOn] = await client.readContract({
+              address: GROVE_MANAGER as Address,
+              abi: GROVE_MANAGER_ABI,
+              functionName: "autoConfigs",
+              args: [smartAccount as Address, BigInt(q.onChainId)],
+            });
+            if (!alreadyOn) {
+              calls.push(...buildEnableAutoCalls(q.onChainId, MANAGED_AUTO_CAPS, autoManage.tokens));
+              autoEnabled = true;
+            }
+          } catch (err) {
+            console.error("[grove-buy] consent read failed; buying unmanaged", err);
           }
         }
 

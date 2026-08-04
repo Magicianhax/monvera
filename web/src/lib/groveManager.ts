@@ -184,26 +184,39 @@ export interface AutoCaps {
   maxRebalanceFractionBps: number;
 }
 
-/** The default per-action budget for a position of this size: a fifth of it,
- *  floored so small baskets still clear the driver's minimum turnover. */
-export function defaultAutoPerActionUsd(positionUsd: number): number {
-  return Math.max(50, Math.ceil(positionUsd * 0.2));
-}
+/** The managed-vault consent: one signature, the WHOLE position, no meters.
+ *  A grove is a curated basket users deposit into precisely so it gets
+ *  managed — budgets and renewal chores are not a product, so the contract's
+ *  required cap fields are signed at values that never bind ($1B budgets,
+ *  full per-holding freedom, one action per six-hour window at most). The
+ *  protections that actually guard the money are unchanged and cap-free:
+ *  the Chainlink band on every leg, the venue whitelist, non-custody, the
+ *  instant revoke, and the guardian pause. */
+export const MANAGED_AUTO_CAPS: AutoCaps = {
+  maxPerBuyUsdg: BigInt(1_000_000_000) * BigInt(1_000_000), // $1B: never binds
+  maxTotalUsdg: BigInt(1_000_000_000) * BigInt(1_000_000),
+  minSecondsBetween: BigInt(21_600), // at most once per driver window
+  maxRebalanceFractionBps: 10_000, // whole holdings may rotate (delistings)
+};
 
-/** House default auto-manage consent, SIZED TO THE MONEY — a flat number was
- *  wrong twice at once: bigger than a small deposit and too small to ever
- *  realign a large one. Per action a fifth of the buy (min $50), lifetime a
- *  year of monthlies (12 actions), weekly at most, never more than 20% of a
- *  single holding. One place, so the copy that promises these numbers can
- *  never drift from what gets signed. */
-export function defaultAutoCaps(positionUsd: number): AutoCaps {
-  const perActionUsd = defaultAutoPerActionUsd(positionUsd);
-  return {
-    maxPerBuyUsdg: BigInt(perActionUsd) * BigInt(1_000_000),
-    maxTotalUsdg: BigInt(perActionUsd * 12) * BigInt(1_000_000),
-    minSecondsBetween: BigInt(604_800), // weekly at most
-    maxRebalanceFractionBps: 2_000, // 20% of any single holding per rebalance
-  };
+/** True when an on-chain AutoConfig predates the managed-vault consent (the
+ *  early narrow-caps era). ANY field that still throttles Vera marks it — a
+ *  narrow fraction or a weekly cooldown throttles exactly as hard as a small
+ *  budget. The budget term compares against $1M (far above every cap the old
+ *  UI could produce, far below MANAGED_AUTO_CAPS); fraction and cooldown
+ *  compare against the managed consent itself. */
+export function isLegacyAutoConfig(cfg: {
+  enabled: boolean;
+  maxTotalUsd: number;
+  maxRebalanceFractionBps: number;
+  cooldownSeconds: number;
+}): boolean {
+  return (
+    cfg.enabled &&
+    (cfg.maxTotalUsd < 1_000_000 ||
+      cfg.maxRebalanceFractionBps < MANAGED_AUTO_CAPS.maxRebalanceFractionBps ||
+      cfg.cooldownSeconds > Number(MANAGED_AUTO_CAPS.minSecondsBetween))
+  );
 }
 
 /**

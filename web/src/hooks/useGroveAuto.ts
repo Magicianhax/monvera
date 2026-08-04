@@ -28,10 +28,6 @@ const client = createPublicClient({ chain, transport: http(RPC_URL) });
 
 export interface GroveAutoState {
   enabled: boolean;
-  /** The caps exactly as they sit on-chain, in signable form — a renewal
-   *  passes these straight back to enable() rather than rebuilding raw
-   *  values from the display numbers below. */
-  caps: AutoCaps;
   /** USD (not raw): what one action may move / the lifetime budget / spent. */
   maxPerActionUsd: number;
   maxTotalUsd: number;
@@ -59,12 +55,6 @@ export function useGroveAutoState(onChainId: number | undefined) {
         });
       return {
         enabled,
-        caps: {
-          maxPerBuyUsdg: maxPerBuy,
-          maxTotalUsdg: maxTotal,
-          minSecondsBetween: cooldown,
-          maxRebalanceFractionBps: Number(fractionBps),
-        },
         maxPerActionUsd: Number(maxPerBuy) / 1e6,
         maxTotalUsd: Number(maxTotal) / 1e6,
         movedUsd: Number(moved) / 1e6,

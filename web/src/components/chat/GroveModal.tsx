@@ -9,7 +9,7 @@
 // animation values (Emil says 0.97/300ms, house says 0.94/340ms) would buy a
 // 40ms delta at the cost of this being the one modal in the app that moves
 // differently, so it reuses the house motion exactly.
-import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { PIcon } from "./chatKit";
 import { TokenLogo } from "@/components/lite/TokenLogo";
@@ -24,6 +24,16 @@ import fx from "@/components/lite/screens/conveyor.module.css";
 const CloseCtx = createContext<{ close: () => void; busy: boolean }>({ close: () => {}, busy: false });
 export const useGroveModalClose = () => useContext(CloseCtx).close;
 const useModalBusy = () => useContext(CloseCtx).busy;
+
+const subscribeNever = () => () => {};
+const snapshotTrue = () => true;
+const snapshotFalse = () => false;
+
+const GVM_PRESS_CSS = `
+.gvm-press{transition:transform .16s ease-out}
+.gvm-press:active{transform:scale(.97)}
+@media (prefers-reduced-motion: reduce){.gvm-press{transition:none}.gvm-press:active{transform:none}}
+`;
 
 export function GroveModal({
   title,
@@ -61,14 +71,15 @@ export function GroveModal({
   // THAT box (off-screen-low on desktop) and its scrim never covered the whole
   // viewport, leaving the page behind it clickable. The root has no transform,
   // keeps the CSS variables, and keeps the `.mvm .fadein` bottom-sheet styles.
-  const [host, setHost] = useState<HTMLElement | null>(null);
-  useEffect(() => {
-    setHost(
-      (document.querySelector(".mvm[data-mode]") as HTMLElement | null) ??
+  // Hydration gate via useSyncExternalStore (the canonical isMounted): the
+  // server snapshot is false, the client snapshot true, so the query runs
+  // only in the browser and no effect-setState render cascade is needed.
+  const mounted = useSyncExternalStore(subscribeNever, snapshotTrue, snapshotFalse);
+  const host = mounted
+    ? ((document.querySelector(".mvm[data-mode]") as HTMLElement | null) ??
         (document.querySelector(".mvc[data-mode]") as HTMLElement | null) ??
-        document.body,
-    );
-  }, []);
+        document.body)
+    : null;
   if (!host) return null;
 
   return createPortal(
@@ -169,7 +180,7 @@ export function ModalWorking({ title, step, symbols }: { title: string; step?: s
       <div className="serif" style={{ fontSize: 19, fontWeight: 500, marginTop: 14 }}>{title}</div>
       <div style={{ fontSize: 13, color: "var(--ink-2)", marginTop: 5, minHeight: 18 }}>{step ?? "Working…"}</div>
       <div style={{ fontSize: 11, color: "var(--ink-3)", marginTop: 12 }}>
-        {many ? "One transaction — the whole basket settles together, or not at all." : "Keep this window open — this usually takes a few seconds."}
+        {many ? "One transaction: the whole basket settles together, or not at all." : "Keep this window open. This usually takes a few seconds."}
       </div>
     </div>
   );
@@ -234,12 +245,16 @@ export function ReceiptRow({
 export function ModalDoneButton() {
   const close = useGroveModalClose();
   return (
+    <>
+    <style>{GVM_PRESS_CSS}</style>
     <button
+      className="gvm-press"
       onClick={close}
       style={{ display: "block", width: "100%", height: 46, marginTop: 16, borderRadius: 13, fontSize: 14, fontWeight: 700, background: "var(--panel-2)", border: "1px solid var(--line)", color: "var(--ink)", cursor: "pointer" }}
     >
       Done
     </button>
+    </>
   );
 }
 
@@ -271,7 +286,9 @@ export function ModalButtons({
   const busy = useModalBusy();
   return (
     <div style={{ display: "flex", gap: 10 }}>
+      <style>{GVM_PRESS_CSS}</style>
       <button
+        className="gvm-press"
         onClick={onCancel ?? close}
         disabled={busy}
         style={{ flex: "0 0 35%", height: 46, borderRadius: 13, fontSize: 13.5, fontWeight: 600, background: "transparent", border: "1px solid var(--line)", color: busy ? "var(--ink-3)" : "var(--ink-2)", cursor: busy ? "default" : "pointer" }}
@@ -279,9 +296,9 @@ export function ModalButtons({
         Cancel
       </button>
       <button
+        className="tnum gvm-press"
         onClick={onConfirm}
         disabled={disabled}
-        className="tnum"
         style={{
           flex: 1,
           height: 46,
