@@ -36,10 +36,14 @@ const COMPOSITION_UPDATED = parseAbiItem(
 const TOPIC_REBALANCED = encodeEventTopics({ abi: [REBALANCED] })[0];
 const TOPIC_COMPOSITION = encodeEventTopics({ abi: [COMPOSITION_UPDATED] })[0];
 
-// The current GroveManager (0xf0b1a694…e5a6) was created in this block
-// (tx 0x1d0b5b71…, 2026-07-27) — the floor for the RPC fallback scan, so a
+// The current GroveManager (0x5ee5df3e…3fb8) was created in this block
+// (tx 0x6c999122…, 2026-08-04) — the floor for the RPC fallback scan, so a
 // Blockscout outage never triggers a whole-chain sweep.
-const DEPLOY_BLOCK = BigInt(process.env.GROVE_MANAGER_DEPLOY_BLOCK || "21036427");
+//
+// MUST be re-pinned with every manager redeploy. Left at the previous
+// manager's block (21036427) this scans ~6.3M blocks in 10k chunks on the
+// fallback path, which is the shape of the RPC bill nobody wants.
+const DEPLOY_BLOCK = BigInt(process.env.GROVE_MANAGER_DEPLOY_BLOCK || "27289241");
 
 const CHUNK = BigInt(9_999);
 // Gentle on purpose: the public RPC 429s Cloudflare egress fast, and this path

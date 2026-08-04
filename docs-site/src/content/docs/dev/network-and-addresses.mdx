@@ -26,6 +26,7 @@ Public RPC caps `eth_getLogs` at 10,000 blocks per request, and the Blockscout i
 | Contract | Address | What it backs |
 | --- | --- | --- |
 | VeraRecord | [`0x7ff1a5ee19330c165146488a7ad8af6cb41da1df`](https://robinhoodchain.blockscout.com/address/0x7ff1a5ee19330c165146488a7ad8af6cb41da1df) | `record(...)`, `agentSigner()`, `committed(planId)`; emits `RecommendationCommitted` and `AllocationExecuted`; EIP-712 domain `VeraRecord` |
+| GroveManager | [`0x5ee5df3e027fd5d9a3fbba4cb19b0edeb4b33fb8`](https://robinhoodchain.blockscout.com/address/0x5ee5df3e027fd5d9a3fbba4cb19b0edeb4b33fb8) | Buys, exits and manages [Groves](/use/groves/) into your own wallet; `positionOf`, `groveComposition`, `buy`, `exit`; emits `Bought`, `Exited`, `Rebalanced`. `feeBps` and `treasury` are immutable, and no function can move a user's holdings |
 | IdentityRegistry | [`0x751ae640cfa816404b017fbb8234dd21abafbbdc`](https://robinhoodchain.blockscout.com/address/0x751ae640cfa816404b017fbb8234dd21abafbbdc) | ERC-8004 ERC-721 agent identity; Vera is agent #1; `reputationScore(agentId)`, `tokenURI(agentId)` |
 | USDG | [`0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168`](https://robinhoodchain.blockscout.com/address/0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168) | Settlement currency, 6 decimals; every trade settles in USDG |
 | WETH | [`0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73`](https://robinhoodchain.blockscout.com/address/0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73) | Intermediate token (18 decimals) for router paths |
