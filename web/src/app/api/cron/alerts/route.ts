@@ -45,7 +45,12 @@ export async function GET(req: NextRequest) {
       const spark = summary[sym]?.spark;
       prices[sym] = feed ?? (spark && spark.length ? spark[spark.length - 1] : undefined);
     }
-    const now = Math.floor(Date.now() / 1000);
+    // MILLISECONDS. Every other notification writer passes ms and the inbox
+    // divides createdAt by 1000 to render, so seconds here rendered as 1970 and
+    // sorted to the bottom. Same value feeds claimTriggered -> triggered_at,
+    // which the panel also divides. (Rows written before this fix stay wrong;
+    // they are not backfilled.)
+    const now = Date.now();
     let fired = 0;
     for (const a of alerts) {
       const price = prices[a.symbol];

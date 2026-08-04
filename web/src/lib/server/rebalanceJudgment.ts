@@ -21,6 +21,8 @@ import { generateObject } from "ai";
 import { resolveModelChain } from "./aiModel";
 import { universeStatsRows } from "./quant";
 import { getDaySummary } from "./marketData";
+import { recentHeadlines } from "./newsFeed";
+import { FORWARD_LOOKING, escapeRegExp } from "./copyLint";
 
 export interface JudgmentRow {
   symbol: string;
@@ -76,6 +78,7 @@ const SYSTEM = [
   "Answer with the verdict and ONE honest sentence of reason, in plain words a customer can read.",
   "The reason must name at least one drifted holding by its exact symbol and cite at least one figure from the data you were given (a weight, a deviation, a day move).",
   "Report only what has already happened. Never predict: no \"will\", no \"expect\", no \"should rise\" or \"should fall\", no price targets.",
+  "A headline line, when present, is context for TIMING only: it never justifies acting and you must not repeat it as a prediction.",
 ].join("\n");
 
 // Numeral lint — deterministic wording checks run AFTER generation. Wording
@@ -84,27 +87,9 @@ const SYSTEM = [
 // swap in a neutral sentence via displayReason(), so slop never reaches a
 // notification.
 //
-// Forward-looking language the reason may never contain: Vera reports what
-// the tape already did, never what it will do. A false positive only costs
-// the neutral fallback, so the list errs strict.
-const FORWARD_LOOKING: RegExp[] = [
-  /\bwill\b/i,
-  /\bwon['’]t\b/i,
-  /\bgoing to\b/i,
-  /\btomorrow\b/i,
-  /\bexpect\w*\b/i,
-  /\bpredict\w*\b/i,
-  /\bforecast\w*\b/i,
-  /\banticipat\w*\b/i,
-  /\bshould\s+(?:\w+\s+){0,2}(?:rise|rally|rebound|recover|climb|gain|surge|fall|drop|dip|slide|decline|sink)\b/i,
-  /\b(?:likely|poised|bound|due|about|set)\s+to\s+(?:\w+\s+){0,2}(?:rise|rally|rebound|recover|climb|gain|surge|fall|drop|dip|slide|decline|sink|move|run)\b/i,
-  /\bprice target\b/i,
-  /\btarget\s+(?:price|of\s+\$)/i,
-];
-
-function escapeRegExp(s: string): string {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
+// Forward-looking language the reason may never contain (FORWARD_LOOKING) now
+// lives in ./copyLint, shared verbatim with the news path so the rule cannot
+// drift between two copies of the list.
 
 /** True when the reason cites a figure (any digit), names at least one brief
  *  symbol, and matches no forward-looking pattern. Wording quality only —
@@ -136,18 +121,23 @@ export async function judgeRebalance(brief: RebalanceBrief): Promise<RebalanceVe
   const symbols = brief.rows.map((r) => r.symbol);
   let prompt: string;
   try {
-    const [stats, day] = await Promise.all([
+    // The headline lookup is READ-ONLY over the KV cache the news sweep already
+    // wrote: no outbound fetch, and a miss produces today's exact prompt.
+    const [stats, day, news] = await Promise.all([
       universeStatsRows(symbols).catch(() => []),
       getDaySummary().catch(() => ({}) as Awaited<ReturnType<typeof getDaySummary>>),
+      recentHeadlines(symbols).catch(() => new Map<string, { title: string; ageH: number }>()),
     ]);
     const statBy = new Map(stats.map((s) => [s.symbol, s]));
     const lines = brief.rows.map((r) => {
       const s = statBy.get(r.symbol);
       const d = (day as Record<string, { dayChangePct?: number }>)[r.symbol];
+      const h = news.get(r.symbol);
       return (
         `${r.symbol}: weight ${r.currentWeightPct.toFixed(1)}% vs target ${r.targetWeightPct.toFixed(1)}% ` +
         `(${r.deviationPct >= 0 ? "overweight, plan sells" : "underweight, plan buys"}) · ` +
-        `today ${fmt(d?.dayChangePct)} · 3m ${fmt(s?.ret3mPct)} · vol ${fmt(s?.volPct)} · maxDD ${fmt(s?.maxDrawdownPct != null ? -s.maxDrawdownPct : null)}`
+        `today ${fmt(d?.dayChangePct)} · 3m ${fmt(s?.ret3mPct)} · vol ${fmt(s?.volPct)} · maxDD ${fmt(s?.maxDrawdownPct != null ? -s.maxDrawdownPct : null)}` +
+        (h ? ` · headline: "${h.title.slice(0, 110)}" (${h.ageH}h ago)` : "")
       );
     });
     prompt = [

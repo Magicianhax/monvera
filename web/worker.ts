@@ -54,6 +54,11 @@ export default {
       ctx.waitUntil(hit("/api/cron/tradability"));
       // Hourly balance snapshots — the real equity curve (D1, /api/balance-history).
       ctx.waitUntil(hit("/api/cron/balances"));
+      // Hourly news sweep on what users hold. Notifications only; Vera never
+      // trades on news. Deliberately not on the 15-minute trigger: the feeds
+      // carry max-age=300 upstream, so four sweeps an hour would re-read the
+      // same cached bodies at four times the egress and model spend.
+      ctx.waitUntil(hit("/api/cron/news"));
     }
     // Auto-manage passes: every six hours around the clock, plus 13:30 UTC on
     // weekdays — the market-open fire, so drift from the open is acted on

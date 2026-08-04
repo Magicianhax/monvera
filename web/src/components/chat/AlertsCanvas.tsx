@@ -56,29 +56,43 @@ export function AlertsCanvas({ nav }: { nav: ChatNav }) {
       <div style={{ padding: "0 4px" }}>
         {items.length === 0 && (
           <div style={{ padding: "18px 2px", fontSize: 13, color: "var(--ink-2)", lineHeight: 1.55 }}>
-            Nothing yet — fills, autopilot runs, and triggered price alerts land here.
+            Nothing yet. Fills, autopilot runs, triggered price alerts, and news on what you hold all land here.
           </div>
         )}
-        {items.slice(0, 30).map((n, i) => (
-          <div key={n.id} style={{ display: "flex", alignItems: "flex-start", gap: 11, padding: "11px 2px", borderTop: i === 0 ? "none" : "1px solid var(--line-2)", opacity: n.readAt ? 0.7 : 1 }}>
-            <span style={{ width: 32, height: 32, borderRadius: 10, flex: "none", display: "grid", placeItems: "center", background: n.readAt ? "var(--panel-2)" : "var(--primary-soft)", color: n.readAt ? "var(--ink-3)" : "var(--primary)" }}>
-              <PIcon name={KIND_ICON[n.kind] ?? "ph-sparkle"} size={16} />
-            </span>
-            <div style={{ flex: 1, minWidth: 0 }}>
+        {items.slice(0, 30).map((n, i) => {
+          const head = (
+            <>
               <div style={{ fontSize: 13.5, fontWeight: n.readAt ? 500 : 650 }}>{n.title}</div>
               {n.body && <div style={{ fontSize: 12, color: "var(--ink-2)", lineHeight: 1.45, marginTop: 1 }}>{n.body}</div>}
-              <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 3 }}>
-                <span className="tnum" style={{ fontSize: 11, color: "var(--ink-3)" }}>{relTime(Math.floor(n.createdAt / 1000))}</span>
-                {n.txHash && (
-                  <a href={txUrl(n.txHash)} target="_blank" rel="noreferrer" style={{ display: "inline-flex", alignItems: "center", gap: 3, fontSize: 11, color: "var(--ink-3)", textDecoration: "none" }}>
-                    receipt <PIcon name="ph-arrow-square-out" size={10} />
-                  </a>
-                )}
+            </>
+          );
+          return (
+            <div key={n.id} style={{ display: "flex", alignItems: "flex-start", gap: 11, padding: "11px 2px", borderTop: i === 0 ? "none" : "1px solid var(--line-2)", opacity: n.readAt ? 0.7 : 1 }}>
+              <span style={{ width: 32, height: 32, borderRadius: 10, flex: "none", display: "grid", placeItems: "center", background: n.readAt ? "var(--panel-2)" : "var(--primary-soft)", color: n.readAt ? "var(--ink-3)" : "var(--primary)" }}>
+                <PIcon name={KIND_ICON[n.kind] ?? "ph-sparkle"} size={16} />
+              </span>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                {/* Symbol-carrying rows (fills, price alerts, autopilot, news) open
+                    that holding — the same call the price-alert row below makes.
+                    Rows without a symbol stay inert: a dead affordance is worse
+                    than none. The receipt link stays OUTSIDE this button; an
+                    anchor nested in a button is not independently clickable. */}
+                {n.symbol
+                  ? <button onClick={() => nav.openCanvas("holding", n.symbol!)} style={{ textAlign: "left", width: "100%", background: "transparent" }}>{head}</button>
+                  : head}
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 3 }}>
+                  <span className="tnum" style={{ fontSize: 11, color: "var(--ink-3)" }}>{relTime(Math.floor(n.createdAt / 1000))}</span>
+                  {n.txHash && (
+                    <a href={txUrl(n.txHash)} target="_blank" rel="noreferrer" style={{ display: "inline-flex", alignItems: "center", gap: 3, fontSize: 11, color: "var(--ink-3)", textDecoration: "none" }}>
+                      receipt <PIcon name="ph-arrow-square-out" size={10} />
+                    </a>
+                  )}
+                </div>
               </div>
+              {!n.readAt && <span style={{ width: 8, height: 8, borderRadius: "50%", background: "var(--primary)", flex: "none", marginTop: 5 }} />}
             </div>
-            {!n.readAt && <span style={{ width: 8, height: 8, borderRadius: "50%", background: "var(--primary)", flex: "none", marginTop: 5 }} />}
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       {/* price alerts */}

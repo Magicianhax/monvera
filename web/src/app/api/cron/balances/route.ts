@@ -9,6 +9,7 @@ import { timingSafeEqual } from "node:crypto";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { listRecentUsers } from "@/lib/server/userDirectory";
 import { putSnapshot, pruneSnapshots } from "@/lib/server/balanceSnapshots";
+import { putHoldings, putHeldUnion } from "@/lib/server/holdingsIndex";
 import { unauthorized, serverError } from "@/lib/server/respond";
 
 export const dynamic = "force-dynamic";
@@ -28,6 +29,9 @@ interface PortfolioBody {
   smartCashUsd?: number;
   investedUsd?: number;
   totalUsd?: number;
+  /** Per-symbol rows, already valued. Kept only to feed the KV holdings index
+   *  the news sweep narrows on — never a source of a user-facing figure. */
+  holdings?: { symbol: string; valueUsd?: number | null; smartUsd?: number | null }[];
 }
 
 export async function GET(req: NextRequest) {
@@ -56,6 +60,11 @@ export async function GET(req: NextRequest) {
     const hour = Math.floor(Date.now() / 3600_000) * 3600;
     let snapped = 0;
     let failed = 0;
+    // Every symbol anyone holds, for the news sweep's candidate set. Written
+    // here because this cron already has the data; both writes below are
+    // best-effort and must never affect snapped/failed — the equity curve is
+    // the primary job and a KV blip must not cost it a row.
+    const union = new Set<string>();
     const CONCURRENCY = 3;
     for (let i = 0; i < addresses.length; i += CONCURRENCY) {
       await Promise.all(
@@ -72,6 +81,11 @@ export async function GET(req: NextRequest) {
             // smart account), so cash + invested = total keeps holding.
             await putSnapshot(address, hour, (p.cashUsd ?? 0) + (p.smartCashUsd ?? 0), p.investedUsd ?? 0, p.totalUsd);
             snapped++;
+            const held = (p.holdings ?? [])
+              .map((h) => ({ symbol: h.symbol, usd: (h.valueUsd ?? 0) + (h.smartUsd ?? 0) }))
+              .filter((h) => h.usd > 0);
+            for (const h of held) union.add(h.symbol);
+            await putHoldings(address, held).catch(() => {});
           } catch (err) {
             failed++;
             console.error(`[cron-balances] ${address}:`, err instanceof Error ? err.message : err);
@@ -79,6 +93,7 @@ export async function GET(req: NextRequest) {
         }),
       );
     }
+    await putHeldUnion([...union]).catch(() => {});
     await pruneSnapshots(90).catch(() => {});
     return Response.json({ snapped, failed, asOf: new Date().toISOString() });
   } catch (err) {

@@ -44,7 +44,11 @@
     // alerts (gas floor, failed sends, unresolved receipts, scan failures)
     // land in this account's notification inbox. Empty disables owner
     // alerting (forks/previews must not page anyone).
-    "OWNER_USER_ID": "did:privy:cmr59h2j200ua0dkzgr7sj7r7"
+    "OWNER_USER_ID": "did:privy:cmr59h2j200ua0dkzgr7sj7r7",
+    // Deploy-time kill switch for the hourly news sweep ("off" short-circuits
+    // the fetch, not just the send). The incident brake is KV key news:kill,
+    // flippable in seconds without a deploy.
+    "NEWS_ALERTS": "on"
   },
   "assets": {
     "directory": ".open-next/assets",
