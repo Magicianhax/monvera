@@ -190,7 +190,7 @@ function GroveShelf({ onOpen }: { onOpen: (id: string) => void }) {
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(120px,1fr))", gap: 4 }}>
           <Stat label="Investors" value={agg.users.toLocaleString("en-US")} sub="across all Groves" />
           <Stat label="Managed" value={usd0(agg.managedUsd)} sub="on-chain cost basis" />
-          <Stat label="Fees paid, ever" value={usd0(agg.feesUsd)} sub="10% of realized profit only" />
+          <Stat label="Fees paid so far" value={usd0(agg.feesUsd)} sub="10% of realized profit only" />
         </div>
         <div style={{ fontSize: 11, color: "var(--ink-3)", lineHeight: 1.55, padding: "6px 4px 8px", borderTop: "1px solid var(--line-2)" }}>
           {anyDeployed

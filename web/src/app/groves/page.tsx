@@ -97,7 +97,7 @@ export default async function GrovesPage() {
               <span className={s.bandSub}>on-chain cost basis</span>
             </div>
             <div className={s.bandCell}>
-              <span className={s.microLbl}>Fees paid, ever</span>
+              <span className={s.microLbl}>Fees paid so far</span>
               <span className={s.bandVal}>{usdWhole(agg.feesUsd)}</span>
               <span className={s.bandSub}>10% of realized profit only</span>
             </div>

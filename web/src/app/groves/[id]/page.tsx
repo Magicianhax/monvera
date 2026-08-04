@@ -193,7 +193,7 @@ export default async function GrovePage({ params }: { params: Promise<{ id: stri
               <span className={s.cellSub}>open positions</span>
             </div>
             <div className={s.cell}>
-              <span className={s.microLbl}>Fees paid, ever</span>
+              <span className={s.microLbl}>Fees paid so far</span>
               <span className={s.cellVal}>{usdWhole(g.stats.feesUsd)}</span>
               <span className={s.cellSub}>{feePct}% of realized profit only</span>
             </div>
