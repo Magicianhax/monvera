@@ -17,8 +17,8 @@ import "server-only";
 // source "outage" so the ledger never dresses a dead provider up as a
 // market opinion.
 import { z } from "zod";
-import { generateObject } from "ai";
-import { resolveModelChain } from "./aiModel";
+// generateJson, not generateObject: the provider has no JSON-schema mode (aiModel).
+import { resolveModelChain, generateJson } from "./aiModel";
 import { universeStatsRows } from "./quant";
 import { getDaySummary } from "./marketData";
 import { recentHeadlines } from "./newsFeed";
@@ -67,6 +67,10 @@ const VerdictSchema = z.object({
       "One plain sentence a user can read: name a drifted symbol, cite one figure from the data, describe only what already happened. No hype, no jargon, no predictions.",
     ),
 });
+
+/** The JSON skeleton the model is asked to emit. Mirrors VerdictSchema above —
+ *  keep the two adjacent so a change to one shows the other is stale. */
+const VERDICT_SHAPE = '{"action": "proceed" | "defer", "reason": "one plain sentence"}';
 
 const SYSTEM = [
   "You are Vera, Monvera's broker agent, deciding the TIMING of one basket rebalance.",
@@ -159,13 +163,13 @@ export async function judgeRebalance(brief: RebalanceBrief): Promise<RebalanceVe
     const budget = Math.min(20_000, deadline - Date.now());
     if (budget < 3_000) break;
     try {
-      const { object } = await generateObject({
+      const object = await generateJson({
         model,
         schema: VerdictSchema,
+        shape: VERDICT_SHAPE,
         system: SYSTEM,
         prompt,
         temperature: 0.2,
-        maxRetries: 1,
         abortSignal: AbortSignal.timeout(budget),
       });
       return { ...object, source: "model", lintOk: lintVerdictReason(object.reason, symbols) };

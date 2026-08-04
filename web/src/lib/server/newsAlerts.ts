@@ -12,10 +12,10 @@ import "server-only";
 // content-free news alert is worse than none, and a noisy inbox is an ignored
 // inbox, so the caps below are product requirements, not tuning.
 import { z } from "zod";
-import { generateObject } from "ai";
+// generateJson, not generateObject: the provider has no JSON-schema mode (aiModel).
 import { createPublicClient, http } from "viem";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
-import { resolveModelChain } from "./aiModel";
+import { resolveModelChain, generateJson } from "./aiModel";
 import { headlinesFor, NEWS_MAX_AGE_MS, type NewsItem } from "./newsFeed";
 import { heldUnion } from "./holdingsIndex";
 import { hasForwardLooking, namesSymbol, normalizeCopy, PREDICTIVE_TITLE } from "./copyLint";
@@ -197,6 +197,11 @@ const ClassifySchema = z.object({
     .max(24),
 });
 
+/** The JSON skeleton the model is asked to emit. Mirrors ClassifySchema above —
+ *  keep the two adjacent so a change to one shows the other is stale. */
+const CLASSIFY_SHAPE =
+  '{"items": [{"id": 1, "symbol": "NVDA", "severity": "high" | "medium" | "low", "direction": "negative" | "positive" | "neutral", "line": "one plain sentence"}]}';
+
 const SYSTEM = [
   "You are Vera, Monvera's broker agent, triaging news about stocks customers already own.",
   "high = a specific, material, company-level event that has ALREADY happened (earnings released, guidance issued, an executive change, a legal or regulatory action, an acquisition, a product recall, an index change). medium = real but routine. low = opinion, analysis, valuation takes, listicles, or a story that is really about a different company.",
@@ -238,13 +243,13 @@ async function classify(candidates: Candidate[]): Promise<Classified[] | null> {
     const budget = Math.min(20_000, deadline - Date.now());
     if (budget < 3_000) break;
     try {
-      const { object } = await generateObject({
+      const object = await generateJson({
         model,
         schema: ClassifySchema,
+        shape: CLASSIFY_SHAPE,
         system: SYSTEM,
         prompt,
         temperature: 0.2,
-        maxRetries: 1,
         abortSignal: AbortSignal.timeout(budget),
       });
       return object.items as Classified[];
