@@ -20,7 +20,7 @@
 // not running (rebalancing) the row says so instead of being hidden.
 import { useEffect, useMemo, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
-import { useGroveHistory, type GroveHistory, type GroveLive } from "@/hooks/useGroves";
+import { useGroveHistory, useGroveChecks, type GroveHistory, type GroveLive } from "@/hooks/useGroves";
 import type { GrovePositionLive } from "@/hooks/useGrovePosition";
 import type { BacktestResult } from "@/lib/server/quant";
 import { GROVE_MANAGER } from "@/lib/groveManager";
@@ -88,6 +88,44 @@ const panel = (extra?: CSSProperties): CSSProperties => ({
 // uppercase, no tracking, anywhere on this page.
 const heading: CSSProperties = { fontSize: 14, fontWeight: 700, color: "var(--ink)" };
 const caption: CSSProperties = { fontSize: 11.5, fontWeight: 500, color: "var(--ink-3)" };
+
+/** One entry in the Rebalances timeline: a window Vera checked this basket in,
+ *  or a change to the grove's published recipe. */
+interface TimelineRow {
+  key: string;
+  /** Epoch MILLISECONDS. */
+  at: number;
+  title: string;
+  detail: string;
+  txHash?: string;
+  outcome: string;
+}
+
+/** Pager button. Disabled is dimmed and inert rather than hidden, so the
+ *  control does not move as the reader pages through. */
+const pagerBtn = (disabled: boolean): CSSProperties => ({
+  display: "grid",
+  placeItems: "center",
+  width: 24,
+  height: 24,
+  borderRadius: 7,
+  background: "var(--panel-2)",
+  border: "1px solid var(--line)",
+  color: disabled ? "var(--ink-3)" : "var(--ink-2)",
+  opacity: disabled ? 0.45 : 1,
+  cursor: disabled ? "default" : "pointer",
+  padding: 0,
+});
+
+/** Icon per outcome. A check that traded nothing must not wear the same face
+ *  as one that moved money — the whole point of the row is that the difference
+ *  is visible at a glance. */
+function timelineIcon(outcome: string): string {
+  if (outcome === "rebalanced" || outcome === "unconfirmed") return "ph-arrows-clockwise";
+  if (outcome === "composition") return "ph-sliders-horizontal";
+  if (outcome === "failed") return "ph-warning";
+  return "ph-check"; // every "checked, did nothing" outcome
+}
 
 /** A labelled fact row. */
 function Row({ k, v, sub, strong, color }: { k: ReactNode; v: ReactNode; sub?: ReactNode; strong?: boolean; color?: string }) {
@@ -298,6 +336,46 @@ export function GroveDetailView({
   const historyRows: GroveHistory["rows"] | null = history.data?.rows ?? null;
   const lastRebalance = historyRows?.find((r) => r.kind === "rebalance") ?? null;
 
+  // Every window Vera checked THIS basket in, including the ones that traded
+  // nothing. Without it the panel could only ever show rebalances that
+  // happened, so a basket managed perfectly read as one nobody was watching.
+  const checks = useGroveChecks(open ? g.id : null, smartAccount ?? null);
+
+  // One timeline: the holder's own checks, plus the grove-wide recipe changes
+  // (which no per-user row covers). A `rebalanced` check already carries its
+  // own txHash, so on-chain rebalance rows are NOT merged in — that would list
+  // the same event twice. The explorer link below stays the route to
+  // everyone's rebalances.
+  const timeline = useMemo(() => {
+    const rows: TimelineRow[] = [];
+    for (const c of checks.data?.rows ?? []) {
+      rows.push({ key: `c${c.at}${c.outcome}`, at: c.at, title: c.title, detail: c.detail, txHash: c.txHash, outcome: c.outcome });
+    }
+    for (const r of historyRows ?? []) {
+      // A log whose block timestamp did not come back has no place on a
+      // timeline: sorting it to either end would state a time we do not know.
+      // It stays visible on the explorer link below.
+      if (r.kind !== "composition" || r.at === null) continue;
+      rows.push({
+        key: `x${r.txHash}`,
+        at: r.at * 1000, // chain rows are seconds; check rows are ms
+        title: `Recipe updated to v${r.version}`,
+        detail: r.names ? `The published basket became ${r.names} names.` : "The published basket changed.",
+        txHash: r.txHash,
+        outcome: "composition",
+      });
+    }
+    return rows.sort((a, b) => b.at - a.at);
+  }, [checks.data, historyRows]);
+
+  const PAGE = 5;
+  const [rebalPage, setRebalPage] = useState(0);
+  const pageCount = Math.max(1, Math.ceil(timeline.length / PAGE));
+  // A list that shrinks under you (a new window lands) must never strand the
+  // reader on a page that no longer exists.
+  const page = Math.min(rebalPage, pageCount - 1);
+  const pageRows = timeline.slice(page * PAGE, page * PAGE + PAGE);
+
   return (
     <div className="gvd" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
       <style>{GVD_CSS}</style>
@@ -448,13 +526,18 @@ export function GroveDetailView({
           >
             <span style={heading}>Rebalances</span>
             <span className="tnum" style={{ marginLeft: "auto", fontSize: 11, color: "var(--ink-3)" }}>
+              {/* The summary counts CHECKS, not transactions. "0 on-chain" was
+                  true and still read as "nothing is running", which is the
+                  opposite of what three clean checks mean. */}
               {!open
                 ? "starts when the grove opens"
-                : historyRows === null
-                  ? "reading the chain…"
-                  : historyRows.length === 0
-                    ? "none yet, straight from the chain"
-                    : `${historyRows.length} on-chain`}
+                : historyRows === null && checks.isLoading
+                  ? "reading…"
+                  : timeline.length === 0
+                    ? held
+                      ? "no checks recorded yet"
+                      : "none yet, straight from the chain"
+                    : `${timeline.length} check${timeline.length === 1 ? "" : "s"}`}
             </span>
             <span className="gvd-chev" data-open={rebalOpen}>
               <PIcon name="ph-caret-down" size={13} />
@@ -470,45 +553,70 @@ export function GroveDetailView({
                 <div style={{ fontSize: 12, color: "var(--ink-3)", lineHeight: 1.55, marginTop: 8 }}>
                   Couldn&rsquo;t read the chain just now. The history is still there; this page just can&rsquo;t show it this minute.
                 </div>
-              ) : historyRows === null ? (
-                <div style={{ fontSize: 12, color: "var(--ink-3)", marginTop: 8 }}>reading the chain&hellip;</div>
-              ) : historyRows.length === 0 ? (
+              ) : historyRows === null && checks.isLoading ? (
+                <div style={{ fontSize: 12, color: "var(--ink-3)", marginTop: 8 }}>reading&hellip;</div>
+              ) : timeline.length === 0 ? (
                 <div style={{ fontSize: 12, color: "var(--ink-2)", lineHeight: 1.55, marginTop: 8 }}>
-                  Nothing has ever touched this basket. Every rebalance is its own transaction, and each one lands here the moment it happens.
+                  {held
+                    ? "Vera has not recorded a check on this basket yet. She looks every six hours, and each look lands here whether or not it moves anything."
+                    : "Nothing has ever touched this basket. Every rebalance is its own transaction, and each one lands here the moment it happens."}
                 </div>
               ) : (
                 <>
-                  {historyRows.slice(0, 8).map((r, i) => (
-                    <div key={`${r.txHash}-${r.kind}-${i}`} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderTop: i === 0 ? "none" : "1px solid var(--line-2)" }}>
+                  {pageRows.map((r, i) => (
+                    <div key={r.key} style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "9px 0", borderTop: i === 0 ? "none" : "1px solid var(--line-2)" }}>
                       <span aria-hidden style={{ width: 28, height: 28, borderRadius: 9, flex: "none", display: "grid", placeItems: "center", background: "var(--panel-2)", border: "1px solid var(--line)", color: "var(--ink-2)" }}>
-                        <PIcon name={r.kind === "rebalance" ? "ph-arrows-clockwise" : "ph-sliders-horizontal"} size={14} />
+                        <PIcon name={timelineIcon(r.outcome)} size={14} />
                       </span>
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: 12.5, fontWeight: 650 }}>
-                          {r.kind === "rebalance" ? "Basket realigned" : `Recipe updated to v${r.version}`}
-                        </div>
-                        <div className="tnum" style={{ fontSize: 10.5, color: "var(--ink-3)" }}>
-                          {r.kind === "rebalance" ? (r.user ? `for ${short(r.user)}` : "") : r.names ? `${r.names} names` : ""}
-                        </div>
+                        <div style={{ fontSize: 12.5, fontWeight: 650 }}>{r.title}</div>
+                        {/* The reason is the row. A check that traded nothing is
+                            only meaningful if it says why. */}
+                        <div style={{ fontSize: 11.5, color: "var(--ink-3)", lineHeight: 1.5, marginTop: 2 }}>{r.detail}</div>
+                        {r.txHash && (
+                          <a className="tnum gvd-press" href={`${EXPLORER}/tx/${r.txHash}`} target="_blank" rel="noopener noreferrer" style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 10.5, color: "var(--ink-3)", textDecoration: "none", marginTop: 3 }}>
+                            transaction <PIcon name="ph-arrow-square-out" size={10} />
+                          </a>
+                        )}
                       </div>
-                      <div style={{ textAlign: "right", flex: "none" }}>
-                        <div className="tnum" style={{ fontSize: 11.5, color: "var(--ink-2)" }}>{fmtWhen(r.at)}</div>
-                        <a className="tnum gvd-press" href={`${EXPLORER}/tx/${r.txHash}`} target="_blank" rel="noopener noreferrer" style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 10.5, color: "var(--ink-3)", textDecoration: "none" }}>
-                          transaction <PIcon name="ph-arrow-square-out" size={10} />
-                        </a>
-                      </div>
+                      <div className="tnum" style={{ fontSize: 11.5, color: "var(--ink-2)", flex: "none", paddingTop: 1 }}>{fmtWhen(r.at / 1000)}</div>
                     </div>
                   ))}
-                  {historyRows.length > 8 && GROVE_MANAGER && (
-                    <a
-                      className="gvd-press"
-                      href={`${EXPLORER}/address/${GROVE_MANAGER}?tab=logs`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      style={{ display: "block", fontSize: 11, color: "var(--ink-3)", paddingTop: 8, borderTop: "1px solid var(--line-2)", textDecoration: "none" }}
-                    >
-                      and {historyRows.length - 8} more on the explorer
-                    </a>
+                  {pageCount > 1 && (
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, paddingTop: 9, borderTop: "1px solid var(--line-2)" }}>
+                      <button
+                        className="gvd-press"
+                        onClick={() => setRebalPage(Math.max(0, page - 1))}
+                        disabled={page === 0}
+                        aria-label="Previous page"
+                        style={pagerBtn(page === 0)}
+                      >
+                        <PIcon name="ph-caret-left" size={12} />
+                      </button>
+                      <span className="tnum" style={{ fontSize: 11, color: "var(--ink-3)" }}>
+                        {page + 1} of {pageCount}
+                      </span>
+                      <button
+                        className="gvd-press"
+                        onClick={() => setRebalPage(Math.min(pageCount - 1, page + 1))}
+                        disabled={page >= pageCount - 1}
+                        aria-label="Next page"
+                        style={{ ...pagerBtn(page >= pageCount - 1), marginRight: "auto" }}
+                      >
+                        <PIcon name="ph-caret-right" size={12} />
+                      </button>
+                      {GROVE_MANAGER && (
+                        <a
+                          className="gvd-press"
+                          href={`${EXPLORER}/address/${GROVE_MANAGER}?tab=logs`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{ fontSize: 11, color: "var(--ink-3)", textDecoration: "none" }}
+                        >
+                          everyone&rsquo;s, on the explorer
+                        </a>
+                      )}
+                    </div>
                   )}
                 </>
               )}

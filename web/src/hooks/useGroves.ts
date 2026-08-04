@@ -7,6 +7,12 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { GroveLive, GrovesPayload } from "@/lib/server/groveService";
 import type { GroveHistory } from "@/lib/server/groveHistory";
+import type { GroveCheckRow } from "@/app/api/groves/[id]/checks/route";
+
+interface GroveChecks {
+  rows: GroveCheckRow[];
+  asOf: string;
+}
 
 async function getJson<T>(url: string, fallbackError: string): Promise<T> {
   const res = await fetch(url);
@@ -50,4 +56,21 @@ export function useGroveHistory(id: string | null) {
   });
 }
 
-export type { GroveLive, GrovesPayload, GroveHistory };
+/** This holder's own record of every window Vera checked their basket in,
+ *  including the ones that correctly traded nothing. The chain shows only
+ *  rebalances that happened, so without this a well-managed basket and an
+ *  unmanaged one look identical. */
+export function useGroveChecks(id: string | null, address: string | null) {
+  return useQuery({
+    queryKey: ["grove-checks", id, address],
+    enabled: !!id && !!address,
+    staleTime: 30_000,
+    queryFn: () =>
+      getJson<GroveChecks>(
+        `/api/groves/${id}/checks?address=${address}`,
+        "Couldn't load this basket's check history.",
+      ),
+  });
+}
+
+export type { GroveLive, GrovesPayload, GroveHistory, GroveChecks };

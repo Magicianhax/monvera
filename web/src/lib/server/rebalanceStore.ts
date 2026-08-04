@@ -332,6 +332,38 @@ export async function listUnconfirmed(limit = 20): Promise<RebalanceOutcomeRow[]
   return (results ?? []).map(rowToOutcome);
 }
 
+/** One holder's own record of every window Vera checked their basket in,
+ *  newest first — what the Rebalances panel reads.
+ *
+ *  This is the ONLY surface that shows a check which did NOT trade. The chain
+ *  can only ever show the rebalances that happened, so a basket that was
+ *  correctly left alone looked identical to one nobody ever looked at: three
+ *  windows ran on 2026-08-04 and the panel stayed empty, which reads as "this
+ *  is not running". A skip with its reason is the product.
+ *
+ *  Best-effort: [] on failure, logged. The panel degrades to the on-chain rows
+ *  it already had rather than erroring. */
+export async function listOutcomesForUser(
+  user: string,
+  groveId: string,
+  limit = 40,
+): Promise<RebalanceOutcomeRow[]> {
+  try {
+    const { results } = await db()
+      .prepare(
+        `SELECT * FROM rebalance_outcomes
+         WHERE user = ? AND grove_id = ?
+         ORDER BY created_at DESC LIMIT ?`,
+      )
+      .bind(user.toLowerCase(), groveId, limit)
+      .all<ORow>();
+    return (results ?? []).map(rowToOutcome);
+  } catch (e) {
+    console.error("[rebalance-ledger] user outcomes read failed:", e instanceof Error ? e.message : e);
+    return [];
+  }
+}
+
 /** Rebalanced rows whose user was never told (recent only) — the notification
  *  repair worklist: a crash between the send and the end-of-pass notification
  *  loop is money that moved silently, and §6 metric 2 exists to make that
