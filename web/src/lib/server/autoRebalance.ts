@@ -35,7 +35,7 @@ import "server-only";
 import { createPublicClient, createWalletClient, encodeEventTopics, encodeFunctionData, erc20Abi, http, keccak256, parseAbi, parseAbiItem, toHex, type Address } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
-import { chain, EXPLORER_URL } from "@/lib/chain";
+import { chain, EXPLORER_URL, PUBLIC_RPC_URL } from "@/lib/chain";
 import { GROVES, type GroveDef } from "@/lib/groves";
 import { ALL_ASSETS, assetBySymbol, USDG, MULTICALL3, type Asset } from "@/lib/tokens";
 import type { AssetPrice } from "@/lib/prices";
@@ -259,7 +259,9 @@ async function sendBudgetNotice(
 /** Every address that ever emitted AutoEnabled for this grove (v2, one page
  *  loop). Revokes and cap edits are re-checked on-chain afterwards, so stale
  *  entries here cost one autoConfigs read, never a wrong action. */
-async function optedInCandidates(onChainId: number): Promise<Address[]> {
+/** Everyone who ever opted this grove in, from Blockscout's index. Throws on
+ *  any HTTP failure — the caller decides whether that is fatal. */
+async function candidatesFromBlockscout(onChainId: number): Promise<Address[]> {
   const topic0 = encodeEventTopics({ abi: [AUTO_ENABLED] })[0];
   const groveTopic = toHex(BigInt(onChainId), { size: 32 }).toLowerCase();
   const users = new Set<Address>();
@@ -282,6 +284,74 @@ async function optedInCandidates(onChainId: number): Promise<Address[]> {
     params = "?" + new URLSearchParams(Object.entries(next).map(([k, v]) => [k, String(v)])).toString();
   }
   return [...users];
+}
+
+/** AutoEnabled logs straight from the chain, over a bounded recent window.
+ *  The LITERAL public endpoint, never the keyed one: Alchemy refuses eth_getLogs
+ *  on this account at every span and bills each refusal (the $15 lesson). */
+async function candidatesFromRpc(onChainId: number, fromBlock: bigint, toBlock: bigint): Promise<Address[]> {
+  const logsClient = createPublicClient({ chain, transport: http(PUBLIC_RPC_URL) });
+  const users = new Set<Address>();
+  const CHUNK = BigInt(9_999);
+  for (let start = fromBlock; start <= toBlock; start += CHUNK + BigInt(1)) {
+    const end = start + CHUNK > toBlock ? toBlock : start + CHUNK;
+    const logs = await logsClient.getLogs({
+      address: GROVE_MANAGER as Address,
+      event: AUTO_ENABLED,
+      args: { groveId: BigInt(onChainId) },
+      fromBlock: start,
+      toBlock: end,
+    });
+    for (const l of logs) if (l.args?.user) users.add(l.args.user as Address);
+  }
+  return [...users];
+}
+
+const CANDIDATES_KEY = (id: number) => `rebalance:candidates:${id}`;
+/** How far back the RPC fallback scans when the cache is warm. Opt-ins are
+ *  append-only and rare, so this only has to cover the gap since the last good
+ *  scan; 6h of blocks on 4663 is far inside this. */
+const TAIL_BLOCKS = BigInt(200_000);
+
+/**
+ * Who to consider for this grove this window.
+ *
+ * Blockscout is the fast path and knows the whole history, but it rate-limits:
+ * on 2026-08-04 an 18:00 window died on a single 429 and the grove was skipped
+ * entirely — no plans, no tilt, no ledger rows, the first live active-management
+ * pass silently a no-op. Discovery must not be a single point of failure for
+ * whether anyone is managed at all.
+ *
+ * So a good scan is remembered, and a failed one falls back to that memory plus
+ * a bounded chain scan for anyone who opted in since. Only when BOTH the index
+ * and the cache are unavailable does the window give up, and it says so.
+ */
+async function optedInCandidates(onChainId: number): Promise<Address[]> {
+  const store = kv();
+  const key = CANDIDATES_KEY(onChainId);
+  try {
+    const users = await candidatesFromBlockscout(onChainId);
+    // Remember the good scan. Opt-ins never disappear, so a cache that only
+    // grows is always a safe floor for the next fallback.
+    await store?.put(key, JSON.stringify(users)).catch(() => {});
+    return users;
+  } catch (err) {
+    console.error("[auto-rebalance] blockscout candidate scan failed, falling back", msg(err));
+    let cached: Address[] = [];
+    try {
+      const raw = await store?.get(key);
+      if (raw) cached = JSON.parse(raw) as Address[];
+    } catch {
+      /* cache unreadable: the RPC scan below is the only source left */
+    }
+    const head = await client.getBlockNumber();
+    const from = head > TAIL_BLOCKS ? head - TAIL_BLOCKS : BigInt(0);
+    const fresh = await candidatesFromRpc(onChainId, from, head);
+    const all = [...new Set([...cached, ...fresh])];
+    if (!all.length) throw new Error(`candidate discovery unavailable: ${msg(err)}`);
+    console.warn(`[auto-rebalance] using ${cached.length} cached + ${fresh.length} on-chain candidates`);
+    return all;
+  }
 }
 
 const byAddress = new Map<string, Asset>(ALL_ASSETS.map((a) => [a.address.toLowerCase(), a]));
