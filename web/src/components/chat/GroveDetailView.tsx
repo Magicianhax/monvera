@@ -18,7 +18,7 @@
 //
 // Everything shown is read from the chain or the registry. Where a thing is
 // not running (rebalancing) the row says so instead of being hidden.
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import { useGroveHistory, type GroveHistory, type GroveLive } from "@/hooks/useGroves";
 import type { GrovePositionLive } from "@/hooks/useGrovePosition";
@@ -35,9 +35,9 @@ const EXPLORER = "https://robinhoodchain.blockscout.com";
 
 const GVD_CSS = `
 .gvd{container-type:inline-size}
-/* Four cells, ONE row, always. No wrapping into 2+2 — a stat strip that
+/* Five cells, ONE row, always. No wrapping — a stat strip that
    re-stacks reads as a broken table. When the container is narrower than
-   four readable cells (~146px each), the strip scrolls sideways instead:
+   five readable cells (~146px each), the strip scrolls sideways instead:
    native swipe on phones, cells at full legibility, dividers always vertical.
    This also deletes the whole breakpoint/divider cascade a wrap needs. */
 .gvd-stats{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(146px,1fr);overflow-x:auto;scrollbar-width:none}
@@ -101,6 +101,56 @@ function Row({ k, v, sub, strong, color }: { k: ReactNode; v: ReactNode; sub?: R
         {sub !== undefined && <div className="tnum" style={{ fontSize: 11, color: "var(--ink-3)", marginTop: 1 }}>{sub}</div>}
       </div>
     </div>
+  );
+}
+
+/** The next ACTING window: the driver checks every six hours, but only the
+ *  weekday 18:00 UTC fire lands inside the market-session gate (weekdays
+ *  15:00-20:00 UTC), so that is the only moment a rebalance can actually
+ *  execute. The other checks record drift and wait — counting down to them
+ *  would promise action they cannot take. */
+function nextActingWindow(now: number): number {
+  const d = new Date(now);
+  const t = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 18, 0, 0, 0));
+  while (t.getTime() <= now || t.getUTCDay() === 0 || t.getUTCDay() === 6) {
+    t.setUTCDate(t.getUTCDate() + 1);
+    t.setUTCHours(18, 0, 0, 0);
+  }
+  return t.getTime();
+}
+
+function fmtCountdown(ms: number): string {
+  const s = Math.max(0, Math.floor(ms / 1000));
+  const d = Math.floor(s / 86_400);
+  const h = Math.floor((s % 86_400) / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = s % 60;
+  if (d > 0) return `${d}d ${h}h`;
+  if (h > 0) return `${h}h ${m}m`;
+  return `${m}m ${String(sec).padStart(2, "0")}s`;
+}
+
+/** Live countdown to the next window Vera can act in. Ticks every second —
+ *  a stat cell, not motion, so no reduced-motion variant is needed. */
+function NextWindowCell({ open }: { open: boolean }) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, []);
+  if (!open) {
+    return (
+      <>
+        <div className="tnum" style={{ fontSize: 21, fontWeight: 600, marginTop: 6 }}>—</div>
+        <div style={{ fontSize: 11, color: "var(--ink-3)", marginTop: 2 }}>starts when the grove opens</div>
+      </>
+    );
+  }
+  return (
+    <>
+      <div className="tnum" style={{ fontSize: 21, fontWeight: 600, marginTop: 6 }}>{fmtCountdown(nextActingWindow(now) - now)}</div>
+      <div style={{ fontSize: 11, color: "var(--ink-3)", marginTop: 2 }}>weekdays, only on real drift</div>
+    </>
   );
 }
 
@@ -306,6 +356,10 @@ export function GroveDetailView({
             <div style={caption}>The only fee</div>
             <div className="tnum" style={{ fontSize: 21, fontWeight: 600, marginTop: 6 }}>{feePct}%</div>
             <div style={{ fontSize: 11, color: "var(--ink-3)", marginTop: 2 }}>of profit, only at exit</div>
+          </div>
+          <div>
+            <div style={caption}>Next rebalance window</div>
+            <NextWindowCell open={open} />
           </div>
         </div>
       </div>

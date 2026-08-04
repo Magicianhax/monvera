@@ -30,7 +30,6 @@ const clean = (v: string) => v.replace(/[^0-9.]/g, "").replace(/(\..*)\./g, "$1"
 
 /** Hook errors, kept short and human. */
 function friendly(msg: string): string {
-  const m = msg.toLowerCase();
   if (/user (rejected|denied)|rejected the request|request rejected|user cancel/i.test(msg)) return "You cancelled the signature — nothing was sent.";
   return msg.length > 180 ? msg.slice(0, 177) + "…" : msg;
 }
@@ -46,9 +45,10 @@ interface PayToken {
   valueUsd?: number;
 }
 
-const eyebrow: React.CSSProperties = { fontSize: 11, fontWeight: 700, letterSpacing: ".05em", textTransform: "uppercase", color: "var(--ink-3)", marginBottom: 8 };
+// Sentence case, no tracking — the app killed the uppercase eyebrow idiom.
+const eyebrow: React.CSSProperties = { fontSize: 11.5, fontWeight: 600, color: "var(--ink-3)", marginBottom: 6 };
 // panel-2 (flat translucency): no blur-inside-blur within the glass modal
-const searchStyle: React.CSSProperties = { width: "100%", height: 40, border: "1px solid var(--line)", outline: "none", background: "var(--panel-2)", color: "var(--ink)", borderRadius: 12, padding: "0 13px", fontSize: 13.5, fontFamily: "inherit", marginBottom: 10 };
+const searchStyle: React.CSSProperties = { width: "100%", height: 40, border: "1px solid var(--line)", outline: "none", background: "var(--panel-2)", color: "var(--ink)", borderRadius: 12, padding: "0 13px", fontSize: 13.5, fontFamily: "inherit", marginBottom: 8 };
 
 export function PaySheet({ mode, onClose }: { mode: PayMode; onClose: () => void }) {
   const { address } = useSmartAccount();
@@ -67,6 +67,10 @@ export function PaySheet({ mode, onClose }: { mode: PayMode; onClose: () => void
   const transfer = useTransfer();
 
   const [sendSym, setSendSym] = useState("USDG");
+  // The asset list is a PICKER, not page furniture: collapsed to the selected
+  // row by default, so amount, address, and the button are all visible without
+  // scrolling. A holder of a whole basket used to get a wall of rows first.
+  const [pickerOpen, setPickerOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [amt, setAmt] = useState("");
   const [addr, setAddr] = useState("");
@@ -220,30 +224,53 @@ export function PaySheet({ mode, onClose }: { mode: PayMode; onClose: () => void
           ) : mode === "send" ? (
             // ── send ──
             <div>
-              <div style={eyebrow}>Choose an asset</div>
-              <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search assets…" style={searchStyle} />
-              {filtered.map((t) => {
-                const on = t.symbol === sendSym;
-                return (
-                  <button
-                    key={t.symbol}
-                    onClick={() => {
-                      setSendSym(t.symbol);
-                      setAmt("");
-                      if (transfer.error) transfer.reset();
-                    }}
-                    style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", padding: "10px 8px", border: "none", borderRadius: 12, background: on ? "var(--primary-soft)" : "transparent", textAlign: "left", marginBottom: 2 }}
-                  >
-                    <AssetTile asset={displayFor(t.symbol, t.name)} size={30} radius={9} />
-                    <span style={{ flex: 1, minWidth: 0, fontSize: 13.5, fontWeight: 600, color: "var(--ink)" }}>{t.name}</span>
-                    <span className="tnum" style={{ fontSize: 12, color: "var(--ink-2)" }}>
-                      {t.valueUsd !== undefined ? usd(t.valueUsd) : `${fmtAmt(t.qty)} ${t.symbol}`}
-                    </span>
-                  </button>
-                );
-              })}
+              <div style={eyebrow}>Sending</div>
+              <button
+                onClick={() => setPickerOpen((v) => !v)}
+                aria-expanded={pickerOpen}
+                style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", padding: "10px 12px", border: "1px solid var(--line)", borderRadius: 13, background: "var(--panel-2)", textAlign: "left" }}
+              >
+                <AssetTile asset={displayFor(sel.symbol, sel.name)} size={30} radius={9} />
+                <span style={{ flex: 1, minWidth: 0, fontSize: 13.5, fontWeight: 600, color: "var(--ink)" }}>{sel.name}</span>
+                <span className="tnum" style={{ fontSize: 12, color: "var(--ink-2)" }}>
+                  {sel.valueUsd !== undefined ? usd(sel.valueUsd) : `${fmtAmt(sel.qty)} ${sel.symbol}`}
+                </span>
+                <PIcon name={pickerOpen ? "ph-caret-up" : "ph-caret-down"} size={14} weight="bold" style={{ color: "var(--ink-3)", flex: "none" }} />
+              </button>
+              {pickerOpen && (
+                <div style={{ marginTop: 8 }}>
+                  <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search assets…" style={searchStyle} />
+                  <div style={{ maxHeight: 218, overflowY: "auto", border: "1px solid var(--line-2)", borderRadius: 13, padding: 4 }}>
+                    {filtered.map((t) => {
+                      const on = t.symbol === sendSym;
+                      return (
+                        <button
+                          key={t.symbol}
+                          onClick={() => {
+                            setSendSym(t.symbol);
+                            setAmt("");
+                            setPickerOpen(false);
+                            setSearch("");
+                            if (transfer.error) transfer.reset();
+                          }}
+                          style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", padding: "9px 8px", border: "none", borderRadius: 10, background: on ? "var(--primary-soft)" : "transparent", textAlign: "left" }}
+                        >
+                          <AssetTile asset={displayFor(t.symbol, t.name)} size={28} radius={9} />
+                          <span style={{ flex: 1, minWidth: 0, fontSize: 13, fontWeight: 600, color: "var(--ink)" }}>{t.name}</span>
+                          <span className="tnum" style={{ fontSize: 12, color: "var(--ink-2)" }}>
+                            {t.valueUsd !== undefined ? usd(t.valueUsd) : `${fmtAmt(t.qty)} ${t.symbol}`}
+                          </span>
+                        </button>
+                      );
+                    })}
+                    {filtered.length === 0 && (
+                      <div style={{ padding: "12px 10px", fontSize: 12.5, color: "var(--ink-3)" }}>Nothing matches.</div>
+                    )}
+                  </div>
+                </div>
+              )}
 
-              <div style={{ ...eyebrow, margin: "10px 0 6px" }}>Amount</div>
+              <div style={{ ...eyebrow, margin: "12px 0 6px" }}>Amount</div>
               <div style={{ display: "flex", alignItems: "center", gap: 4, background: "var(--panel-2)", borderRadius: 13, padding: "9px 13px" }}>
                 <span className="tnum" style={{ fontSize: 18, fontWeight: 600, color: "var(--ink-3)" }}>$</span>
                 <input
@@ -340,6 +367,7 @@ export function PaySheet({ mode, onClose }: { mode: PayMode; onClose: () => void
             <div>
               <div style={eyebrow}>Choose an asset to receive</div>
               <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search assets…" style={searchStyle} />
+              <div style={{ maxHeight: 300, overflowY: "auto" }}>
               {filtered.map((t) => (
                 <button
                   key={t.symbol}
@@ -354,6 +382,7 @@ export function PaySheet({ mode, onClose }: { mode: PayMode; onClose: () => void
                   <PIcon name="ph-caret-right" size={14} weight="bold" style={{ color: "var(--ink-3)" }} />
                 </button>
               ))}
+              </div>
             </div>
           ) : (
             // ── receive: QR + address ──
