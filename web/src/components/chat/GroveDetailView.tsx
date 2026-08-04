@@ -665,8 +665,8 @@ export function GroveDetailView({
               q="Does it rebalance?"
               a={
                 open
-                  ? "Yes. From the moment you buy, Vera keeps your position at the published weights: she checks every six hours and acts during US market hours when the basket has genuinely drifted. Everyone in the grove is managed together, in proportion to what they hold.\n\nYou can switch management off at buy time or any time after, instantly, in the Managed card. Every rebalance is its own transaction in the list above; an empty list means nothing has ever touched the basket."
-                  : "Yes, once it opens. Management begins when the grove opens on-chain: from your first buy, Vera keeps your position at the published weights, checking every six hours, around the clock, and acting when it has genuinely drifted and the on-chain prices are fresh.\n\nYou can switch management off at buy time or any time after, instantly, in the Managed card."
+                  ? "Yes, actively. Every six hours, around the clock, Vera sets the basket's target weights herself, reading each holding's momentum, volatility and news. She may scale any published weight between 0.7x and 1.3x and nothing else: she cannot add a name, drop one, or move to cash, and those limits are applied in code to her answer before anything is traded. If her judgment is unavailable, the published weights stand. Everyone in the grove is managed together, in proportion to what they hold.\n\nYou can switch management off at buy time or any time after, instantly, in the Managed card. The list above shows every window she checked and what she decided, including the ones that traded nothing."
+                  : "Yes, once it opens. From your first buy, Vera sets the basket's target weights every six hours, around the clock, within 0.7x to 1.3x of the published ones, and realigns when your position no longer matches them and the on-chain prices are fresh.\n\nYou can switch management off at buy time or any time after, instantly, in the Managed card."
               }
             />
             <Faq

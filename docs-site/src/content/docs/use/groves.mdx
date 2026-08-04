@@ -60,14 +60,30 @@ Because the basket is ordinary tokens in your own account, you can also sell ind
 
 ## Auto-manage
 
-A Grove is a managed basket. When you buy, the management permission rides inside the buy's own signature, so your whole position is kept at the published weights from the first block until you exit or switch it off. Untick "Managed by Vera" on the buy screen to buy unmanaged, or flip it on or off any time from the Grove's page. One decision is made per Grove per window, so everyone in a Grove is managed together, each in proportion to their own holdings.
+A Grove is an actively managed basket. When you buy, the management permission rides inside the buy's own signature, so your position is managed from the first block until you exit or switch it off. Untick "Managed by Vera" on the buy screen to buy unmanaged, or flip it on or off any time from the Grove's page. One decision is made per Grove per window, so everyone in a Grove is managed together, each in proportion to their own holdings.
 
-Vera checks every basket every six hours, around the clock — tokenized stocks trade 24/7 — and realigns it **only when it has genuinely drifted** (about five percentage points of weight or more), the move is big enough to be worth what trading it costs, and the on-chain price feeds are fresh. That second test matters most on small baskets: the gas to realign is much the same whatever the size, so on a basket of a few tens of dollars the drift has to roughly double the five-point mark before correcting it leaves you better off than leaving it alone. Larger baskets clear that bar almost as soon as they pass five points. The contract refuses any manager trade against a stale feed, and the real equity feeds gap 52 hours or more over a weekend, so weekend checks often record the drift and wait; that throttle comes from the oracle's actual state, never from a market-hours clock. She also reads the market before acting: when the drift is driven by a name still moving hard, she waits for a calmer window rather than churning your basket through it. Her judgment can only ever veto a rebalance the math already justified; it cannot start, enlarge, or redirect one.
+### What Vera actually decides
 
-What protects the money is not a setting. Every move is a public transaction whose price the contract checks against Chainlink on-chain, only whitelisted venues can be called, the shares never leave your own wallet, the manager key is never trusted with more than that, and stopping is instant, with no cooldown, even while the contract is paused. When a rebalance does run, your notification says what moved and why that window was chosen.
+Every six hours, around the clock, Vera sets that window's **target weights** for the basket. She is not waiting for it to drift: she reads each holding's recent momentum, its volatility, how it moved today, and any significant company news, and decides how much of each name the basket should hold right now. If the position no longer matches those targets by about a point or more, it is realigned that window.
 
-Every rebalance — and every change to a Grove's recipe — is its own transaction, and the **Rebalances** panel on the Grove's page lists each one straight from the chain, with a link to the transaction. An empty list means exactly what it says: nothing has ever touched the basket.
+**The band is the promise.** She may scale any published weight between **0.7x and 1.3x** — Titan's 14% NVDA can run from roughly 10% to 18% — and nothing else. She cannot add a name, cannot drop one, cannot exceed the band, and cannot move the basket into cash. Those limits are not guidance she is asked to follow; they are applied in code to her answer before any trade is planned, so a wrong or manipulated judgment can only ever rearrange the same names inside the same band. If her judgment is unavailable for any reason, the published weights stand and the basket is simply kept at them.
+
+She also decides *when*. A realignment the weights justify is still skipped when the names involved are moving hard, because trading into that usually churns the position straight back. Those windows are recorded with her reason rather than hidden.
+
+### What limits the trading
+
+Three things, and none of them is a setting you have to manage:
+
+- **The contract.** Every leg's price is checked against Chainlink on-chain, only whitelisted venues can be called, the shares never leave your own wallet, and a trade against a stale price feed is refused outright. Equity feeds gap over a weekend, so weekend windows often record the decision and wait — that throttle comes from the oracle's actual state, never from a market-hours clock.
+- **A turnover budget.** Active management that traded every window would cost more in spread than it adds. Each holder's basket may turn over about a quarter of itself per month; past that, management falls back to keeping the published weights until the budget refreshes.
+- **Cost.** A realignment costs roughly the same in gas whatever the basket is worth, so small positions trade less often by arithmetic: on a basket of a few tens of dollars, a one-point adjustment is worth about a dollar and is not worth making. Active management earns its keep from a few hundred dollars up.
+
+Stopping is instant, with no cooldown, even while the contract is paused.
+
+Every rebalance — and every change to a Grove's recipe — is its own public transaction. The **Rebalances** panel on the Grove's page lists every window Vera checked your basket in, what she decided, and why, whether or not it traded. A window that correctly changed nothing appears there too, because "we looked and left it alone" is a decision worth showing.
 
 ## Honest numbers
 
 The shelf's investor counts and managed totals read straight from the Grove contract — they start at zero and are never faked. Each Grove shows a one-year backtest against the S&P 500 for the same window; [backtests are history, not promises](/safety/backtests-are-history-not-promises/).
+
+One thing the backtest is **not**: it models the Grove's **published weights** held through the year. It does not model Vera's active management, because that has no history yet — she began setting weights herself in August 2026. Her decisions will move the basket away from those weights within the band, so the backtest describes the strategy she manages around, not the returns she has produced. When there is a real track record of active management, it will be published as its own number rather than folded into this one.

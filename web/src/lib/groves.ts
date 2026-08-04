@@ -151,11 +151,11 @@ export const GROVES: GroveDef[] = [
     methodology:
       "**Selection.** The seven largest US technology platforms, each held directly, plus the Nasdaq-100 tracker as the largest single position.\n\n" +
       "**Weighting.** Near-equal across the seven; the index anchor sized above them so no single company decides the basket.\n\n" +
-      "**Rebalancing.** None automatic today: your basket holds exactly what you bought until you change it. Near-zero turnover is the intent, and automated drift management is not live yet.",
+      "**Rebalancing.** Actively managed. Vera sets each window's target weights herself, every six hours, and may scale any name between 0.7x and 1.3x its published weight on momentum, volatility and company news. She cannot add a name, cannot drop one, and cannot move the basket to cash. Weights outside that band are impossible, not merely discouraged: they are clamped in code before any trade is planned, and if her judgment is unavailable the published weights stand.",
     feeBps: 1000,
     minBuyUsd: 20,
     recommendedUsd: RECOMMENDED_BUY_USD,
-    rebalancePolicy: "no automatic rebalancing yet — the basket holds exactly what you bought",
+    rebalancePolicy: "actively managed — Vera sets the weights every six hours, within 0.7x to 1.3x of the published ones",
     launched: true,
     onChainId: 0,
   },
