@@ -122,7 +122,9 @@ export const GROVES: GroveDef[] = [
       "**Weighting.** Market-cap informed with a 20% single-name cap; excess redistributes down the list.\n\n" +
       "**Rebalancing.** None automatic today: your basket holds exactly what you bought until you change it. The screen re-runs quarterly, and when a screen drops a name we publish it here rather than moving your holdings for you. A per-holding impure-income estimate is published so holders can purify that sliver.",
     feeBps: 1000,
-    minBuyUsd: 20,
+    // 12 names, smallest weight 2%: $100 is what it takes for every one of them
+    // to clear the per-leg floor, so every depositor holds the same basket.
+    minBuyUsd: 100,
     recommendedUsd: RECOMMENDED_BUY_USD,
     rebalancePolicy: "no automatic rebalancing yet — the basket holds exactly what you bought",
     launched: false,
@@ -189,7 +191,8 @@ export const GROVES: GroveDef[] = [
       "**Weighting.** Sized by role in the chain: irreplaceable monopolies largest, high-beta assemblers smallest.\n\n" +
       "**Rebalancing.** None automatic today: your basket holds exactly what you bought until you change it. Chips are cyclical; the basket does not pretend otherwise.",
     feeBps: 1000,
-    minBuyUsd: 20,
+    // 11 names, smallest weight 2.8%: $80 clears the per-leg floor on every one.
+    minBuyUsd: 80,
     recommendedUsd: RECOMMENDED_BUY_USD,
     rebalancePolicy: "no automatic rebalancing yet — the basket holds exactly what you bought",
     launched: false,
@@ -233,10 +236,19 @@ export function groveById(id: string): GroveDef | undefined {
   return GROVES.find((g) => g.id === id);
 }
 
-/** Our per-leg sizing floor, USD — one source for pages + chat.
- *  NOT a venue rule: no live venue rejects a size. Each leg is one sponsored
- *  UserOp (~$0.075-0.09 gas), so tiny slices cost more than they're worth. */
-export const MIN_LEG_USD = 11;
+/** Our per-leg sizing floor for GROVES, USD — one source for pages + chat.
+ *  NOT a venue rule: no live venue rejects a size.
+ *
+ *  A grove's legs all settle inside ONE transaction, so an extra name costs a
+ *  marginal swap, not a whole UserOp: measured on 4663, an 8-leg buy is
+ *  4,615,367 gas against 2,579,140 for 4 legs, i.e. ~509k gas (about 4 cents)
+ *  per additional name. The invest path's $11 (RFQ_MIN_BUY_USD) is the floor
+ *  for legs that ARE their own UserOp and does not apply here.
+ *
+ *  This must stay at or above the contract's own MIN_BUY_USDG dust guard and
+ *  low enough that the smallest published weight clears it at minBuyUsd — the
+ *  invariant below enforces exactly that. */
+export const MIN_LEG_USD = 2;
 
 export interface GroveLeg {
   symbol: string;
@@ -244,15 +256,17 @@ export interface GroveLeg {
   reason: string;
 }
 
-/** The legs a buy of amountUsd actually places. Small buys CONCENTRATE: the
- *  same capAllocationLegs greedy the invest plans use keeps components by
- *  descending weight and drops the tail until every kept leg clears the ~$11
- *  sizing floor at renormalized weights. Full diversification returns as the
- *  amount grows (fullDiversificationUsd). One formula for pages + chat. */
+/** The legs a buy of amountUsd actually places. At or above minBuyUsd this is
+ *  ALWAYS every component at its published weight — the invariant below
+ *  guarantees the smallest weight clears MIN_LEG_USD there, so no name is ever
+ *  dropped from a valid buy and two depositors of different size hold the same
+ *  basket. The greedy remains as the safety net for below-minimum amounts a
+ *  caller may still preview. One formula for pages + chat. */
 export function groveLegsFor(g: GroveDef, amountUsd: number): GroveLeg[] {
   return capAllocationLegs(
     g.components.map((c) => ({ symbol: c.symbol, weightPct: c.weightBps / 100, reason: c.reason })),
     amountUsd,
+    MIN_LEG_USD,
   );
 }
 
@@ -284,9 +298,17 @@ for (const g of GROVES) {
       );
     }
   }
-  if (g.minBuyUsd < MIN_LEG_USD) {
+  // THE UNIFORMITY INVARIANT. Every buy at or above the minimum must place
+  // EVERY name, so the basket a depositor holds never depends on their size.
+  // Violating this is what shipped before: minBuyUsd was $20 while the floor
+  // was $11, so a $20 buy placed a single leg and "Titan Grove" meant 100% QQQ
+  // at $20, 4 of 8 names at $50 and the full basket only from $100.
+  const needed = fullDiversificationUsd(g);
+  if (g.minBuyUsd < needed) {
     throw new Error(
-      `Grove "${g.id}": minBuyUsd $${g.minBuyUsd} is under our $${MIN_LEG_USD} per-leg gas floor — even a fully concentrated buy could not fill.`,
+      `Grove "${g.id}": minBuyUsd $${g.minBuyUsd} buys only part of the basket — ` +
+        `its smallest weight (${Math.min(...g.components.map((c) => c.weightBps)) / 100}%) needs $${needed} ` +
+        `to clear the $${MIN_LEG_USD} per-leg floor. Raise minBuyUsd to $${needed} or reweight.`,
     );
   }
   const dupes = new Set<string>();

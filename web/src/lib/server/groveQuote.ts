@@ -40,8 +40,11 @@ export const GROVE_MANAGER = (process.env.NEXT_PUBLIC_GROVE_MANAGER ||
   process.env.GROVE_MANAGER_ADDRESS ||
   "") as Address | "";
 
-/** Mirrors GroveManager.MIN_BUY_USDG — the contract reverts BuyLegTooSmall. */
-export const MIN_BUY_USDG = BigInt(11_000_000);
+/** Mirrors GroveManager.MIN_BUY_USDG — the contract reverts BuyLegTooSmall.
+ *  A permissive DUST guard, not our economics: the sizing floor that decides
+ *  which names a buy places is MIN_LEG_USD in lib/groves.ts, which sits well
+ *  above this. Must match the deployed contract exactly. */
+export const MIN_BUY_USDG = BigInt(250_000);
 /** Mirrors GroveManager.MAX_LEGS. */
 export const MAX_LEGS = 20;
 /** How long the built calldata stays valid. Every leg shares one deadline. */

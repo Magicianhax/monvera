@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { pageMeta } from "@/lib/seo";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { GROVES, groveById, fullDiversificationUsd, MIN_LEG_USD, RECOMMENDED_BUY_USD } from "@/lib/groves";
+import { GROVES, groveById, fullDiversificationUsd, RECOMMENDED_BUY_USD } from "@/lib/groves";
 import { getGrove } from "@/lib/server/groveService";
 import type { BacktestResult } from "@/lib/server/quant";
 import { TokenLogo } from "@/components/lite/TokenLogo";
@@ -179,7 +179,7 @@ export default async function GrovePage({ params }: { params: Promise<{ id: stri
               <span className={s.microLbl}>From</span>
               <span className={s.cellSerif}>{usdWhole(g.minBuyUsd)}</span>
               <span className={s.cellSub}>
-                all {g.components.length} names from {usdWhole(fullUsd)}
+                all {g.components.length} names, every buy
               </span>
             </div>
             <div className={s.cell}>
@@ -391,14 +391,15 @@ export default async function GrovePage({ params }: { params: Promise<{ id: stri
               <b>Venue spread:</b> priced into every quote you approve — paid to the market,
               not to Monvera.
             </p>
-            {/* ~$11 is OUR gas-economics floor, never a "venue minimum" —
-                no venue imposes one, and saying otherwise was inaccurate.
-                The {" "} after each expression is load-bearing: SWC drops a
-                multi-line text node's leading space after an expression. */}
+            {/* The minimum is derived: it is the amount at which the SMALLEST
+                published weight is still worth its own swap, so no buy above it
+                ever drops a name. The {" "} after each expression is
+                load-bearing: SWC drops a multi-line text node's leading space
+                after an expression. */}
             <p className={s.mechRow}>
-              <b>Small buys:</b> below ~${MIN_LEG_USD}{" "}
-              a slice isn&apos;t worth its own gas, so they take the largest names first — our
-              floor, not any venue&apos;s. From {usdWhole(fullUsd)} every name is in
+              <b>Every buy, the whole basket:</b> the {usdWhole(fullUsd)}{" "}
+              minimum is set so the smallest weight is still worth buying, so every holder owns all{" "}
+              {g.components.length} names at the published weights whatever they put in
               {RECOMMENDED_BUY_USD > fullUsd ? (
                 <>; {usdWhole(RECOMMENDED_BUY_USD)}+ keeps trading costs a small share.</>
               ) : (

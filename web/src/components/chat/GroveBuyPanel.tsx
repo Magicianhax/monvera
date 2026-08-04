@@ -217,7 +217,7 @@ export function GroveBuyPanel({ g, onClose }: { g: GroveLive; onClose: () => voi
               ))}
               {quote.skipped.length > 0 && (
                 <div style={{ fontSize: 11, color: "var(--ink-3)", lineHeight: 1.5, paddingTop: 8, borderTop: "1px solid var(--line-2)" }}>
-                  Skipped at this size: {quote.skipped.map((s) => s.symbol).join(", ")}. Small buys take the largest holdings first.
+                  Skipped at this size: {quote.skipped.map((s) => s.symbol).join(", ")}. Buys at or above the minimum normally hold every name, so this is worth a second look before you confirm.
                 </div>
               )}
             </ModalCard>

@@ -101,14 +101,22 @@ export function computeRebalancePlan(
   opts?: PlanOptions,
 ): RebalancePlan | null {
   const driftTriggerBps = opts?.driftTriggerBps ?? 500;
-  const minTurnoverUsd = opts?.minTurnoverUsd ?? 15;
-  const minLegUsd = opts?.minLegUsd ?? 5;
   const maxLegs = opts?.maxLegs ?? 20;
 
   // A partial valuation would misread drift entirely — refuse instead.
   if (holdings.some((h) => !(h.priceUsd > 0))) return null;
   const totalUsd = holdings.reduce((s, h) => s + toUsd(h.amountRaw, h.priceUsd), 0);
   if (totalUsd <= 0) return null;
+
+  // Flat floors silently excluded small baskets from management entirely: a $20
+  // position that has drifted the full 500 bps is $1 of misallocation, so a flat
+  // $5 leg / $15 turnover could never be reached and the position would sit
+  // unmanaged forever while its owner was told it was managed. The floors scale
+  // down with the position and never below $1, so the RULE is identical for
+  // everyone and only the size it applies to changes. Large baskets are
+  // unaffected: above ~$150 the absolute values still bind exactly as before.
+  const minTurnoverUsd = opts?.minTurnoverUsd ?? Math.min(15, Math.max(2, totalUsd * 0.1));
+  const minLegUsd = opts?.minLegUsd ?? Math.min(5, Math.max(1, totalUsd * 0.05));
 
   // Deviation per holding (actual − target) plus pure buy candidates at −target.
   const rows = holdings.map((h) => {

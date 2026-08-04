@@ -16,6 +16,22 @@ const { readGroveRegistry } = require("./lib/registry");
 //   npx hardhat run scripts/grove-verify.js --network robinhood
 
 const ZERO = "0x0000000000000000000000000000000000000000";
+
+/** The app's mirror of the contract's dust floor, read as text rather than
+ *  imported: groveQuote.ts is "server-only" and pulls the whole venue stack in,
+ *  which a keyless verify run must not need. null when it cannot be found. */
+function readAppMinBuyUsdg() {
+  try {
+    const src = require("node:fs").readFileSync(
+      require("node:path").resolve(__dirname, "../../web/src/lib/server/groveQuote.ts"),
+      "utf8",
+    );
+    const m = /MIN_BUY_USDG\s*=\s*BigInt\(\s*([\d_]+)\s*\)/.exec(src);
+    return m ? m[1].replace(/_/g, "") : null;
+  } catch {
+    return null;
+  }
+}
 const same = (a, b) => String(a).toLowerCase() === String(b).toLowerCase();
 
 const AGG_ABI = [
@@ -62,17 +78,19 @@ async function main() {
   console.log(`\nGroveManager ${GROVE_MANAGER}`);
 
   // ── immutables ────────────────────────────────────────────────────────────
-  const [onUsdg, onTreasury, owner, manager, guardian, paused, bandBps, staleBandBps, count] = await Promise.all([
-    gm.read.usdg(),
-    gm.read.treasury(),
-    gm.read.owner(),
-    gm.read.manager(),
-    gm.read.guardian(),
-    gm.read.paused(),
-    gm.read.bandBps(),
-    gm.read.staleBandBps(),
-    gm.read.groveCount(),
-  ]);
+  const [onUsdg, onTreasury, owner, manager, guardian, paused, bandBps, staleBandBps, count, minBuy] =
+    await Promise.all([
+      gm.read.usdg(),
+      gm.read.treasury(),
+      gm.read.owner(),
+      gm.read.manager(),
+      gm.read.guardian(),
+      gm.read.paused(),
+      gm.read.bandBps(),
+      gm.read.staleBandBps(),
+      gm.read.groveCount(),
+      gm.read.MIN_BUY_USDG(),
+    ]);
   console.log(`usdg      ${onUsdg}`);
   console.log(`treasury  ${onTreasury}`);
   console.log(`owner     ${owner}`);
@@ -87,6 +105,22 @@ async function main() {
   if (same(guardian, owner) && guardian !== ZERO) bad("guardian == owner — the pause role is meaningless");
   if (same(manager, owner) && manager !== ZERO) bad("manager == owner — a hot key holds every owner power");
   if (paused) warn("contract is PAUSED — no buys or rebalances");
+
+  // The app sizes every leg against its own mirror of this constant. If the two
+  // disagree the failure is total and silent until a user tries to buy: legs
+  // sized under the deployed floor revert BuyLegTooSmall and the whole atomic
+  // buy dies. Deploying the app ahead of the contract is exactly how that
+  // happens, so it is checked here rather than trusted.
+  const appFloor = readAppMinBuyUsdg();
+  console.log(`MIN_BUY_USDG  ${minBuy} on chain / ${appFloor} in the app`);
+  if (appFloor === null) {
+    warn("could not read MIN_BUY_USDG from web/src/lib/server/groveQuote.ts");
+  } else if (BigInt(appFloor) !== BigInt(minBuy)) {
+    bad(
+      `MIN_BUY_USDG ${minBuy} on chain != ${appFloor} in the app — every buy whose smallest ` +
+        `leg falls between the two reverts BuyLegTooSmall. Deploy the contract first, then the app.`,
+    );
+  }
 
   // ── venues ────────────────────────────────────────────────────────────────
   console.log("venues");

@@ -1186,19 +1186,40 @@ describe("GroveManager", function () {
   });
 
   describe("hardening: dust buys are rejected by the minimum notional", () => {
-    it("a 1-unit buy reverts (no activeUserCount inflation) but an 11-USDG buy works", async () => {
+    it("a 1-unit buy reverts (no activeUserCount inflation) but a 0.25-USDG buy works", async () => {
       await expectRevert(
         gm.write.buy([0n, [legBuy(aapl, 1n, 1n)], FOREVER], { account: user1.account }),
         "BuyLegTooSmall"
       );
       expect((await groveStats()).users).to.equal(0n); // nothing minted, no user counted
-      // The floor is exactly 11 USDG.
+      // The floor is exactly 0.25 USDG: a dust guard, not a business rule. It
+      // has to stay low enough that the smallest published weight in a grove
+      // still clears it at the app's minimum buy, or a deposit silently buys
+      // only part of the basket (the 11-USDG floor did exactly that).
+      const floor = await gm.read.MIN_BUY_USDG();
+      expect(floor).to.equal(250_000n);
       await expectRevert(
-        gm.write.buy([0n, [legBuy(aapl, U(11) - 1n, 1n)], FOREVER], { account: user1.account }),
+        gm.write.buy([0n, [legBuy(aapl, floor - 1n, 1n)], FOREVER], { account: user1.account }),
         "BuyLegTooSmall"
       );
-      await gm.write.buy([0n, [legBuy(aapl, U(11), 1n)], FOREVER], { account: user1.account });
+      await gm.write.buy([0n, [legBuy(aapl, floor, 1n)], FOREVER], { account: user1.account });
       expect((await groveStats()).users).to.equal(1n);
+    });
+
+    it("a $20 buy fills every name of an 8-name grove at published weights", async () => {
+      // The regression the new floor exists to prevent: at 11 USDG a $20 buy
+      // could place at most one leg, so two depositors of different size held
+      // different baskets and the manager could never equalize them.
+      const weightsBps = [1600n, 1400n, 1300n, 1300n, 1100n, 1100n, 1100n, 1100n];
+      const total = U(20);
+      const floor = await gm.read.MIN_BUY_USDG();
+      // Every published weight clears the floor at the app's $20 minimum.
+      for (const bps of weightsBps) {
+        expect((total * bps) / 10_000n >= floor).to.equal(true);
+      }
+      // The old floor is what broke it: at 11 USDG only the top name survived.
+      const cleared11 = weightsBps.filter((bps) => (total * bps) / 10_000n >= U(11)).length;
+      expect(cleared11).to.equal(0);
     });
   });
 });

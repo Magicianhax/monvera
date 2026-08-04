@@ -119,7 +119,13 @@ contract GroveManager is Ownable2Step, ReentrancyGuard {
     /// matching the product's "$11 per leg" rule — without it a 1-raw-unit buy
     /// (0.000001 USDG) mints a full activeUserCount++, letting the public tracker
     /// metrics be Sybil-inflated for ~gas.
-    uint256 public constant MIN_BUY_USDG = 11_000_000; // 11 USDG (6dp)
+    // Dust floor only. This is deliberately PERMISSIVE: it exists so a leg
+    // cannot be zero or trivially small, not to express Monvera's economics.
+    // The first deploy set it at 11 USDG, which baked a business policy (the
+    // old per-leg gas floor) into immutable bytecode — so a $20 buy could only
+    // reach the largest 2 of 8 names and no two depositors held the same
+    // basket. Policy now lives in the app (grove.minBuyUsd), where it can move.
+    uint256 public constant MIN_BUY_USDG = 250_000; // 0.25 USDG (6dp)
 
     // ── oracle band ─────────────────────────────────────────────────────────
     /// @dev Hard ceilings on the owner-settable bands. Gamma Strategies lost ~$6M

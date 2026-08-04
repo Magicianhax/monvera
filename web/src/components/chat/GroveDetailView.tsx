@@ -24,7 +24,6 @@ import { useGroveHistory, type GroveHistory, type GroveLive } from "@/hooks/useG
 import type { GrovePositionLive } from "@/hooks/useGrovePosition";
 import type { BacktestResult } from "@/lib/server/quant";
 import { GROVE_MANAGER } from "@/lib/groveManager";
-import { fullDiversificationUsd } from "@/lib/groves";
 import { assetBySymbol } from "@/lib/tokens";
 import { toTile, displayFor } from "@/lib/displayAssets";
 import { AssetTile } from "@/components/design";
@@ -574,8 +573,8 @@ export function GroveDetailView({
               <Faq q="What was left out, and why?" a={g.excluded.map((e) => `${e.symbol}: ${e.why}`).join("\n")} />
             )}
             <Faq
-              q="Why did my buy not include every name?"
-              a={`Each holding is bought with its own swap, and a swap has to be worth its own cost. Below about $11 a slice is not, so small buys concentrate into the largest weights and skip the tail. The buy screen lists exactly which names were left out before you confirm.\n\nFrom ${usd0(fullDiversificationUsd(g))} every one of the ${g.components.length} names is included.`}
+              q="Does a smaller buy get a smaller basket?"
+              a={`No. Every buy holds all ${g.components.length} names at the published weights, whether you put in ${usd0(g.minBuyUsd)} or ${usd0(g.minBuyUsd * 50)}. The minimum is set at ${usd0(g.minBuyUsd)} precisely so the smallest weight is still worth buying, which is what makes every holder's basket the same shape and lets one decision manage all of them in proportion.\n\nThe whole basket settles in a single transaction, so you get all of it or none of it.`}
             />
           </div>
         </div>
@@ -697,7 +696,7 @@ export function GroveDetailView({
               </>
             ) : (
               <div className="tnum" style={{ fontSize: 10.5, color: "var(--ink-3)", textAlign: "center", marginTop: 8 }}>
-                {open ? `All ${g.components.length} names from ${usd0(fullDiversificationUsd(g))}` : "Buys open when the contract is live"}
+                {open ? `All ${g.components.length} names, every buy` : "Buys open when the contract is live"}
               </div>
             )}
           </div>

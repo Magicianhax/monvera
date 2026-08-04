@@ -56,9 +56,9 @@ export const RFQ_MIN_SELL_USD = 5;
 /** Minimum a plan/autopilot run must invest — one leg that clears the RFQ floor. */
 export const MIN_INVEST_USD = RFQ_MIN_BUY_USD;
 
-/** Most legs an amount can support with every leg at or above the RFQ floor. */
-export function maxLegsForAmount(amountUsd: number): number {
-  return Math.max(1, Math.floor(amountUsd / RFQ_MIN_BUY_USD));
+/** Most legs an amount can support with every leg at or above `floorUsd`. */
+export function maxLegsForAmount(amountUsd: number, floorUsd = RFQ_MIN_BUY_USD): number {
+  return Math.max(1, Math.floor(amountUsd / floorUsd));
 }
 
 /**
@@ -66,24 +66,30 @@ export function maxLegsForAmount(amountUsd: number): number {
  * split by weight. Splitting $40 across 8 names makes ~$5 legs that the makers
  * reject; only the AMM-routed ones fill, so the user's money lands short.
  *
- * Keeps the highest-weight names up to floor(amount / $11), then drops the
- * smallest remaining leg until each survivor's dollar share is >= $11, and
+ * Keeps the highest-weight names up to floor(amount / floorUsd), then drops the
+ * smallest remaining leg until each survivor's dollar share is >= floorUsd, and
  * renormalizes to whole percents summing to 100.
+ *
+ * `floorUsd` defaults to the invest path's per-leg floor, where each leg is its
+ * own sponsored UserOp. Groves pass their own, much lower floor: a grove's legs
+ * all settle inside ONE transaction, so an extra name costs a marginal swap
+ * (~509k gas, measured) rather than a whole UserOp.
  */
 export function capAllocationLegs<T extends { weightPct: number }>(
   allocations: T[],
   amountUsd: number,
+  floorUsd = RFQ_MIN_BUY_USD,
 ): T[] {
   let list = [...allocations]
     .filter((a) => a.weightPct > 0)
     .sort((a, b) => b.weightPct - a.weightPct)
-    .slice(0, maxLegsForAmount(amountUsd));
+    .slice(0, maxLegsForAmount(amountUsd, floorUsd));
 
   // Drop the smallest leg until every survivor's share clears the floor.
   while (list.length > 1) {
     const total = list.reduce((s, a) => s + a.weightPct, 0);
     const min = list[list.length - 1];
-    if ((min.weightPct / total) * amountUsd >= RFQ_MIN_BUY_USD) break;
+    if ((min.weightPct / total) * amountUsd >= floorUsd) break;
     list = list.slice(0, -1);
   }
 
