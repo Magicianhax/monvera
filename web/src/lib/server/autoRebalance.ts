@@ -239,7 +239,7 @@ async function sendBudgetNotice(
       kind: "system",
       title: `${def.name} auto-manage budget spent`,
       body:
-        `Auto-manage has stopped for your ${def.name} basket: less than one of our $15 minimum moves remains of the $${total.toFixed(2)} lifetime budget you approved. ` +
+        `Auto-manage has stopped for your ${def.name} basket: too little of the $${total.toFixed(2)} lifetime budget you approved remains to cover another move. ` +
         "This is an early, limited setting. One signature in the grove's Managed card upgrades it to full management; nothing changes on its own.",
       at: Date.now(),
     });
@@ -381,7 +381,9 @@ async function planOne(def: GroveDef, user: Address, ctx: RunCtx): Promise<Outco
 
   const plan = computeRebalancePlan(holdings, missing, { maxTurnoverUsd, maxFractionBps: Number(fractionBps) }, { driftTriggerBps: DRIFT_TRIGGER_BPS });
   if (!plan) {
-    return out("no-drift", `no actionable plan (drift under ${DRIFT_TRIGGER_BPS} bps, under our $15 minimum move, or nothing sellable within caps)`);
+    // No hard-coded dollar floor here: it scales with the position now
+    // (rebalancePlan), so naming one number would be wrong for most baskets.
+    return out("no-drift", `no actionable plan (drift under ${DRIFT_TRIGGER_BPS} bps, too small a move to be worth its costs, or nothing sellable within caps)`);
   }
 
   // R7, feed half, per touched symbol: a plan touching a stale round cannot
