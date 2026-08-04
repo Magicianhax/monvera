@@ -17,7 +17,12 @@ const TREASURY = "0xb87f5A74267ca3F9512b8511B32cCd804EA3707E"; // buyback treasu
 // Deployed 2026-07-27 with the bootstrap window, so venues and feeds were live
 // on day 0. The earlier 0x8b707a85… is ORPHANED: it holds two unused groves and
 // its venue whitelist never applied. Nothing points at it.
-const GROVE_MANAGER = process.env.GROVE_MANAGER_ADDRESS || "0xf0b1a694b85f6868b335f1799a044c15da01e5a6";
+// Deployed 2026-08-04 with MIN_BUY_USDG = 0.25 USDG, so a buy at a grove's
+// minimum fills EVERY name. The previous manager (0xf0b1a694…e5a6) had an
+// 11 USDG per-leg floor baked in as an immutable constant: against a $20
+// minimum it bought a single stock, so no two depositors held the same basket.
+// It is empty and orphaned — do not revive it.
+const GROVE_MANAGER = process.env.GROVE_MANAGER_ADDRESS || "0x5ee5df3e027fd5d9a3fbba4cb19b0edeb4b33fb8";
 
 // Feed staleness threshold, seconds. Above it a feed is STALE: the wide
 // staleBandBps applies and the manager is locked out of that token.
