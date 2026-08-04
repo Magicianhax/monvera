@@ -7,7 +7,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { GroveLive, GrovesPayload } from "@/lib/server/groveService";
 import type { GroveHistory } from "@/lib/server/groveHistory";
-import type { GroveCheckRow } from "@/app/api/groves/[id]/checks/route";
+import type { GroveCheckRow } from "@/lib/server/groveChecks";
 
 interface GroveChecks {
   rows: GroveCheckRow[];
