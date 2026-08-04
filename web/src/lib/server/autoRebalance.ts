@@ -4,10 +4,10 @@ import "server-only";
 // actual rebalances. Safety gates run first, in order — the KV kill switch
 // (rebalance:kill, FAIL CLOSED: an unreadable switch halts the run like a set
 // one), an advisory run lock, the manager gas floor, then receipt repair for
-// any prior window's unconfirmed send, then the market-session + feed-
-// freshness gate (R7: the contract hard-reverts stale oracle rounds, so
-// off-session windows only record eligibility and wait — no quotes, no sims,
-// no LLM call). Inside the session, for every launched grove it
+// any prior window's unconfirmed send. The only session gate is per-symbol
+// feed FRESHNESS (tokenized markets trade 24/7; the contract hard-reverts
+// stale oracle rounds, which in practice throttles weekend windows and
+// nothing else). Then, for every launched grove it
 //
 //   1. finds who ever opted in (AutoEnabled events, Blockscout v2) and keeps
 //      only those still enabled, off cooldown, and with budget left,
@@ -178,21 +178,16 @@ function msg(err: unknown): string {
   return err instanceof Error ? err.message.split("\n")[0] : String(err);
 }
 
-/** R7, session half: weekday 15:00–20:00 UTC — US regular hours under both
- *  EST and EDT, skipping the open. The only span where 4663 equity feeds sit
- *  reliably inside their heartbeat; with the 6h cron grid only the 18:00 UTC
- *  fire lands here, so auto-manage acts once per weekday and the other
- *  windows record and wait. */
-function inMarketSession(at = new Date()): boolean {
-  const day = at.getUTCDay();
-  if (day === 0 || day === 6) return false;
-  const hour = at.getUTCHours();
-  return hour >= 15 && hour < 20;
-}
-
-/** Fresh means a Chainlink round younger than the feed heartbeat. Fallback-
- *  priced symbols (arcus/market/none) count stale: the CONTRACT prices every
- *  leg from its feed, whatever our sweep fell back to. */
+/** Fresh means a Chainlink round younger than the feed heartbeat — and this
+ *  is the ONLY session gate. Tokenized markets trade around the clock, so the
+ *  driver acts in every 6h window where the touched feeds are fresh; a
+ *  wall-clock "market hours" gate was tried and dropped as TradFi cosplay
+ *  (user buys settle fine at 1am through the same pools and bands).
+ *  Weeknights the rounds stay inside the 24h heartbeat; weekends they gap
+ *  52h+, so Saturday-evening-to-Monday windows throttle themselves per
+ *  symbol, by the oracle's actual state instead of a clock's guess at it.
+ *  Fallback-priced symbols (arcus/market/none) count stale: the CONTRACT
+ *  prices every leg from its feed, whatever our sweep fell back to. */
 function feedFresh(p: AssetPrice | undefined, nowSeconds: number): boolean {
   return p?.source === "chainlink" && p.updatedAt !== undefined && nowSeconds - p.updatedAt < FEED_MAX_AGE_S;
 }
@@ -805,39 +800,6 @@ export async function runAutoRebalance(): Promise<AutoRebalanceReport> {
   }
 
   const launched = GROVES.filter((g) => g.onChainId !== undefined);
-
-  // ── R7, session half: off-session windows record eligibility and stop —
-  //    no quotes, no sims, no LLM call ──
-  if (!inMarketSession()) {
-    for (const def of launched) {
-      let users: Address[];
-      try {
-        users = await optedInCandidates(def.onChainId!);
-      } catch (err) {
-        errors.push(`candidate scan failed for ${def.id}: ${msg(err)}`);
-        await alertOwner("candidate scan failed", `${def.id}: ${msg(err)}`);
-        continue;
-      }
-      const groveId = BigInt(def.onChainId!);
-      const flags = await Promise.all(
-        users.map((u) =>
-          client
-            .readContract({ address: GROVE_MANAGER as Address, abi: ABI, functionName: "autoConfigs", args: [u, groveId] })
-            .then((r) => r[0])
-            .catch(() => null),
-        ),
-      );
-      for (let i = 0; i < users.length; i++) {
-        if (flags[i] !== true) continue;
-        await record({ grove: def.id, user: users[i], outcome: "off-session", reason: "outside market session (weekdays 15:00–20:00 UTC)" });
-      }
-    }
-    const gate: RunGate = gasFloor ? "gas-floor" : "off-session";
-    await recordRunFinish(runId, { startedAt, finishedAt: Date.now(), gate, counts: countBy(outcomes), error: errors.join("; ") || undefined });
-    await pruneLedger();
-    console.log(`[auto-rebalance] ${runId} gate=${gate} (${outcomes.length} eligible recorded)`);
-    return { ran: true, runId, gate, outcomes, repairs };
-  }
 
   // One price sweep for every symbol any launched grove could touch. Total
   // failure surfaces per user as pricing-unavailable — never "no drift".

@@ -30,6 +30,8 @@ function db(): D1Db {
  *  (the counts say what happened inside it); everything else names the gate
  *  that stopped it. A row with NULL gate AND NULL finished_at is a run that
  *  crashed mid-window. */
+// "off-session" survives for rows written before the wall-clock gate was
+// dropped (2026-08-04, feeds-freshness is the only session gate now).
 export type RunGate = "acted" | "off-session" | "stale-feeds" | "killed" | "locked" | "gas-floor";
 
 /** The truthful per-user taxonomy. "unconfirmed" is a receipt timeout — mined

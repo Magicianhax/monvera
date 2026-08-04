@@ -104,19 +104,14 @@ function Row({ k, v, sub, strong, color }: { k: ReactNode; v: ReactNode; sub?: R
   );
 }
 
-/** The next ACTING window: the driver checks every six hours, but only the
- *  weekday 18:00 UTC fire lands inside the market-session gate (weekdays
- *  15:00-20:00 UTC), so that is the only moment a rebalance can actually
- *  execute. The other checks record drift and wait — counting down to them
- *  would promise action they cannot take. */
+/** The next acting window: the driver fires every six hours (00/06/12/18
+ *  UTC) and acts in ANY window where the touched Chainlink rounds are fresh —
+ *  tokenized markets trade around the clock, so there is no market-hours
+ *  clock here. Weekend windows can still pass without action when the feeds
+ *  themselves have gone stale; the caption says so. */
 function nextActingWindow(now: number): number {
-  const d = new Date(now);
-  const t = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 18, 0, 0, 0));
-  while (t.getTime() <= now || t.getUTCDay() === 0 || t.getUTCDay() === 6) {
-    t.setUTCDate(t.getUTCDate() + 1);
-    t.setUTCHours(18, 0, 0, 0);
-  }
-  return t.getTime();
+  const WINDOW_MS = 6 * 3600 * 1000;
+  return now - (now % WINDOW_MS) + WINDOW_MS;
 }
 
 function fmtCountdown(ms: number): string {
@@ -149,7 +144,7 @@ function NextWindowCell({ open }: { open: boolean }) {
   return (
     <>
       <div className="tnum" style={{ fontSize: 21, fontWeight: 600, marginTop: 6 }}>{fmtCountdown(nextActingWindow(now) - now)}</div>
-      <div style={{ fontSize: 11, color: "var(--ink-3)", marginTop: 2 }}>weekdays, only on real drift</div>
+      <div style={{ fontSize: 11, color: "var(--ink-3)", marginTop: 2 }}>every 6 hours, only on real drift</div>
     </>
   );
 }
@@ -553,7 +548,7 @@ export function GroveDetailView({
               a={
                 open
                   ? "Yes. From the moment you buy, Vera keeps your position at the published weights: she checks every six hours and acts during US market hours when the basket has genuinely drifted. Everyone in the grove is managed together, in proportion to what they hold.\n\nYou can switch management off at buy time or any time after, instantly, in the Managed card. Every rebalance is its own transaction in the list above; an empty list means nothing has ever touched the basket."
-                  : "Yes, once it opens. Management begins when the grove opens on-chain: from your first buy, Vera keeps your position at the published weights, checking every six hours and acting during US market hours when it has genuinely drifted.\n\nYou can switch management off at buy time or any time after, instantly, in the Managed card."
+                  : "Yes, once it opens. Management begins when the grove opens on-chain: from your first buy, Vera keeps your position at the published weights, checking every six hours, around the clock, and acting when it has genuinely drifted and the on-chain prices are fresh.\n\nYou can switch management off at buy time or any time after, instantly, in the Managed card."
               }
             />
             <Faq
