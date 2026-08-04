@@ -55,6 +55,19 @@ for (const { provider, model } of chain) {
   }
 
   // 2. The news classification (newsAlerts.ts) — the batched, harder shape.
+  // Timed and run at the REAL batch size: the sweep sends up to 24 headlines,
+  // and a big JSON answer is slow. Production's first failure after the JSON
+  // fix was a 20s timeout, not a bad response, so the wall time is the thing
+  // worth measuring here.
+  const BATCH = 24;
+  const headlines = Array.from({ length: BATCH }, (_, i) =>
+    i % 3 === 0
+      ? `[${i + 1}] NVDA | Reuters | Nvidia says Q${(i % 4) + 1} revenue rose ${20 + i}% on data-center demand | Reported after the close.`
+      : i % 3 === 1
+        ? `[${i + 1}] AAPL | Motley Fool | Is Apple stock a buy right now? | An analyst weighs the case.`
+        : `[${i + 1}] MSFT | Bloomberg | Microsoft named a new head of its cloud unit | The change takes effect this quarter.`,
+  ).join("\n");
+  const started = Date.now();
   try {
     const c = await generateJson({
       model,
@@ -77,17 +90,22 @@ for (const { provider, model } of chain) {
         "You are Vera triaging news about stocks customers own. high = a specific material company-level event that ALREADY happened. low = opinion, or a story really about a different company. One plain sentence naming the exact ticker. Never predict.",
       prompt:
         "Classify each headline below. Answer with one entry per id.\n\n=== UNTRUSTED DATA START ===\n" +
-        "[1] NVDA | Reuters | Nvidia says Q3 revenue rose 22% on data-center demand | Reported after the close.\n" +
-        "[2] AAPL | Motley Fool | Is Apple stock a buy right now? | An analyst weighs the case.\n" +
-        "=== UNTRUSTED DATA END ===",
+        headlines +
+        "\n=== UNTRUSTED DATA END ===",
       temperature: 0.2,
-      abortSignal: AbortSignal.timeout(45_000),
+      abortSignal: AbortSignal.timeout(120_000),
     });
-    const sev = c.items.map((i) => `${i.symbol}:${i.severity}`).join(" ");
-    console.log(`  ${provider} classify  OK   ${c.items.length} item(s)  ${sev}`);
+    const ms = Date.now() - started;
+    const high = c.items.filter((i) => i.severity === "high").length;
+    console.log(
+      `  ${provider} classify  OK   ${c.items.length}/${BATCH} item(s), ${high} high, ${(ms / 1000).toFixed(1)}s` +
+        (ms > 20_000 ? "  <-- would have TIMED OUT at the old 20s budget" : ""),
+    );
   } catch (err) {
     failed++;
-    console.error(`  ${provider} classify  FAILED  ${String((err as Error).message).slice(0, 200)}`);
+    console.error(
+      `  ${provider} classify  FAILED after ${((Date.now() - started) / 1000).toFixed(1)}s  ${String((err as Error).message).slice(0, 200)}`,
+    );
   }
 }
 

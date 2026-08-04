@@ -237,11 +237,17 @@ async function classify(candidates: Candidate[]): Promise<Classified[] | null> {
     "=== UNTRUSTED DATA END ===",
   ].join("\n");
 
-  const deadline = Date.now() + 25_000;
+  // MEASURED, not guessed: a full 24-headline batch takes ~14.5s against
+  // Virtuals (scripts/ai-smoke.ts prints the number). The first budget here was
+  // 20s, which looked fine locally and timed out in the Worker every hour — the
+  // edge-to-provider path is slower and generateText retries once, so one slow
+  // attempt plus its retry blew straight through it. 60s per attempt leaves
+  // room for both; the sweep is hourly and nothing waits on it.
+  const deadline = Date.now() + 75_000;
   let lastErr: unknown = null;
   for (const { model } of resolveModelChain()) {
-    const budget = Math.min(20_000, deadline - Date.now());
-    if (budget < 3_000) break;
+    const budget = Math.min(60_000, deadline - Date.now());
+    if (budget < 5_000) break;
     try {
       const object = await generateJson({
         model,

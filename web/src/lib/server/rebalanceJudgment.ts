@@ -157,11 +157,16 @@ export async function judgeRebalance(brief: RebalanceBrief): Promise<RebalanceVe
     return { action: "defer", reason: "Market data was unavailable, so the rebalance waits for the next window.", source: "outage", lintOk: true };
   }
 
-  const deadline = Date.now() + 25_000;
+  // One short verdict is far quicker than the news batch (~14.5s for 24 items,
+  // see scripts/ai-smoke.ts), but the old 20s budget was still tight enough to
+  // time out from the Worker once generateText's single retry was counted. This
+  // stays smaller than the news budget on purpose: a rebalance window judges
+  // once per grove and a defer costs nothing, so it should give up sooner.
+  const deadline = Date.now() + 60_000;
   let lastErr: unknown = null;
   for (const { model } of resolveModelChain()) {
-    const budget = Math.min(20_000, deadline - Date.now());
-    if (budget < 3_000) break;
+    const budget = Math.min(45_000, deadline - Date.now());
+    if (budget < 5_000) break;
     try {
       const object = await generateJson({
         model,
