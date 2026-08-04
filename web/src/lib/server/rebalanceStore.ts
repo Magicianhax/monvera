@@ -332,6 +332,34 @@ export async function listUnconfirmed(limit = 20): Promise<RebalanceOutcomeRow[]
   return (results ?? []).map(rowToOutcome);
 }
 
+/** Dollars this holder's basket has actually turned over since `since`, from
+ *  rebalances that really happened (a defer or a no-drift moved nothing).
+ *
+ *  Active management makes this load-bearing: a tilt of a point or two is
+ *  ~3% turnover, and four windows a day unchecked is ~400% a month, which at
+ *  venue spread quietly bleeds far more than the drift it corrects. The
+ *  budget is the only thing standing between "actively managed" and "churned".
+ *
+ *  Fail CLOSED: an unreadable ledger returns Infinity, which reads as "budget
+ *  spent" and drops the window back to passive drift maintenance. Being
+ *  wrongly passive costs a missed adjustment; being wrongly active costs
+ *  money. */
+export async function turnoverSince(user: string, groveId: string, since: number): Promise<number> {
+  try {
+    const row = await db()
+      .prepare(
+        `SELECT COALESCE(SUM(turnover_usd), 0) AS total FROM rebalance_outcomes
+         WHERE user = ? AND grove_id = ? AND outcome IN ('rebalanced','unconfirmed') AND created_at >= ?`,
+      )
+      .bind(user.toLowerCase(), groveId, since)
+      .first<{ total: number }>();
+    return Number(row?.total ?? 0);
+  } catch (e) {
+    console.error("[rebalance-ledger] turnover read failed:", e instanceof Error ? e.message : e);
+    return Number.POSITIVE_INFINITY;
+  }
+}
+
 /** One holder's own record of every window Vera checked their basket in,
  *  newest first — what the Rebalances panel reads.
  *

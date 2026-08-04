@@ -22,6 +22,9 @@ import { judgeRebalance, displayReason } from "../src/lib/server/rebalanceJudgme
 import { toCheckRow } from "../src/lib/server/groveChecks";
 import { GROVES } from "../src/lib/groves";
 import { assetBySymbol } from "../src/lib/tokens";
+import { veraTilt, TILT_TRIGGER_BPS } from "../src/lib/server/veraTilt";
+import { universeStatsRows } from "../src/lib/server/quant";
+import { getDaySummary } from "../src/lib/server/marketData";
 
 for (const line of readFileSync(resolve(process.cwd(), ".env.local"), "utf8").split(/\r?\n/)) {
   const m = /^([A-Z0-9_]+)=(.*)$/.exec(line);
@@ -30,9 +33,13 @@ for (const line of readFileSync(resolve(process.cwd(), ".env.local"), "utf8").sp
 
 
 async function main() {
-const [address, shockSymbol = "NVDA", movePctRaw = "45"] = process.argv.slice(2);
+const [address, shockSymbol = "NVDA", movePctRaw = "45", scaleRaw = "1"] = process.argv.slice(2);
 if (!address) throw new Error("usage: rebalance-rehearse <address> [SYMBOL] [movePct]");
 const movePct = Number(movePctRaw);
+// Scale the position to ask "what would this basket do at a realistic size?".
+// Fixed gas means a $50 basket and a $5,000 one behave completely differently
+// under the same tilt, and the small one is the misleading case to test on.
+const scale = Number(scaleRaw) || 1;
 
 const MANAGER = process.env.NEXT_PUBLIC_GROVE_MANAGER as `0x${string}`;
 const grove = GROVES.find((g) => g.id === "titan")!;
@@ -74,8 +81,8 @@ const holdings = tokens.map((token, i) => {
   return {
     token,
     symbol: comp.symbol,
-    amountRaw: amounts[i],
-    sellableRaw: amounts[i], // the driver clamps by allowance/balance; both are full here
+    amountRaw: amounts[i] * BigInt(Math.round(scale)),
+    sellableRaw: amounts[i] * BigInt(Math.round(scale)), // the driver clamps by allowance/balance; both are full here
     priceUsd: livePrice(comp.symbol) * shocked,
     targetWeightBps: comp.weightBps,
   };
@@ -93,12 +100,37 @@ for (const h of holdings.sort((a, b) => b.targetWeightBps - a.targetWeightBps)) 
   );
 }
 
+// The REAL active weights: exactly what the driver now asks for each window.
+const symbols = grove.components.map((c) => c.symbol);
+const [stats, day] = await Promise.all([
+  universeStatsRows(symbols).catch(() => []),
+  getDaySummary().catch(() => ({}) as Awaited<ReturnType<typeof getDaySummary>>),
+]);
+const statBy = new Map(stats.map((s) => [s.symbol, s]));
+const tilt = await veraTilt(grove.name, grove.components.map((c) => ({
+  symbol: c.symbol,
+  baseWeightBps: c.weightBps,
+  dayChangePct: (day as Record<string, { dayChangePct?: number }>)[c.symbol]?.dayChangePct,
+  ret3mPct: statBy.get(c.symbol)?.ret3mPct,
+  volPct: statBy.get(c.symbol)?.volPct,
+})));
+console.log(`\nVera's active weights this window (source=${tilt.source}, lintOk=${tilt.lintOk}):`);
+console.log(`  "${tilt.reason}"`);
+for (const c of grove.components) {
+  const t = tilt.weights[c.symbol] ?? c.weightBps;
+  const d = (t - c.weightBps) / 100;
+  console.log(
+    `   ${c.symbol.padEnd(6)} ${(c.weightBps / 100).toFixed(1)}% -> ${(t / 100).toFixed(1)}%   ${d >= 0 ? "+" : ""}${d.toFixed(1)}pp`,
+  );
+}
+for (const h of holdings) h.targetWeightBps = tilt.weights[h.symbol] ?? h.targetWeightBps;
+
 // The REAL planner, with the REAL caps a managed vault signs.
 const plan = computeRebalancePlan(
   holdings,
   [],
   { maxTurnoverUsd: total, maxFractionBps: 10_000 },
-  { driftTriggerBps: 500 },
+  { driftTriggerBps: tilt.source === "model" ? TILT_TRIGGER_BPS : 500 },
 );
 
 if (!plan) {

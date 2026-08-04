@@ -45,6 +45,10 @@ import { kyberQuote } from "./kyber";
 import { GROVE_MANAGER, GROVE_LEG_SLIPPAGE_BPS } from "./groveQuote";
 import { computeRebalancePlan, type PlanHolding, type PlanTarget } from "./rebalancePlan";
 import { judgeRebalance, displayReason, type JudgmentRow, type RebalanceVerdict } from "./rebalanceJudgment";
+import { veraTilt, TILT_TRIGGER_BPS, type TiltResult, type TiltRow } from "./veraTilt";
+import { universeStatsRows } from "./quant";
+import { getDaySummary } from "./marketData";
+import { recentHeadlines } from "./newsFeed";
 import { addNotification } from "./notifyStore";
 import { listRecentUsers } from "./userDirectory";
 import {
@@ -60,6 +64,7 @@ import {
   wasBudgetNoticeRecent,
   latestRuns,
   pruneLedger,
+  turnoverSince,
   type RunGate,
   type RebalanceOutcome,
   type RebalanceLeg,
@@ -108,6 +113,11 @@ const KILL_KEY = "rebalance:kill";
  *  mid-run. Real idempotency is the D1 upsert key plus the contract cooldown;
  *  notification dedup keys off the ledger, never this lock. */
 const LOCK_TTL_S = 600;
+/** Active management may turn a holder's basket over this much per rolling 30
+ *  days before it reverts to passive drift maintenance for them. 25% is about
+ *  eight full tilt-sized rebalances a month; past that the spread starts to
+ *  outweigh what the adjustments are worth. */
+const TURNOVER_BUDGET_FRACTION = 0.25;
 const SIM_REFUSED = "simulation refused";
 
 interface KvNamespace {
@@ -292,6 +302,66 @@ interface RunCtx {
   bySmart: Map<string, string>;
   /** Users whose plan touched a stale feed this window (gate accounting). */
   staleBlocked: number;
+  /** This window's ACTIVE target weights per grove id: symbol → bps, always
+   *  summing to 10000 and always inside the published band (clampWeights).
+   *  Absent, or source "base", means the published weights — which is exactly
+   *  the drift-only behaviour the vault had before active management. */
+  tilt: Map<string, TiltResult>;
+}
+
+/** KV brake for active management alone: `wrangler kv key put tilt:off 1`
+ *  reverts every grove to published weights within a window, without touching
+ *  the rebalancer itself and without a deploy. Unreadable KV means OFF here
+ *  (unlike the kill switch, which fails closed) — the safe state for active
+ *  management is the passive behaviour that ran before it. */
+async function tiltEnabled(): Promise<boolean> {
+  if ((process.env.VERA_TILT ?? "on") === "off") return false;
+  try {
+    return !(await kv()?.get("tilt:off"));
+  } catch {
+    return false;
+  }
+}
+
+/** This window's active weights for one grove. Never throws: any failure is
+ *  the published weights, which is the drift-only vault. */
+async function tiltFor(def: GroveDef): Promise<TiltResult> {
+  const base: Record<string, number> = {};
+  for (const c of def.components) base[c.symbol] = c.weightBps;
+  const passive: TiltResult = { weights: base, reason: "Published weights kept for this window.", source: "base", lintOk: true };
+  try {
+    if (!(await tiltEnabled())) return passive;
+    const symbols = def.components.map((c) => c.symbol);
+    const [stats, day, news] = await Promise.all([
+      universeStatsRows(symbols).catch(() => []),
+      getDaySummary().catch(() => ({}) as Awaited<ReturnType<typeof getDaySummary>>),
+      recentHeadlines(symbols).catch(() => new Map<string, { title: string; ageH: number }>()),
+    ]);
+    const statBy = new Map(stats.map((s) => [s.symbol, s]));
+    const rows: TiltRow[] = def.components.map((c) => ({
+      symbol: c.symbol,
+      baseWeightBps: c.weightBps,
+      dayChangePct: (day as Record<string, { dayChangePct?: number }>)[c.symbol]?.dayChangePct,
+      ret3mPct: statBy.get(c.symbol)?.ret3mPct,
+      volPct: statBy.get(c.symbol)?.volPct,
+      headline: news.get(c.symbol),
+    }));
+    return await veraTilt(def.name, rows);
+  } catch (err) {
+    console.error("[auto-rebalance] tilt failed, using published weights", msg(err));
+    return passive;
+  }
+}
+
+/** This window's target weight for one symbol: Vera's active weight when she
+ *  set one, the published weight otherwise. Never reads the model's raw
+ *  numbers — ctx.tilt only ever holds clamped, summed-to-10000 weights. */
+function baseWeight(def: GroveDef, symbol: string): number {
+  return def.components.find((c) => c.symbol === symbol)?.weightBps ?? 0;
+}
+
+function targetOf(def: GroveDef, ctx: RunCtx, symbol: string): number {
+  return ctx.tilt.get(def.id)?.weights[symbol] ?? baseWeight(def, symbol);
 }
 
 /** Everything up to (and including) the pure plan. No venue, no sends — the
@@ -356,6 +426,17 @@ async function planOne(def: GroveDef, user: Address, ctx: RunCtx): Promise<Outco
     ),
   ]);
 
+  // Turnover budget, per holder per rolling 30 days. Spent budget does NOT
+  // stop the basket being managed — it drops this user back to passive drift
+  // maintenance (published weights, 500 bps trigger), which is the behaviour
+  // that needs no budget because the market, not Vera, decides when it fires.
+  const spentUsd = await turnoverSince(user, def.id, Date.now() - 30 * 86_400_000);
+  const positionUsd = held.reduce(
+    (s, h) => s + (Number(h.amountRaw) / 1e18) * (ctx.prices[byAddress.get(h.token.toLowerCase())?.symbol ?? ""]?.priceUsd ?? 0),
+    0,
+  );
+  const overBudget = positionUsd > 0 && spentUsd > positionUsd * TURNOVER_BUDGET_FRACTION;
+
   const holdings: PlanHolding[] = [];
   for (let i = 0; i < held.length; i++) {
     const asset = byAddress.get(held[i].token.toLowerCase());
@@ -367,7 +448,7 @@ async function planOne(def: GroveDef, user: Address, ctx: RunCtx): Promise<Outco
       amountRaw: held[i].amountRaw,
       sellableRaw: deliverable,
       priceUsd: ctx.prices[asset.symbol]?.priceUsd ?? 0,
-      targetWeightBps: def.components.find((c) => c.symbol === asset.symbol)?.weightBps ?? 0,
+      targetWeightBps: overBudget ? baseWeight(def, asset.symbol) : targetOf(def, ctx, asset.symbol),
     });
   }
   // Record truthfully: a holding the sweep could not price is an OUTAGE, and
@@ -377,13 +458,17 @@ async function planOne(def: GroveDef, user: Address, ctx: RunCtx): Promise<Outco
 
   const missing: PlanTarget[] = def.components
     .filter((c) => !holdings.some((hh) => hh.symbol === c.symbol))
-    .map((c) => ({ token: assetBySymbol(c.symbol)!.address as Address, symbol: c.symbol, targetWeightBps: c.weightBps }));
+    .map((c) => ({ token: assetBySymbol(c.symbol)!.address as Address, symbol: c.symbol, targetWeightBps: overBudget ? baseWeight(def, c.symbol) : targetOf(def, ctx, c.symbol) }));
 
-  const plan = computeRebalancePlan(holdings, missing, { maxTurnoverUsd, maxFractionBps: Number(fractionBps) }, { driftTriggerBps: DRIFT_TRIGGER_BPS });
+  // A tilt is a deliberate decision, so it is acted on at a lower bar than
+  // passive drift: Vera moved the target meaning it to happen THIS window.
+  const tilted = !overBudget && ctx.tilt.get(def.id)?.source === "model";
+  const triggerBps = tilted ? TILT_TRIGGER_BPS : DRIFT_TRIGGER_BPS;
+  const plan = computeRebalancePlan(holdings, missing, { maxTurnoverUsd, maxFractionBps: Number(fractionBps) }, { driftTriggerBps: triggerBps });
   if (!plan) {
     // No hard-coded dollar floor here: it scales with the position now
     // (rebalancePlan), so naming one number would be wrong for most baskets.
-    return out("no-drift", `no actionable plan (drift under ${DRIFT_TRIGGER_BPS} bps, too small a move to be worth its costs, or nothing sellable within caps)`);
+    return out("no-drift", `no actionable plan (drift under ${triggerBps} bps, too small a move to be worth its costs, or nothing sellable within caps)`);
   }
 
   // R7, feed half, per touched symbol: a plan touching a stale round cannot
@@ -816,7 +901,7 @@ export async function runAutoRebalance(): Promise<AutoRebalanceReport> {
   } catch (err) {
     errors.push(`pricing sweep failed: ${msg(err)}`);
   }
-  const ctx: RunCtx = { prices, nowSeconds: Math.floor(Date.now() / 1000), bySmart, staleBlocked: 0 };
+  const ctx: RunCtx = { prices, nowSeconds: Math.floor(Date.now() / 1000), bySmart, staleBlocked: 0, tilt: new Map() };
 
   let executed = 0;
   let plannedCount = 0;
@@ -838,6 +923,18 @@ export async function runAutoRebalance(): Promise<AutoRebalanceReport> {
       await alertOwner("candidate scan failed", `${def.id}: ${msg(err)}`);
       continue;
     }
+
+    // Phase 0: ONE active-weight decision per grove per window, before any
+    // planning — every depositor holds the same strategy, so they get the same
+    // targets and move together. This is what makes the vault actively managed
+    // rather than drift-maintained: Vera moves the target, so the trade happens
+    // when her view changes, not when the market happens to drift 5 points.
+    //
+    // It is bounded before it is used: clampWeights holds every weight inside
+    // the published band and forces the sum, so the worst possible tilt is a
+    // rearrangement of the same names. A model failure returns the published
+    // weights and the window silently behaves exactly as it did before.
+    ctx.tilt.set(def.id, await tiltFor(def));
 
     // Phase 1: plan EVERY eligible user — pure reads, no venue, no sends;
     // only executions count against the run cap (R10).
