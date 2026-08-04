@@ -202,6 +202,19 @@ function fmtWhen(at: number | null) {
   return at ? new Date(at * 1000).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "—";
 }
 
+/** Clock time, local to the reader. Vera checks four times a day, so a row
+ *  carrying only a date renders as four identical "Aug 4"s and the reader
+ *  cannot tell which window they are looking at — or that there were four. */
+function fmtClock(at: number | null) {
+  return at ? new Date(at * 1000).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" }) : "";
+}
+
+/** Short date for a dense row: no year, because every row in this panel is
+ *  recent and the year repeated eight times is noise. */
+function fmtDay(at: number | null) {
+  return at ? new Date(at * 1000).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : "—";
+}
+
 function short(a: string) {
   return `${a.slice(0, 6)}…${a.slice(-4)}`;
 }
@@ -579,7 +592,10 @@ export function GroveDetailView({
                           </a>
                         )}
                       </div>
-                      <div className="tnum" style={{ fontSize: 11.5, color: "var(--ink-2)", flex: "none", paddingTop: 1 }}>{fmtWhen(r.at / 1000)}</div>
+                      <div className="tnum" style={{ flex: "none", paddingTop: 1, textAlign: "right" }}>
+                        <div style={{ fontSize: 11.5, color: "var(--ink-2)" }}>{fmtDay(r.at / 1000)}</div>
+                        <div style={{ fontSize: 10.5, color: "var(--ink-3)", marginTop: 1 }}>{fmtClock(r.at / 1000)}</div>
+                      </div>
                     </div>
                   ))}
                   {pageCount > 1 && (
@@ -826,7 +842,9 @@ export function GroveDetailView({
         </span>
         <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
           <PIcon name="ph-clock" size={13} />{" "}
-          {lastRebalance ? `last rebalance: ${fmtWhen(lastRebalance.at)}` : "last rebalance: never yet"}
+          {lastRebalance
+            ? `last rebalance: ${fmtWhen(lastRebalance.at)}, ${fmtClock(lastRebalance.at)}`
+            : "last rebalance: never yet"}
         </span>
       </div>
     </div>
