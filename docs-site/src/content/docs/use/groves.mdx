@@ -76,7 +76,7 @@ Three things, and none of them is a setting you have to manage:
 
 - **The contract.** Every leg's price is checked against Chainlink on-chain, only whitelisted venues can be called, the shares never leave your own wallet, and a trade against a stale price feed is refused outright. Equity feeds gap over a weekend, so weekend windows often record the decision and wait — that throttle comes from the oracle's actual state, never from a market-hours clock.
 - **A turnover budget.** Active management that traded every window would cost more in spread than it adds. Each holder's basket may turn over about a quarter of itself per month; past that, management falls back to keeping the published weights until the budget refreshes.
-- **Cost.** A realignment costs roughly the same in gas whatever the basket is worth, so small positions trade less often by arithmetic: on a basket of a few tens of dollars, a one-point adjustment is worth about a dollar and is not worth making. Active management earns its keep from a few hundred dollars up.
+- **Execution, not size.** Every managed basket is rebalanced on the same decision, whatever it is worth: a $30 position and a $30,000 one get the same targets and both are realigned. Monvera pays the gas for every rebalance, so a small basket is never charged more for being small — what you pay is the venue's spread on what actually moves, which is the same fraction at any size. The one thing that is refused is a slice too small to trade cleanly (under about a dollar), because a swap that thin can miss the contract's own price check and fail.
 
 Stopping is instant, with no cooldown, even while the contract is paused.
 

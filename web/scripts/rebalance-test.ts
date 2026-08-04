@@ -64,9 +64,22 @@ check(
   computeRebalancePlan([h(A, "AAA", 700, 5000, { sellableRaw: BigInt(0) }), h(B, "BBB", 300, 5000)], [], CAPS) === null,
 );
 
-// ── 6 · dollar-tiny positions never churn ──
-// Same 70/30 drift on a $10 basket: turnover $1.40 < $15 floor.
-check("tiny basket -> null", computeRebalancePlan([h(A, "AAA", 7, 5000), h(B, "BBB", 3, 5000)], [], CAPS) === null);
+// ── 6 · small baskets ARE managed; only unexecutable ones are refused ──
+// This asserted the opposite until 2026-08-04, when the floors turned out to
+// be sized against a cost the HOLDER never pays (the manager key pays gas;
+// the holder pays only proportional spread). A $10 basket at the same 70/30
+// drift moves $2, which is real money to its owner and must be corrected —
+// excluding it was excluding most depositors from the vault they were sold.
+{
+  const plan = computeRebalancePlan([h(A, "AAA", 7, 5000), h(B, "BBB", 3, 5000)], [], CAPS);
+  check("small basket IS rebalanced", !!plan && plan.sells[0].valueUsd > 1, `got ${plan?.sells[0]?.valueUsd}`);
+}
+// The floor that remains is execution viability: a sub-$1 leg risks missing
+// the contract's Chainlink band and reverting the whole rebalance.
+check(
+  "leg under $1 -> null",
+  computeRebalancePlan([h(A, "AAA", 1.4, 5000), h(B, "BBB", 0.6, 5000)], [], CAPS) === null,
+);
 
 // ── 7 · a token dropped from the recipe sells but is never bought ──
 // C holds 30% at target 0; A underweight takes the proceeds.

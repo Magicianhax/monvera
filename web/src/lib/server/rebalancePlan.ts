@@ -108,15 +108,29 @@ export function computeRebalancePlan(
   const totalUsd = holdings.reduce((s, h) => s + toUsd(h.amountRaw, h.priceUsd), 0);
   if (totalUsd <= 0) return null;
 
-  // Flat floors silently excluded small baskets from management entirely: a $20
-  // position that has drifted the full 500 bps is $1 of misallocation, so a flat
-  // $5 leg / $15 turnover could never be reached and the position would sit
-  // unmanaged forever while its owner was told it was managed. The floors scale
-  // down with the position and never below $1, so the RULE is identical for
-  // everyone and only the size it applies to changes. Large baskets are
-  // unaffected: above ~$150 the absolute values still bind exactly as before.
-  const minTurnoverUsd = opts?.minTurnoverUsd ?? Math.min(15, Math.max(2, totalUsd * 0.1));
-  const minLegUsd = opts?.minLegUsd ?? Math.min(5, Math.max(1, totalUsd * 0.05));
+  // These floors decide EXECUTION VIABILITY, not economics — and that
+  // distinction was got wrong once, expensively.
+  //
+  // The earlier proportional floors (10% of position turnover) were written as
+  // if the holder paid for a rebalance. They do not: the manager hot key signs
+  // and sends, so gas is MONVERA's cost. What a holder actually pays is the
+  // venue spread, which is proportional — about a third of a cent on a $1
+  // trade. So a floor sized to protect the holder from gas was protecting our
+  // bill while quietly excluding every basket under ~$750 from ever being
+  // managed at all, which is the opposite of a vault that treats everyone the
+  // same.
+  //
+  // What remains is the only floor with a real reason: a leg too small to
+  // execute well. Sub-dollar swaps risk missing the contract's own Chainlink
+  // band and reverting the whole rebalance. $1 sits just under the smallest
+  // leg we have executed in production ($2.20, from a $20 grove buy) and the
+  // driver SIMULATES before sending, so a leg that turns out to be too small
+  // is refused for free rather than paid for.
+  //
+  // Churn is bounded elsewhere, where it belongs: the contract's 6h per-user
+  // cooldown, the per-run execution cap, and the 25%/30-day turnover budget.
+  const minTurnoverUsd = opts?.minTurnoverUsd ?? 1;
+  const minLegUsd = opts?.minLegUsd ?? 1;
 
   // Deviation per holding (actual − target) plus pure buy candidates at −target.
   const rows = holdings.map((h) => {
