@@ -104,14 +104,25 @@ function Row({ k, v, sub, strong, color }: { k: ReactNode; v: ReactNode; sub?: R
   );
 }
 
-/** The next acting window: the driver fires every six hours (00/06/12/18
- *  UTC) and acts in ANY window where the touched Chainlink rounds are fresh —
- *  tokenized markets trade around the clock, so there is no market-hours
- *  clock here. Weekend windows can still pass without action when the feeds
- *  themselves have gone stale; the caption says so. */
+/** The next acting window. Mirrors the driver's cron schedule exactly:
+ *  00/06/12/18 UTC daily plus 13:30 UTC on weekdays (the market-open fire).
+ *  The driver acts in ANY window where the touched Chainlink rounds are
+ *  fresh — tokenized markets trade around the clock, so there is no
+ *  market-hours clock here; weekend windows can still pass without action
+ *  when the feeds themselves have gone stale. */
 function nextActingWindow(now: number): number {
-  const WINDOW_MS = 6 * 3600 * 1000;
-  return now - (now % WINDOW_MS) + WINDOW_MS;
+  const d = new Date(now);
+  let best = Number.POSITIVE_INFINITY;
+  for (let dayOff = 0; dayOff <= 3; dayOff++) {
+    const base = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() + dayOff);
+    for (const [h, m] of [[0, 0], [6, 0], [12, 0], [13, 30], [18, 0]] as const) {
+      const t = base + (h * 60 + m) * 60_000;
+      const day = new Date(t).getUTCDay();
+      if (m === 30 && (day === 0 || day === 6)) continue; // open fire is weekdays only
+      if (t > now && t < best) best = t;
+    }
+  }
+  return best;
 }
 
 function fmtCountdown(ms: number): string {

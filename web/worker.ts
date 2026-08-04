@@ -55,11 +55,11 @@ export default {
       // Hourly balance snapshots — the real equity curve (D1, /api/balance-history).
       ctx.waitUntil(hit("/api/cron/balances"));
     }
-    // Auto-manage pass, every six hours: acts only for opted-in users, only
-    // past a real drift, only inside their on-chain caps — and only when
-    // Vera's market check says this window is the moment (a drift mid-storm
-    // waits rather than churns). Hourly was pointless churn-checking.
-    if (cron === "0 */6 * * *") ctx.waitUntil(hit("/api/cron/rebalance"));
+    // Auto-manage passes: every six hours around the clock, plus 13:30 UTC on
+    // weekdays — the market-open fire, so drift from the open is acted on
+    // within minutes instead of waiting for 18:00. Weekend windows throttle
+    // themselves by feed freshness (the contract refuses stale rounds).
+    if (cron === "0 */6 * * *" || cron === "30 13 * * 1-5") ctx.waitUntil(hit("/api/cron/rebalance"));
     if (cron === "0 13 * * 1") ctx.waitUntil(hit("/api/cron/digest"));
     // Keep the $MONVERA chart warm: the route persists every successful series
     // to KV for 24h, so even occasional upstream luck keeps all ranges served.

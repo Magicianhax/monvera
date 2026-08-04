@@ -184,13 +184,26 @@ function rowToRun(r: RRow): RebalanceRunRow {
   };
 }
 
-/** Canonical run id: the six-hour window start as an ISO instant (the cron
- *  fires every 6h, so windows sit at 00/06/12/18 UTC). The KV run lock keys
- *  on the same string, and repeated cron fires inside one window collapse
- *  onto one ledger row. Pure — safe outside a CF context. */
+/** Canonical run id: the most recent scheduled fire as an ISO instant. The
+ *  schedule is 00/06/12/18 UTC daily plus 13:30 UTC on weekdays (the
+ *  market-open fire) — this MUST mirror wrangler.jsonc's rebalance crons, or
+ *  the open run would collide with the 12:00 window's ledger row and the
+ *  already-acted guard would bail it. The KV run lock keys on the same
+ *  string, and repeated fires inside one window collapse onto one ledger
+ *  row. Pure — safe outside a CF context. */
 export function runIdForWindow(at = Date.now()): string {
-  const WINDOW_MS = 6 * 3600 * 1000;
-  return new Date(at - (at % WINDOW_MS)).toISOString();
+  const d = new Date(at);
+  let best = Number.NEGATIVE_INFINITY;
+  for (let dayOff = -1; dayOff <= 0; dayOff++) {
+    const base = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() + dayOff);
+    for (const [h, m] of [[0, 0], [6, 0], [12, 0], [13, 30], [18, 0]] as const) {
+      const t = base + (h * 60 + m) * 60_000;
+      const day = new Date(t).getUTCDay();
+      if (m === 30 && (day === 0 || day === 6)) continue; // open fire is weekdays only
+      if (t <= at && t > best) best = t;
+    }
+  }
+  return new Date(best).toISOString();
 }
 
 /** Open the window's run row. Idempotent: a second fire in the same window

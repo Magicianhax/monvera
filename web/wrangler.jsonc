@@ -11,8 +11,10 @@
   // Hourly: the route itself claims only autopilots that are actually due.
   "triggers": {
     // hourly (autopilot/tradability/balances/chart-warm) · every 15 min (alerts)
-    // · Mondays 13:00 UTC (digest) · every 6h (auto-manage rebalance pass)
-    "crons": ["0 * * * *", "*/15 * * * *", "0 13 * * 1", "0 */6 * * *"]
+    // · Mondays 13:00 UTC (digest) · every 6h + weekday 13:30 UTC market-open
+    // (auto-manage rebalance passes; the open fire reacts to fresh prices
+    // within minutes instead of waiting for 18:00)
+    "crons": ["0 * * * *", "*/15 * * * *", "0 13 * * 1", "0 */6 * * *", "30 13 * * 1-5"]
   },
   // ALL custom domains must be listed here: once `routes` exists in config it
   // is the source of truth, and a deploy DETACHES any dashboard-added domain
