@@ -331,11 +331,26 @@ const MANAGER_DEPLOY_BLOCK = BigInt(process.env.GROVE_MANAGER_DEPLOY_BLOCK || "2
  * a bounded chain scan for anyone who opted in since. Only when BOTH the index
  * and the cache are unavailable does the window give up, and it says so.
  */
+/** ONE canonical spelling per holder, always lowercase.
+ *
+ *  The two discovery paths disagree on case — Blockscout yields a lowercase
+ *  topic slice, viem's getLogs yields a checksummed address — so a plain Set
+ *  over the union kept BOTH spellings of the same wallet and the pass planned,
+ *  judged and (nearly) traded for every holder twice. Only the contract's 6h
+ *  cooldown stopped the second send, which is luck, not a design. The ledger
+ *  key is (run_id, grove_id, user) too, so mixed case also split one holder's
+ *  history into two rows. */
+function dedupeAddresses(...lists: Address[][]): Address[] {
+  const seen = new Set<string>();
+  for (const list of lists) for (const a of list) seen.add(a.toLowerCase());
+  return [...seen] as Address[];
+}
+
 async function optedInCandidates(onChainId: number): Promise<Address[]> {
   const store = kv();
   const key = CANDIDATES_KEY(onChainId);
   try {
-    const users = await candidatesFromBlockscout(onChainId);
+    const users = dedupeAddresses(await candidatesFromBlockscout(onChainId));
     // Remember the good scan. Opt-ins never disappear, so a cache that only
     // grows is always a safe floor for the next fallback.
     await store?.put(key, JSON.stringify(users)).catch(() => {});
@@ -351,7 +366,7 @@ async function optedInCandidates(onChainId: number): Promise<Address[]> {
     }
     const head = await client.getBlockNumber();
     const fresh = await candidatesFromRpc(onChainId, MANAGER_DEPLOY_BLOCK, head);
-    const all = [...new Set([...cached, ...fresh])];
+    const all = dedupeAddresses(cached, fresh);
     if (!all.length) throw new Error(`candidate discovery unavailable: ${msg(err)}`);
     // Cache what the CHAIN told us too, not just Blockscout. The scan above is
     // ~80 chunks and 30s from the contract's deploy block; without this, a
