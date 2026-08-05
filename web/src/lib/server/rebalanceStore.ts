@@ -360,6 +360,43 @@ export async function turnoverSince(user: string, groveId: string, since: number
   }
 }
 
+/** How many windows in a row this grove has been deferred on market timing,
+ *  counting back from the most recent.
+ *
+ *  Deferring is individually cheap and collectively fatal: on 2026-08-05 Vera
+ *  deferred four consecutive windows, each with a sound reason ("NVDA is
+ *  running +4.4% today"), and the basket went 24 hours without being managed
+ *  at all. With eight mega-caps SOMETHING is always moving, so "wait for a
+ *  calmer window" can be satisfied forever. A drift that has survived three
+ *  windows is no longer a transient move, and waiting is no longer free.
+ *
+ *  Counts only defer-market: an outage defer says nothing about the market and
+ *  must never push the basket toward trading. Returns 0 on any failure, which
+ *  disables the override — the safe direction. */
+export async function deferStreak(groveId: string, limit = 12): Promise<number> {
+  try {
+    const { results } = await db()
+      .prepare(
+        `SELECT run_id,
+                SUM(CASE WHEN outcome = 'defer-market' THEN 1 ELSE 0 END) AS deferred,
+                SUM(CASE WHEN outcome IN ('rebalanced','unconfirmed') THEN 1 ELSE 0 END) AS traded
+         FROM rebalance_outcomes WHERE grove_id = ?
+         GROUP BY run_id ORDER BY run_id DESC LIMIT ?`,
+      )
+      .bind(groveId, limit)
+      .all<{ run_id: string; deferred: number; traded: number }>();
+    let streak = 0;
+    for (const r of results ?? []) {
+      if (Number(r.traded) > 0 || Number(r.deferred) === 0) break;
+      streak++;
+    }
+    return streak;
+  } catch (e) {
+    console.error("[rebalance-ledger] defer streak read failed:", e instanceof Error ? e.message : e);
+    return 0;
+  }
+}
+
 /** One holder's own record of every window Vera checked their basket in,
  *  newest first — what the Rebalances panel reads.
  *

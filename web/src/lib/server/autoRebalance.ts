@@ -65,6 +65,7 @@ import {
   latestRuns,
   pruneLedger,
   turnoverSince,
+  deferStreak,
   type RunGate,
   type RebalanceOutcome,
   type RebalanceLeg,
@@ -118,6 +119,10 @@ const LOCK_TTL_S = 600;
  *  eight full tilt-sized rebalances a month; past that the spread starts to
  *  outweigh what the adjustments are worth. */
 const TURNOVER_BUDGET_FRACTION = 0.25;
+/** Windows a grove may be deferred on market timing before the drift is acted
+ *  on regardless. Three is 18 hours: long enough that a genuinely transient
+ *  move has passed, short enough that "actively managed" stays true. */
+const MAX_CONSECUTIVE_DEFERS = 3;
 const SIM_REFUSED = "simulation refused";
 
 interface KvNamespace {
@@ -293,15 +298,35 @@ async function candidatesFromRpc(onChainId: number, fromBlock: bigint, toBlock: 
   const logsClient = createPublicClient({ chain, transport: http(PUBLIC_RPC_URL) });
   const users = new Set<Address>();
   const CHUNK = BigInt(9_999);
-  for (let start = fromBlock; start <= toBlock; start += CHUNK + BigInt(1)) {
-    const end = start + CHUNK > toBlock ? toBlock : start + CHUNK;
-    const logs = await logsClient.getLogs({
+  // Typed through this helper so `args.user` survives: the bare getLogs return
+  // widens to a Log without the event's decoded arguments.
+  const fetchChunk = (from: bigint, to: bigint) =>
+    logsClient.getLogs({
       address: GROVE_MANAGER as Address,
       event: AUTO_ENABLED,
       args: { groveId: BigInt(onChainId) },
-      fromBlock: start,
-      toBlock: end,
+      fromBlock: from,
+      toBlock: to,
     });
+  for (let start = fromBlock; start <= toBlock; start += CHUNK + BigInt(1)) {
+    const end = start + CHUNK > toBlock ? toBlock : start + CHUNK;
+    // Retry the CHUNK, not the window. This scan is ~80 sequential requests to
+    // a public endpoint, so an occasional failure is expected rather than
+    // exceptional — and on 2026-08-05 one of them ("RPC Request failed") threw
+    // away the entire 13:30 pass. Three tries with a short backoff; only a
+    // chunk that fails all three aborts, because silently skipping a range
+    // would under-report opted-in holders and quietly stop managing them.
+    let logs: Awaited<ReturnType<typeof fetchChunk>> | null = null;
+    let lastErr: unknown = null;
+    for (let attempt = 0; attempt < 3 && !logs; attempt++) {
+      try {
+        logs = await fetchChunk(start, end);
+      } catch (err) {
+        lastErr = err;
+        if (attempt < 2) await new Promise((r) => setTimeout(r, 400 * (attempt + 1)));
+      }
+    }
+    if (!logs) throw new Error(`getLogs ${start}-${end} failed after 3 tries: ${msg(lastErr)}`);
     for (const l of logs) if (l.args?.user) users.add(l.args.user as Address);
   }
   return [...users];
@@ -1087,12 +1112,38 @@ export async function runAutoRebalance(): Promise<AutoRebalanceReport> {
         if (!prev || Math.abs(row.deviationPct) > Math.abs(prev.deviationPct)) agg.set(row.symbol, row);
       }
     }
-    const verdict = await judgeRebalance({
+    let verdict = await judgeRebalance({
       groveName: def.name,
       turnoverUsd: planned.reduce((s, p) => s + p.plan.turnoverUsd, 0),
       maxDeviationBps: Math.max(...planned.map((p) => p.plan.maxDeviationBps)),
       rows: [...agg.values()],
     });
+
+    // Patience has a limit. Each defer is cheap and defensible; a run of them
+    // is a basket nobody is managing. With eight mega-caps some name is always
+    // moving, so "wait for a calmer window" can be satisfied indefinitely — on
+    // 2026-08-05 it was, four windows running, and the grove went a full day
+    // untouched while every reason read perfectly.
+    //
+    // A drift that survived MAX_CONSECUTIVE_DEFERS windows is not a transient
+    // move, so the streak overrides the veto. Only a MARKET defer is
+    // overridden: an outage says nothing about the market and must never push
+    // the basket toward trading. The plan, the caps and the oracle checks are
+    // untouched — this decides timing only, exactly like the verdict it
+    // replaces.
+    if (verdict.action === "defer" && verdict.source === "model") {
+      const streak = await deferStreak(def.id).catch(() => 0);
+      if (streak >= MAX_CONSECUTIVE_DEFERS) {
+        console.warn(`[auto-rebalance] ${def.id}: ${streak} consecutive defers, acting on the drift`);
+        verdict = {
+          action: "proceed",
+          reason: `This basket has waited ${streak} windows for a calmer market, so it is being realigned now rather than drifting further.`,
+          source: "model",
+          lintOk: false, // hand-written: displayReason() shows its neutral sentence
+        };
+      }
+    }
+
     if (verdict.action === "defer") {
       // The ledger takes the verdict verbatim plus the lint flag; anything a
       // user ever sees goes through displayReason() instead.
