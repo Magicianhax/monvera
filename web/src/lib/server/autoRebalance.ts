@@ -562,7 +562,13 @@ async function planOne(def: GroveDef, user: Address, ctx: RunCtx): Promise<Outco
   const rows: JudgmentRow[] = [...touched].map((symbol) => {
     const hh = holdings.find((x) => x.symbol === symbol);
     const currentPct = hh ? (((Number(hh.amountRaw) / 1e18) * hh.priceUsd) / totalUsd) * 100 : 0;
-    const targetPct = (def.components.find((c) => c.symbol === symbol)?.weightBps ?? 0) / 100;
+    // THE TILTED target, not the published one. The judge must be shown the
+    // same target the planner used, or it reasons about a plan that does not
+    // exist: on 2026-08-05 a rebalance sold TSLA down to Vera's own lowered
+    // target while her recorded reason read "TSLA 10.8% vs 11.0% ... slightly
+    // underweight ... buying them back to shape". True of the published weight,
+    // the opposite of the trade, and shown verbatim to the holder.
+    const targetPct = targetOf(def, ctx, symbol) / 100;
     return { symbol, currentWeightPct: currentPct, targetWeightPct: targetPct, deviationPct: currentPct - targetPct };
   });
   return { user, plan, rows };
