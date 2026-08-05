@@ -308,10 +308,15 @@ async function candidatesFromRpc(onChainId: number, fromBlock: bigint, toBlock: 
 }
 
 const CANDIDATES_KEY = (id: number) => `rebalance:candidates:${id}`;
-/** How far back the RPC fallback scans when the cache is warm. Opt-ins are
- *  append-only and rare, so this only has to cover the gap since the last good
- *  scan; 6h of blocks on 4663 is far inside this. */
-const TAIL_BLOCKS = BigInt(200_000);
+/** The GroveManager's creation block — the floor for the fallback scan.
+ *
+ * A recent-tail window was tried first and was wrong: it scanned the last 200k
+ * blocks while the actual AutoEnabled events sat ~900k blocks back, so the
+ * fallback searched a range that could not contain them and reported "no
+ * candidates" with total confidence. An opt-in can be arbitrarily old, so the
+ * only correct floor is the contract itself. Must be re-pinned on redeploy —
+ * same rule as groveHistory's DEPLOY_BLOCK. */
+const MANAGER_DEPLOY_BLOCK = BigInt(process.env.GROVE_MANAGER_DEPLOY_BLOCK || "27289241");
 
 /**
  * Who to consider for this grove this window.
@@ -345,10 +350,13 @@ async function optedInCandidates(onChainId: number): Promise<Address[]> {
       /* cache unreadable: the RPC scan below is the only source left */
     }
     const head = await client.getBlockNumber();
-    const from = head > TAIL_BLOCKS ? head - TAIL_BLOCKS : BigInt(0);
-    const fresh = await candidatesFromRpc(onChainId, from, head);
+    const fresh = await candidatesFromRpc(onChainId, MANAGER_DEPLOY_BLOCK, head);
     const all = [...new Set([...cached, ...fresh])];
     if (!all.length) throw new Error(`candidate discovery unavailable: ${msg(err)}`);
+    // Cache what the CHAIN told us too, not just Blockscout. The scan above is
+    // ~80 chunks and 30s from the contract's deploy block; without this, a
+    // Blockscout outage lasting a day would pay that on every window.
+    await store?.put(key, JSON.stringify(all)).catch(() => {});
     console.warn(`[auto-rebalance] using ${cached.length} cached + ${fresh.length} on-chain candidates`);
     return all;
   }
