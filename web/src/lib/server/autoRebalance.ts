@@ -1139,7 +1139,15 @@ export async function runAutoRebalance(): Promise<AutoRebalanceReport> {
           action: "proceed",
           reason: `This basket has waited ${streak} windows for a calmer market, so it is being realigned now rather than drifting further.`,
           source: "model",
-          lintOk: false, // hand-written: displayReason() shows its neutral sentence
+          // Hand-written, not model output — safe verbatim, exactly like the
+          // outage sentences, and true for the same reason. This carried false
+          // until 2026-08-06, which sent BOTH real trades of the 08-05 18:00
+          // window through displayReason()'s neutral fallback: users were shown
+          // "The market looked settled enough to realign" instead of the honest
+          // sentence explaining a three-window wait. The symbol-name rule inside
+          // lintVerdictReason exists to stop the MODEL being vague; it has no
+          // business judging a sentence we wrote ourselves.
+          lintOk: true,
         };
       }
     }

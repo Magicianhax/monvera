@@ -80,6 +80,8 @@ const SYSTEM = [
   "Defer ONLY for a genuinely violent move in a name the plan touches: roughly 4% or more on the day, or a clear gap on news. A mega-cap up 2% or down 3% is an ordinary session, not a live move, and is NOT a reason to wait.",
   "Proceed otherwise. Realigning on an ordinary day is the normal case and what you are for.",
   "Do not defer merely because several names are green or red today, because volatility is elevated in the abstract, or because a calmer window might exist later. There is always a calmer window; a basket that waits for it is never managed.",
+  "The brief states whether the US reference session is OPEN or CLOSED. When it is CLOSED, every day-move figure you are given is a SETTLED CLOSING number, not a live move: the tape cannot change until the next open. Never defer to let such a move finish, cool off or settle — it already has, and no name can be \"still running\" or \"mid-move\" outside the session.",
+  "A closed session never prevents execution: the basket itself trades around the clock. It is a reason to proceed, not to wait.",
   "When uncertain, PROCEED — the math already justified this plan, the caps already bound it, and drift left alone compounds.",
   "Answer with the verdict and ONE honest sentence of reason, in plain words a customer can read.",
   "The reason must name at least one drifted holding by its exact symbol and cite at least one figure from the data you were given (a weight, a deviation, a day move).",
@@ -117,6 +119,41 @@ export function displayReason(verdict: RebalanceVerdict): string {
     : "Vera chose to wait for the next window.";
 }
 
+/** Whether the US reference session (09:30–16:00 New York) is open right now.
+ *
+ *  CONTEXT FOR THE PROMPT ONLY — this deliberately gates nothing. A wall-clock
+ *  market-hours gate on execution was tried and dropped as TradFi cosplay (see
+ *  feedFresh in autoRebalance.ts): the tokenized basket trades around the clock
+ *  and the oracle's own freshness is the only real session gate. Nothing here
+ *  may ever decide whether a rebalance runs.
+ *
+ *  It exists because three of the five daily windows — 00:00, 06:00 and 12:00
+ *  UTC — land outside the session, where every "today" figure is the previous
+ *  close. On 2026-08-05 Vera deferred those three windows running against the
+ *  SAME frozen tape, calling settled closes "a live move" and "still running",
+ *  and the defer-streak cap had to rescue a basket waiting on news that could
+ *  not arrive. She was reasoning correctly from context she did not have.
+ *
+ *  Timezone-aware via Intl rather than a fixed UTC offset, so DST needs no
+ *  upkeep. Market holidays are NOT modelled: on one, this reads open and the
+ *  prompt simply omits the hint — which is exactly the behaviour that shipped
+ *  before, so the failure direction is "no worse than today". */
+export function referenceSessionOpen(now: Date = new Date()): boolean {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/New_York",
+    weekday: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).formatToParts(now);
+  const part = (type: string) => parts.find((p) => p.type === type)?.value ?? "";
+  const day = part("weekday");
+  if (day === "Sat" || day === "Sun") return false;
+  // hour12:false renders midnight as "24" in some ICU builds; fold it to 0.
+  const minutes = (Number(part("hour")) % 24) * 60 + Number(part("minute"));
+  return minutes >= 9 * 60 + 30 && minutes < 16 * 60;
+}
+
 function fmt(n: number | null | undefined, suffix = "%"): string {
   return n == null || !Number.isFinite(n) ? "n/a" : `${n >= 0 ? "+" : ""}${n.toFixed(1)}${suffix}`;
 }
@@ -148,6 +185,9 @@ export async function judgeRebalance(brief: RebalanceBrief): Promise<RebalanceVe
     });
     prompt = [
       `Grove: ${brief.groveName}. Planned turnover ~$${brief.turnoverUsd.toFixed(0)}; worst weight deviation ${(brief.maxDeviationBps / 100).toFixed(1)} points.`,
+      referenceSessionOpen()
+        ? "US reference session: OPEN — the day moves below are live intraday figures."
+        : "US reference session: CLOSED — the day moves below are settled closing figures and cannot change until the next open.",
       "Holdings the plan touches:",
       ...lines,
       "",
