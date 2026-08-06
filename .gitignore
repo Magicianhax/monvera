@@ -41,9 +41,23 @@ video/
 # held-back working surfaces — local only, never committed
 web/src/app/v2/
 web/src/components/site/SiteLandingV2.tsx
+# V3 landing WIP. Nothing tracked imports these, so a clean checkout builds
+# without them — same arrangement as SiteLandingV2 above. LandingFooter.module.css
+# is deliberately NOT here: the SHIPPED LandingFooter.tsx imports it, and leaving
+# it untracked broke every CI build (fixed 2026-08-06).
+web/src/components/site/SiteLandingV3.module.css
+web/src/components/site/SiteLandingV3.tsx.bak
+web/src/components/site/LandingHero.tsx
+web/src/components/site/LandingHero.module.css
+web/src/components/site/LandingNav.tsx
+web/src/components/site/LandingNav.module.css
 web/.design-handoff.*
 web/public/brand/app-screens.png
 web/public/brand/monvera-icon+full logo.png
+
+# wrangler tail / chain sweep output — local debugging artifacts
+web/tail*.jsonl
+web/sweep.json
 
 # os / editor / misc
 .DS_Store
