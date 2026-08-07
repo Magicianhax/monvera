@@ -335,8 +335,26 @@ async function candidatesFromBlockscout(onChainId: number): Promise<{ users: Add
 
 /** AutoEnabled logs straight from the chain, over a bounded recent window.
  *  The LITERAL public endpoint, never the keyed one: Alchemy refuses eth_getLogs
- *  on this account at every span and bills each refusal (the $15 lesson). */
-async function candidatesFromRpc(onChainId: number, fromBlock: bigint, toBlock: bigint): Promise<Address[]> {
+ *  on this account at every span and bills each refusal (the $15 lesson).
+ *
+ *  NEVER THROWS. It returns how far it actually got, and the caller keeps that
+ *  as a watermark. The previous version aborted the whole scan on any chunk that
+ *  failed three times, reasoning that silently skipping a range would
+ *  under-report holders — sound in isolation, but the abort propagated out of
+ *  optedInCandidates past the cache that exists for precisely this case, so the
+ *  grove was skipped entirely and NOBODY was managed. That is a strictly worse
+ *  version of the outcome it was avoiding, and it happened twice in a row on
+ *  2026-08-06/07: Titan went ~18h unmanaged on two "RPC Request failed" chunks
+ *  out of ~145.
+ *
+ *  Nothing is silently skipped: `scannedTo` only ever advances over ranges that
+ *  were actually read, so a mid-scan failure means "we know everything up to
+ *  here", never "we looked and there was nobody". */
+async function candidatesFromRpc(
+  onChainId: number,
+  fromBlock: bigint,
+  toBlock: bigint,
+): Promise<{ users: Address[]; scannedTo: bigint }> {
   const logsClient = createPublicClient({ chain, transport: http(PUBLIC_RPC_URL) });
   const users = new Set<Address>();
   const CHUNK = BigInt(9_999);
@@ -350,14 +368,33 @@ async function candidatesFromRpc(onChainId: number, fromBlock: bigint, toBlock: 
       fromBlock: from,
       toBlock: to,
     });
+
+  // ONE call for the whole span first. Measured 2026-08-07: 4663's public
+  // endpoint returns the entire deploy-block-to-head range (2.5M blocks) in a
+  // single 341ms request. The 10k chunking below was carried over from the
+  // KEYED endpoint's limit (Alchemy caps log range at 10 blocks — see
+  // lib/staking.ts) and this endpoint has never needed it: it turned one
+  // request into 256 sequential ones, so the chance of the scan dying rose with
+  // the age of the deployment rather than with anything real. That is what
+  // killed the 08-06 18:00 and 08-07 00:00 windows and left Titan unmanaged for
+  // ~18h — a single failure out of 256, twice. Chunking stays as the fallback
+  // for the day the result set outgrows one response.
+  try {
+    const all = await fetchChunk(fromBlock, toBlock);
+    for (const l of all) if (l.args?.user) users.add(l.args.user as Address);
+    return { users: [...users], scannedTo: toBlock };
+  } catch (err) {
+    console.warn(`[auto-rebalance] wide getLogs ${fromBlock}-${toBlock} failed (${msg(err)}); falling back to ${CHUNK + BigInt(1)}-block chunks`);
+  }
+
   for (let start = fromBlock; start <= toBlock; start += CHUNK + BigInt(1)) {
     const end = start + CHUNK > toBlock ? toBlock : start + CHUNK;
     // Retry the CHUNK, not the window. This scan is ~80 sequential requests to
     // a public endpoint, so an occasional failure is expected rather than
     // exceptional — and on 2026-08-05 one of them ("RPC Request failed") threw
-    // away the entire 13:30 pass. Three tries with a short backoff; only a
-    // chunk that fails all three aborts, because silently skipping a range
-    // would under-report opted-in holders and quietly stop managing them.
+    // away the entire 13:30 pass. Three tries with a short backoff; a chunk that
+    // fails all three STOPS the scan here and reports the contiguous progress,
+    // rather than discarding everything already found.
     let logs: Awaited<ReturnType<typeof fetchChunk>> | null = null;
     let lastErr: unknown = null;
     for (let attempt = 0; attempt < 3 && !logs; attempt++) {
@@ -368,10 +405,13 @@ async function candidatesFromRpc(onChainId: number, fromBlock: bigint, toBlock: 
         if (attempt < 2) await new Promise((r) => setTimeout(r, 400 * (attempt + 1)));
       }
     }
-    if (!logs) throw new Error(`getLogs ${start}-${end} failed after 3 tries: ${msg(lastErr)}`);
+    if (!logs) {
+      console.warn(`[auto-rebalance] getLogs ${start}-${end} failed after 3 tries: ${msg(lastErr)}; keeping progress to ${start - BigInt(1)}`);
+      return { users: [...users], scannedTo: start - BigInt(1) };
+    }
     for (const l of logs) if (l.args?.user) users.add(l.args.user as Address);
   }
-  return [...users];
+  return { users: [...users], scannedTo: toBlock };
 }
 
 const CANDIDATES_KEY = (id: number) => `rebalance:candidates:${id}`;
@@ -413,15 +453,81 @@ function dedupeAddresses(...lists: Address[][]): Address[] {
   return [...seen] as Address[];
 }
 
-/** The remembered floor. Unreadable cache is not fatal: the callers below all
- *  have another source, and an empty floor only costs coverage, never safety. */
-async function cachedCandidates(store: ReturnType<typeof kv>, key: string): Promise<Address[]> {
+/** The remembered floor, plus how far the chain has actually been read.
+ *
+ *  The watermark is why the fallback scan stays affordable. Without it every
+ *  fallback re-read from the contract's creation block — ~145 sequential public
+ *  RPC chunks and growing by ~2,600 blocks an hour — so the chance of at least
+ *  one chunk failing rose with the age of the deployment, and the scan got
+ *  slower every day. With it, a warm cache means the next scan covers only the
+ *  blocks since the last one.
+ *
+ *  Legacy shape (a bare array) is still read: the deployed cache predates this
+ *  and must not be discarded, it just carries no watermark until the next write.
+ *  Unreadable cache is never fatal — an empty floor costs coverage, not safety. */
+interface CandidateCache {
+  users: Address[];
+  /** Highest block whose logs are already folded into `users`. */
+  scannedTo: bigint | null;
+}
+
+async function cachedCandidates(store: ReturnType<typeof kv>, key: string): Promise<CandidateCache> {
   try {
     const raw = await store?.get(key);
-    return raw ? (JSON.parse(raw) as Address[]) : [];
+    if (!raw) return { users: [], scannedTo: null };
+    const parsed = JSON.parse(raw) as Address[] | { users?: Address[]; scannedTo?: string };
+    if (Array.isArray(parsed)) return { users: parsed, scannedTo: null };
+    return {
+      users: parsed.users ?? [],
+      scannedTo: parsed.scannedTo ? BigInt(parsed.scannedTo) : null,
+    };
   } catch {
-    return [];
+    return { users: [], scannedTo: null };
   }
+}
+
+async function writeCandidates(
+  store: ReturnType<typeof kv>,
+  key: string,
+  users: Address[],
+  scannedTo: bigint | null,
+): Promise<void> {
+  const value: { users: Address[]; scannedTo?: string } = { users };
+  if (scannedTo !== null) value.scannedTo = scannedTo.toString();
+  await store?.put(key, JSON.stringify(value)).catch(() => {});
+}
+
+/** Top up the remembered set from the chain, from the watermark forward, and
+ *  persist however far we got. Shared by the truncated and failed paths, which
+ *  differ only in what the index already told us. */
+async function scanFromChain(
+  store: ReturnType<typeof kv>,
+  key: string,
+  onChainId: number,
+  cached: CandidateCache,
+  fromIndex: Address[],
+): Promise<Address[]> {
+  const head = await client.getBlockNumber();
+  // Re-read one chunk below the watermark: a reorg at the boundary would
+  // otherwise leave a hole no later scan ever revisits.
+  const from = cached.scannedTo && cached.scannedTo > MANAGER_DEPLOY_BLOCK
+    ? cached.scannedTo - BigInt(10_000)
+    : MANAGER_DEPLOY_BLOCK;
+  const { users: fresh, scannedTo } = await candidatesFromRpc(onChainId, from, head);
+  const all = dedupeAddresses(cached.users, fromIndex, fresh);
+  // Only advance; a partial scan must never move the watermark backwards.
+  const mark = cached.scannedTo && cached.scannedTo > scannedTo ? cached.scannedTo : scannedTo;
+  await writeCandidates(store, key, all, mark);
+  if (scannedTo < head) {
+    // Progress kept, but the tail is unread — say so rather than let a partial
+    // scan pass as a complete one.
+    await alertOwner(
+      "candidate chain scan incomplete",
+      `Grove ${onChainId}: the log scan stopped at block ${scannedTo} of ${head}. ${all.length} holders are known from the cache and the completed range, so this window still runs; the remaining blocks are picked up next window.`,
+    );
+  }
+  console.warn(`[auto-rebalance] grove ${onChainId}: ${cached.users.length} cached + ${fresh.length} on-chain, scanned ${from}-${scannedTo}`);
+  return all;
 }
 
 async function optedInCandidates(onChainId: number): Promise<Address[]> {
@@ -437,8 +543,13 @@ async function optedInCandidates(onChainId: number): Promise<Address[]> {
       // safe floor" — true of the cache, but the write made it not grow. The
       // claim is now enforced instead of asserted: opt-ins never disappear, so
       // dropping a remembered holder can only ever be a bug.
-      const all = dedupeAddresses(cached, scanned);
-      await store?.put(key, JSON.stringify(all)).catch(() => {});
+      const all = dedupeAddresses(cached.users, scanned);
+      // The watermark is NOT advanced from Blockscout. Its indexer trails the
+      // chain head by ~20k blocks (CLAUDE.md rule 6), so "the end of the log"
+      // means the end of what it has indexed — advancing past that would skip
+      // the freshest opt-ins forever, which is the one range most likely to
+      // contain a brand-new holder.
+      await writeCandidates(store, key, all, cached.scannedTo);
       return all;
     }
 
@@ -450,23 +561,12 @@ async function optedInCandidates(onChainId: number): Promise<Address[]> {
       "candidate scan truncated",
       `Grove ${onChainId}: Blockscout returned ${BLOCKSCOUT_MAX_PAGES} full pages without reaching the end of the log, so the fast path can no longer see every opt-in. Falling back to the chain scan this window. Raise BLOCKSCOUT_MAX_PAGES or filter the request by topic.`,
     );
-    const head = await client.getBlockNumber();
-    const fresh = await candidatesFromRpc(onChainId, MANAGER_DEPLOY_BLOCK, head);
-    const all = dedupeAddresses(cached, scanned, fresh);
-    await store?.put(key, JSON.stringify(all)).catch(() => {});
-    return all;
+    return await scanFromChain(store, key, onChainId, cached, scanned);
   } catch (err) {
     console.error("[auto-rebalance] blockscout candidate scan failed, falling back", msg(err));
     const cached = await cachedCandidates(store, key);
-    const head = await client.getBlockNumber();
-    const fresh = await candidatesFromRpc(onChainId, MANAGER_DEPLOY_BLOCK, head);
-    const all = dedupeAddresses(cached, fresh);
+    const all = await scanFromChain(store, key, onChainId, cached, []);
     if (!all.length) throw new Error(`candidate discovery unavailable: ${msg(err)}`);
-    // Cache what the CHAIN told us too, not just Blockscout. The scan above is
-    // ~80 chunks and 30s from the contract's deploy block; without this, a
-    // Blockscout outage lasting a day would pay that on every window.
-    await store?.put(key, JSON.stringify(all)).catch(() => {});
-    console.warn(`[auto-rebalance] using ${cached.length} cached + ${fresh.length} on-chain candidates`);
     return all;
   }
 }
