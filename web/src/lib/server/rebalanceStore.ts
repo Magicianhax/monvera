@@ -497,6 +497,48 @@ export async function resolveUnconfirmed(id: number, outcome: RebalanceOutcome, 
   }
 }
 
+/** How many windows in a row this grove produced ONLY outage-sourced outcomes —
+ *  the model unreachable, or prices unavailable — counting back from the most
+ *  recent.
+ *
+ *  This is the blind spot deferStreak deliberately leaves. An outage defer says
+ *  nothing about the market, so it must never push the basket toward trading and
+ *  is correctly excluded from the override. The consequence is that a provider
+ *  failure can defer every window, for every grove, indefinitely, while each
+ *  individual row looks honest and nothing escalates. CLAUDE.md rule 10 records
+ *  that exact shape reaching production once already: every structured call
+ *  failed silently and rebalances were always defer-outage. The fix there was at
+ *  the code level; nothing was left watching for a recurrence from a different
+ *  cause (rate limit, auth rotation, schema drift).
+ *
+ *  Returns 0 on any failure — the safe direction, since this only drives an
+ *  alert and a false page is worse than a late one. */
+export async function outageStreak(groveId: string, limit = 12): Promise<number> {
+  try {
+    const { results } = await db()
+      .prepare(
+        `SELECT run_id,
+                SUM(CASE WHEN outcome IN ('defer-outage','pricing-unavailable') THEN 1 ELSE 0 END) AS outage,
+                SUM(CASE WHEN outcome NOT IN ('defer-outage','pricing-unavailable') THEN 1 ELSE 0 END) AS other
+         FROM rebalance_outcomes WHERE grove_id = ?
+         GROUP BY run_id ORDER BY run_id DESC LIMIT ?`,
+      )
+      .bind(groveId, limit)
+      .all<{ run_id: string; outage: number; other: number }>();
+    let streak = 0;
+    for (const r of results ?? []) {
+      // A window that produced anything else — a trade, a no-drift, a market
+      // defer — proves the pipeline was alive, and ends the streak.
+      if (Number(r.other) > 0 || Number(r.outage) === 0) break;
+      streak++;
+    }
+    return streak;
+  } catch (e) {
+    console.error("[rebalance-ledger] outage streak read failed:", e instanceof Error ? e.message : e);
+    return 0;
+  }
+}
+
 /** Most recent windows, newest first — pass history for the panel, digest,
  *  and admin surfaces. THROWS on D1 failure; surfaces show their own error
  *  state rather than an empty history that reads as "never ran". */

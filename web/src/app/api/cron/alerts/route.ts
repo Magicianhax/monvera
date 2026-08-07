@@ -13,6 +13,7 @@ import { SERVER_RPC_URL } from "@/lib/server/rpc";
 import { displayFor } from "@/lib/displayAssets";
 import { whyItMoved } from "@/lib/marketContext";
 import { usd } from "@/lib/format";
+import { runRebalanceWatchdog } from "@/lib/server/rebalanceWatchdog";
 
 export const dynamic = "force-dynamic";
 
@@ -29,9 +30,15 @@ function authed(req: NextRequest): boolean {
 
 export async function GET(req: NextRequest) {
   if (!authed(req)) return new Response("unauthorized", { status: 401 });
+  // The auto-manage watchdog rides this 15-minute cron, and runs BEFORE the
+  // early return below: whether anyone has a price alert set has nothing to do
+  // with whether the rebalance pass is still alive, and the version of this that
+  // sat after the return would have gone silent exactly when the app was
+  // quietest. It never throws, so it cannot take this route down with it.
+  const watchdog = await runRebalanceWatchdog();
   try {
     const alerts = await activeAlerts();
-    if (alerts.length === 0) return Response.json({ ok: true, checked: 0, fired: 0 });
+    if (alerts.length === 0) return Response.json({ ok: true, checked: 0, fired: 0, watchdog });
     // Live spots: Chainlink feeds, then a live Arcus quote for the feedless
     // majority, then Yahoo close (day summary spark) as the last resort —
     // mirroring how the app itself prices feedless assets.
@@ -72,7 +79,7 @@ export async function GET(req: NextRequest) {
       });
       fired++;
     }
-    return Response.json({ ok: true, checked: alerts.length, fired });
+    return Response.json({ ok: true, checked: alerts.length, fired, watchdog });
   } catch (err) {
     console.error("[cron/alerts]", err instanceof Error ? err.message : err);
     return Response.json({ ok: false }, { status: 500 });

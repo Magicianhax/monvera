@@ -32,6 +32,23 @@ function readAppMinBuyUsdg() {
     return null;
   }
 }
+/** The app's mirror of the GroveManager creation block, read the same way and
+ *  for the same reason. Wrong-and-too-LATE is the dangerous direction: an opt-in
+ *  can be arbitrarily old, so a floor set past it makes the candidate scan report
+ *  "no candidates" with total confidence and nobody gets managed. */
+function readAppDeployBlock() {
+  try {
+    const src = require("node:fs").readFileSync(
+      require("node:path").resolve(__dirname, "../../web/src/lib/server/groveQuote.ts"),
+      "utf8",
+    );
+    const m = /GROVE_MANAGER_DEPLOY_BLOCK\s*=\s*BigInt\([^)]*?"(\d+)"\s*\)/.exec(src);
+    return m ? m[1] : null;
+  } catch {
+    return null;
+  }
+}
+
 const same = (a, b) => String(a).toLowerCase() === String(b).toLowerCase();
 
 const AGG_ABI = [
@@ -120,6 +137,47 @@ async function main() {
       `MIN_BUY_USDG ${minBuy} on chain != ${appFloor} in the app — every buy whose smallest ` +
         `leg falls between the two reverts BuyLegTooSmall. Deploy the contract first, then the app.`,
     );
+  }
+
+  // Same mirror problem, opposite symptom. The app scans AutoEnabled logs from
+  // this block; too late and discovery finds nobody while reporting success, so
+  // opted-in holders silently stop being managed. It is not on-chain state, so
+  // it cannot be read back the way MIN_BUY_USDG can — the check is that it is
+  // present, parseable, and not AFTER the block this contract actually appeared
+  // at. A redeploy that forgets to re-pin it is exactly the case this catches.
+  // Resolved through the CREATION TRANSACTION, not a historical getCode probe.
+  // The probe was the obvious approach and does not work: 4663's public nodes
+  // keep no archive state, so every call warned and the check verified nothing.
+  // A receipt lookup needs no archive, and gives the exact block rather than an
+  // inequality — which matters, because the dangerous direction is a pin set too
+  // LATE, and "the contract exists at this block" is true for every such pin.
+  const appBlock = readAppDeployBlock();
+  if (appBlock === null) {
+    warn("could not read GROVE_MANAGER_DEPLOY_BLOCK from web/src/lib/server/groveQuote.ts");
+  } else {
+    console.log(`GROVE_MANAGER_DEPLOY_BLOCK  ${appBlock} in the app`);
+    try {
+      const explorer = (robinhood.blockExplorers?.default?.url || "https://robinhoodchain.blockscout.com").replace(/\/$/, "");
+      const res = await fetch(`${explorer}/api/v2/addresses/${GROVE_MANAGER}`, { headers: { accept: "application/json" } });
+      if (!res.ok) throw new Error(`blockscout ${res.status}`);
+      const meta = await res.json();
+      const creationHash = meta.creation_transaction_hash;
+      if (!creationHash) throw new Error("no creation_transaction_hash in the explorer response");
+      const receipt = await publicClient.getTransactionReceipt({ hash: creationHash });
+      const realBlock = receipt.blockNumber;
+      if (BigInt(appBlock) !== realBlock) {
+        bad(
+          `GROVE_MANAGER_DEPLOY_BLOCK is ${appBlock} in the app but this contract was created at ` +
+            `${realBlock}. ${BigInt(appBlock) > realBlock
+              ? "The pin is LATE: any holder who opted in before it is invisible to candidate discovery, " +
+                "which then reports \"no candidates\" and manages nobody, silently."
+              : "The pin is early: harmless, but it costs a longer scan on every fallback."} ` +
+            `Re-pin it in web/src/lib/server/groveQuote.ts AND in web/wrangler.jsonc vars.`,
+        );
+      }
+    } catch (e) {
+      warn(`could not resolve the contract's creation block to check the deploy-block pin (${e.shortMessage || e.message})`);
+    }
   }
 
   // ── venues ────────────────────────────────────────────────────────────────

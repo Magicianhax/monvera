@@ -53,6 +53,7 @@ import { universeStatsRows } from "./quant";
 import { getDaySummary } from "./marketData";
 import { recentHeadlines } from "./newsFeed";
 import { addNotification } from "./notifyStore";
+import { alertOwner } from "./ownerAlert";
 import { listRecentUsers } from "./userDirectory";
 import {
   runIdForWindow,
@@ -100,7 +101,17 @@ const CAP_HAIRCUT = 0.98;
  *  gets planned. Worst drift first decides who sends when the cap bites, so
  *  anyone trimmed is front of the line next window by construction. */
 const MAX_USERS_PER_RUN = 20;
-const DEADLINE_SECONDS = 600;
+/** One window's wall-clock budget, shared by the calldata deadline and the
+ *  advisory run lock — they describe the same interval and drifting apart is a
+ *  silent way for the lock to expire while calldata is still considered valid. */
+const WINDOW_SECONDS = 600;
+const DEADLINE_SECONDS = WINDOW_SECONDS;
+/** Planning is uncapped by design (cheap reads, everyone eligible gets planned),
+ *  but "cheap" is per user and the loop is unbounded in users. Past this the run
+ *  stops planning and records the rest honestly, rather than walking into
+ *  WINDOW_SECONDS with calldata that expires mid-execution. Two thirds of the
+ *  window, so a full planning phase still leaves a third for sends. */
+const PLANNING_BUDGET_MS = (WINDOW_SECONDS * 1000 * 2) / 3;
 /** Executions halt (and the owner is paged) below this manager balance — a
  *  flat trip-wire, not budgeting: at ~$0.0001 per tx, 0.001 ETH is months of
  *  ceiling-throughput spend. */
@@ -113,10 +124,12 @@ const FEED_MAX_AGE_S = 86_400;
 /** Incident brake: `wrangler kv key put rebalance:kill 1` stops the next pass
  *  in seconds, no deploy. FAIL CLOSED — KV unreachable halts too. */
 const KILL_KEY = "rebalance:kill";
-/** Advisory only, renewed after every executed user so it cannot lapse
- *  mid-run. Real idempotency is the D1 upsert key plus the contract cooldown;
- *  notification dedup keys off the ledger, never this lock. */
-const LOCK_TTL_S = 600;
+/** Advisory only, renewed after every planned AND every executed user so it
+ *  cannot lapse mid-run. Real idempotency is the D1 upsert key plus the contract
+ *  cooldown; notification dedup keys off the ledger, never this lock. Derived
+ *  from WINDOW_SECONDS rather than repeating 600: the lock must not outlive the
+ *  calldata it protects, nor expire before it. */
+const LOCK_TTL_S = WINDOW_SECONDS;
 /** Active management may turn a holder's basket over this much per rolling 30
  *  days before it reverts to passive drift maintenance for them. 25% is about
  *  eight full tilt-sized rebalances a month; past that the spread starts to
@@ -210,15 +223,8 @@ function feedFresh(p: AssetPrice | undefined, nowSeconds: number): boolean {
   return p?.source === "chainlink" && p.updatedAt !== undefined && nowSeconds - p.updatedAt < FEED_MAX_AGE_S;
 }
 
-/** RED events page the owner through the ordinary notification inbox.
- *  OWNER_USER_ID is the owner's user-directory id (wrangler.jsonc vars);
- *  unset means alerting is off — deliberately, so a fork or preview without
- *  the var never pages anyone. */
-async function alertOwner(title: string, body: string): Promise<void> {
-  const owner = process.env.OWNER_USER_ID;
-  if (!owner) return;
-  await addNotification(owner, { kind: "system", title: `Auto-manage: ${title}`, body, at: Date.now() });
-}
+// alertOwner now lives in ./ownerAlert so the watchdog can page without
+// importing this whole engine. Imported above; nothing else changed.
 
 /** R8 consent-meter notices, at-most-once per budget epoch: the ledger claim
  *  (markBudgetNoticeSent, keyed on the on-chain moved value) decides, and the
@@ -232,6 +238,12 @@ async function sendBudgetNotice(
   kind: BudgetNoticeKind,
   moved: bigint,
   maxTotal: bigint,
+  /** Which cap actually bound. The gate is min(perAction, remaining), so the
+   *  lifetime budget is only sometimes the answer — legacy AutoConfigs from the
+   *  narrow-caps era carry a small maxPerBuy that stops management while the
+   *  lifetime budget is barely touched. Saying "your lifetime budget is nearly
+   *  gone" to that holder sends them to look at the wrong number. */
+  bound: "lifetime" | "per-action" = "lifetime",
 ): Promise<void> {
   const userId = bySmart.get(user.toLowerCase());
   if (!userId) return;
@@ -255,10 +267,12 @@ async function sendBudgetNotice(
   } else {
     await addNotification(userId, {
       kind: "system",
-      title: `${def.name} auto-manage budget spent`,
+      title: `${def.name} auto-manage stopped`,
       body:
-        `Auto-manage has stopped for your ${def.name} basket: too little of the $${total.toFixed(2)} lifetime budget you approved remains to cover another move. ` +
-        "This is an early, limited setting. One signature in the grove's Managed card upgrades it to full management; nothing changes on its own.",
+        (bound === "per-action"
+          ? `Auto-manage has stopped for your ${def.name} basket: the per-move cap you approved is now too small to cover another rebalance. Your lifetime budget is not the limit here.`
+          : `Auto-manage has stopped for your ${def.name} basket: too little of the $${total.toFixed(2)} lifetime budget you approved remains to cover another move.`) +
+        " This is an early, limited setting. One signature in the grove's Managed card upgrades it to full management; nothing changes on its own.",
       at: Date.now(),
     });
   }
@@ -559,8 +573,10 @@ async function planOne(def: GroveDef, user: Address, ctx: RunCtx): Promise<Outco
   // R8 exhaustion — this exact condition is the one the panel and the
   // exhaustion notice must agree with; never restate it differently.
   if (maxTurnoverUsd < 15) {
-    await sendBudgetNotice(def, user, ctx.bySmart, "exhausted", moved, maxTotal);
-    return out("skipped", "budget-exhausted");
+    // Name the term that actually bound, not whichever one the template assumed.
+    const bound = perActionUsd <= remainingUsd ? "per-action" : "lifetime";
+    await sendBudgetNotice(def, user, ctx.bySmart, "exhausted", moved, maxTotal, bound);
+    return out("skipped", `budget-exhausted (${bound})`);
   }
   // R8 low-water: under 25% lifetime headroom the user hears it once per
   // budget epoch (the epoch key is the on-chain moved value — re-signing
@@ -1143,12 +1159,36 @@ export async function runAutoRebalance(): Promise<AutoRebalanceReport> {
     // weights and the window silently behaves exactly as it did before.
     ctx.tilt.set(def.id, await tiltFor(def));
 
+    // Registry order must not decide WHETHER a grove is managed at all. The run
+    // budget is global and spent in registry order, so the moment a second grove
+    // launches, a broad move in the first would consume all 20 executions and
+    // the second would skipAll every window until the first stopped drifting.
+    // Reserving a floor for each grove still to come turns that from exclusion
+    // into delay. Inert with one launched grove — the reserve is 0, so the
+    // ceiling is MAX_USERS_PER_RUN and today's behaviour is bit-identical.
+    const grovesAfterThis = launched.length - 1 - launched.indexOf(def);
+    const perGroveFloor = launched.length > 1 ? Math.max(1, Math.floor(MAX_USERS_PER_RUN / launched.length)) : 0;
+    const budgetCeiling = MAX_USERS_PER_RUN - grovesAfterThis * perGroveFloor;
+
     // Phase 1: plan EVERY eligible user — pure reads, no venue, no sends;
     // only executions count against the run cap (R10).
     const planned: PlannedUser[] = [];
+    let planningStopped = false;
     for (const user of users) {
       if (blocked.has(`${def.id}:${user.toLowerCase()}`)) {
         await record({ grove: def.id, user, outcome: "skipped", reason: "prior rebalance still unconfirmed" });
+        continue;
+      }
+      // Wall-clock guard. Planning is uncapped in USERS on purpose, which means
+      // it is unbounded in TIME — and running past the window would strand
+      // already-planned users behind expired calldata. Stopping here records the
+      // rest truthfully and leaves them first in line next window.
+      if (planningStopped || Date.now() - startedAt > PLANNING_BUDGET_MS) {
+        if (!planningStopped) {
+          planningStopped = true;
+          console.warn(`[auto-rebalance] ${def.id}: planning budget spent, deferring the rest of the queue`);
+        }
+        await record({ grove: def.id, user, outcome: "skipped", reason: "planning budget; next window" });
         continue;
       }
       try {
@@ -1159,10 +1199,9 @@ export async function runAutoRebalance(): Promise<AutoRebalanceReport> {
         console.error(`[auto-rebalance] plan failed ${def.id}/${user}`, err);
         await record({ grove: def.id, user, outcome: "failed", reason: msg(err) });
       }
-      // Planning is uncapped (only executions count against MAX_USERS_PER_RUN),
-      // so at scale this loop, not the execution loop, is the long one — and it
-      // was the only phase that never renewed, making the "renewed after every
-      // user so it cannot lapse mid-run" comment above literally untrue here.
+      // Planning is the long phase at scale, and it was the only one that never
+      // renewed — making the "renewed after every user so it cannot lapse
+      // mid-run" comment on LOCK_TTL_S literally untrue here.
       await renewLock();
     }
     if (!planned.length) continue;
@@ -1183,7 +1222,7 @@ export async function runAutoRebalance(): Promise<AutoRebalanceReport> {
       await skipAll("halted: earlier transaction unconfirmed");
       continue;
     }
-    if (executed >= MAX_USERS_PER_RUN) {
+    if (executed >= budgetCeiling) {
       await skipAll("execution budget; next window");
       continue;
     }
@@ -1255,7 +1294,7 @@ export async function runAutoRebalance(): Promise<AutoRebalanceReport> {
         await record({ grove: def.id, user: p.user, outcome: "skipped", reason: "halted: earlier transaction unconfirmed" });
         continue;
       }
-      if (executed >= MAX_USERS_PER_RUN) {
+      if (executed >= budgetCeiling) {
         await record({ grove: def.id, user: p.user, outcome: "skipped", reason: "execution budget; next window" });
         continue;
       }
