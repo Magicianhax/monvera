@@ -243,9 +243,9 @@ export function GroveBuyPanel({ g, onClose }: { g: GroveLive; onClose: () => voi
                 style={{ marginTop: 2, width: 15, height: 15, accentColor: "var(--primary)" }}
               />
               <span style={{ fontSize: 11.5, lineHeight: 1.55, color: "var(--ink-2)" }}>
-                <span style={{ fontWeight: 700, color: "var(--ink)" }}>Managed by Vera</span>. She keeps this
-                basket at its published weights, and every move is a public transaction. Off any time,
-                instantly.
+                <span style={{ fontWeight: 700, color: "var(--ink)" }}>Managed by Vera</span>. She sets this
+                basket&apos;s target weights each window, within 0.7–1.3× of its published ones, and every move
+                is a public transaction. Off any time, instantly.
               </span>
             </label>
           ) : standingLegacy ? (

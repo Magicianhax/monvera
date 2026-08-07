@@ -2,8 +2,16 @@
 
 // The managed switch. A grove is a curated vault: depositing IS the consent
 // to manage, so this card is a light switch, not a settings page. ON means
-// Vera keeps the whole position aligned to the published weights until the
-// user exits or flips it off. No budgets, no meters, no renewal chores: the
+// Vera ACTIVELY manages the whole position until the user exits or flips it
+// off: she sets each window's target weights herself, always within 0.7-1.3x
+// of the published composition, and realigns to those.
+//
+// ⚠️ This card is the CONSENT surface, so its wording is the permission. It
+// described "keeps this position at the published weights" until 2026-08-07 —
+// written for the drift-only product and never updated through the pivot to
+// active management, so it named a strictly narrower permission than the one
+// Vera exercises. Any copy here must describe the band, not the composition.
+// No budgets, no meters, no renewal chores: the
 // contract's required cap fields are signed at values that never bind
 // (MANAGED_AUTO_CAPS), and the protections that actually guard the money are
 // cap-free anyway (Chainlink band per leg, venue whitelist, non-custody,
@@ -120,8 +128,9 @@ export function GroveAutoPanel({ g, held, autoFocus }: { g: GroveLive; held: boo
         held ? (
           <>
             <p style={{ margin: "8px 0 2px", fontSize: 12, lineHeight: 1.55, color: "var(--ink-2)" }}>
-              Vera holds one revocable permission: keep this position at the published weights. Every move is
-              a public transaction in the Rebalances list.
+              Vera holds one revocable permission: manage this position to targets she sets each window,
+              always within 0.7–1.3× of its published weights. Every move is a public transaction in the
+              Rebalances list.
             </p>
             <div style={{ marginTop: 4 }}>
               <ReceiptRow
@@ -180,8 +189,8 @@ export function GroveAutoPanel({ g, held, autoFocus }: { g: GroveLive; held: boo
         </>
       ) : (
         <p style={{ margin: "8px 0 0", fontSize: 12, lineHeight: 1.55, color: "var(--ink-3)" }}>
-          Every deposit here is managed: Vera keeps it at the published weights. Off at buy time, or any time
-          after, instantly.
+          Every deposit here is managed: Vera sets each window&apos;s targets herself, within 0.7–1.3× of the
+          published weights. Off at buy time, or any time after, instantly.
         </p>
       )}
 
@@ -192,8 +201,9 @@ export function GroveAutoPanel({ g, held, autoFocus }: { g: GroveLive; held: boo
               <ModalSuccessIcon />
               <div style={{ textAlign: "center", fontSize: 14.5, fontWeight: 700, marginTop: 10 }}>Vera is managing it</div>
               <p style={{ margin: "6px 0 0", fontSize: 12.5, lineHeight: 1.55, color: "var(--ink-2)", textAlign: "center" }}>
-                Your whole {g.name} position stays aligned to its published weights. Every action lands in the
-                Rebalances list, and you can stop any time, instantly.
+                Your whole {g.name} position is now managed to targets Vera sets each window, always within
+                0.7–1.3× of its published weights. Every action lands in the Rebalances list, and you can stop
+                any time, instantly.
               </p>
               <ModalDoneButton />
             </>
@@ -202,8 +212,10 @@ export function GroveAutoPanel({ g, held, autoFocus }: { g: GroveLive; held: boo
           ) : (
             <>
               <p style={{ margin: "2px 0 8px", fontSize: 12.5, lineHeight: 1.55, color: "var(--ink-2)" }}>
-                You are authorizing Vera to manage your whole {g.name} basket. She realigns it to the
-                published weights when it genuinely drifts, the same way for everyone in the grove.
+                You are authorizing Vera to actively manage your whole {g.name} basket. She sets each
+                window&apos;s target weights herself — always within 0.7–1.3× of the published composition —
+                and realigns to them. She cannot add a name, drop one, or move it to cash. The same way for
+                everyone in the grove.
               </p>
               <ReceiptRow k="Every action" v="a public transaction" />
               <ReceiptRow k="Every price" v="checked against Chainlink on-chain" />

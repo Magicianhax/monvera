@@ -76,6 +76,14 @@ export interface RebalanceOutcomeInput {
   veraReason?: string;
   /** R9 reason-lint flag; omit when no verdict was involved. */
   lintOk?: boolean;
+  /** Which target this row's plan traded toward. "base" = the published weights,
+   *  "model" = a tilt Vera set for the window (0.7-1.3x each published weight).
+   *  Omitted means unknown — user-facing copy must treat that as "unknown", never
+   *  as "base", or it re-creates the false "realigned to published weights" claim. */
+  tiltSource?: "model" | "base";
+  /** Vera's one line on why she tilted. Shown only when tiltLintOk. */
+  tiltReason?: string;
+  tiltLintOk?: boolean;
   legs?: RebalanceLeg[];
   at: number;
 }
@@ -91,6 +99,9 @@ export interface RebalanceOutcomeRow {
   turnoverUsd?: number;
   veraReason?: string;
   lintOk?: boolean;
+  tiltSource?: "model" | "base";
+  tiltReason?: string;
+  tiltLintOk?: boolean;
   notified: boolean;
   legs?: RebalanceLeg[];
   createdAt: number;
@@ -127,6 +138,9 @@ interface ORow {
   turnover_usd: number | null;
   vera_reason: string | null;
   lint_ok: number | null;
+  tilt_source: string | null;
+  tilt_reason: string | null;
+  tilt_lint_ok: number | null;
   notified: number;
   legs: string | null;
   created_at: number;
@@ -167,6 +181,12 @@ function rowToOutcome(r: ORow): RebalanceOutcomeRow {
     reason: r.reason ?? undefined, txHash: r.tx_hash ?? undefined,
     turnoverUsd: r.turnover_usd ?? undefined, veraReason: r.vera_reason ?? undefined,
     lintOk: r.lint_ok === null ? undefined : Boolean(r.lint_ok),
+    // Only the two known spellings survive the read. Anything else (including a
+    // pre-migration NULL) stays undefined so copy reads it as "unknown" rather
+    // than defaulting to "base" and reasserting the published-weights claim.
+    tiltSource: r.tilt_source === "model" || r.tilt_source === "base" ? r.tilt_source : undefined,
+    tiltReason: r.tilt_reason ?? undefined,
+    tiltLintOk: r.tilt_lint_ok === null ? undefined : Boolean(r.tilt_lint_ok),
     notified: Boolean(r.notified), legs: parseLegs(r.legs),
     createdAt: r.created_at, updatedAt: r.updated_at,
   };
@@ -273,12 +293,15 @@ export async function upsertOutcome(o: RebalanceOutcomeInput): Promise<number | 
     const { results } = await db()
       .prepare(
         `INSERT INTO rebalance_outcomes
-           (run_id, grove_id, user, outcome, reason, tx_hash, turnover_usd, vera_reason, lint_ok, legs, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+           (run_id, grove_id, user, outcome, reason, tx_hash, turnover_usd, vera_reason, lint_ok,
+            tilt_source, tilt_reason, tilt_lint_ok, legs, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT (run_id, grove_id, user) DO UPDATE SET
            outcome = excluded.outcome, reason = excluded.reason, tx_hash = excluded.tx_hash,
            turnover_usd = excluded.turnover_usd, vera_reason = excluded.vera_reason,
-           lint_ok = excluded.lint_ok, legs = excluded.legs, updated_at = excluded.updated_at
+           lint_ok = excluded.lint_ok, tilt_source = excluded.tilt_source,
+           tilt_reason = excluded.tilt_reason, tilt_lint_ok = excluded.tilt_lint_ok,
+           legs = excluded.legs, updated_at = excluded.updated_at
          WHERE NOT (rebalance_outcomes.outcome IN ${TERMINAL}
                     AND excluded.outcome NOT IN ${TERMINAL})
          RETURNING id`,
@@ -287,6 +310,8 @@ export async function upsertOutcome(o: RebalanceOutcomeInput): Promise<number | 
         o.runId, o.groveId, o.user.toLowerCase(), o.outcome, o.reason ?? null, o.txHash ?? null,
         o.turnoverUsd ?? null, o.veraReason ?? null,
         o.lintOk === undefined ? null : o.lintOk ? 1 : 0,
+        o.tiltSource ?? null, o.tiltReason ?? null,
+        o.tiltLintOk === undefined ? null : o.tiltLintOk ? 1 : 0,
         o.legs ? packLegs(o.legs) : null, o.at, o.at,
       )
       .run<{ id: number }>();

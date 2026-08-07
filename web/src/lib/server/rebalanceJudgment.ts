@@ -85,6 +85,7 @@ const SYSTEM = [
   "When uncertain, PROCEED — the math already justified this plan, the caps already bound it, and drift left alone compounds.",
   "Answer with the verdict and ONE honest sentence of reason, in plain words a customer can read.",
   "The reason must name at least one drifted holding by its exact symbol and cite at least one figure from the data you were given (a weight, a deviation, a day move).",
+  "EVERY number you write must be COPIED from the data above. Do not compute new figures, do not estimate, do not round beyond the one decimal place shown, and never introduce a number that is not in front of you. A reason containing an unsupported figure is discarded and the holder is shown a generic sentence instead — so an invented number costs them the explanation entirely.",
   "Report only what has already happened. Never predict: no \"will\", no \"expect\", no \"should rise\" or \"should fall\", no price targets.",
   "A headline line, when present, is context for TIMING only: it never justifies acting and you must not repeat it as a prediction.",
 ].join("\n");
@@ -99,14 +100,48 @@ const SYSTEM = [
 // lives in ./copyLint, shared verbatim with the news path so the rule cannot
 // drift between two copies of the list.
 
-/** True when the reason cites a figure (any digit), names at least one brief
- *  symbol, and matches no forward-looking pattern. Wording quality only —
- *  never gates the verdict itself. */
-export function lintVerdictReason(reason: string, briefSymbols: string[]): boolean {
-  if (!/\d/.test(reason)) return false;
+/** How close a written number must be to one the model was actually shown.
+ *  Every figure in the brief is rendered to one decimal place, so a correct
+ *  quotation lands on it exactly; the slack only forgives honest rounding
+ *  ("2.3 points" for a 2.25 deviation), never an invented figure. */
+const FIGURE_TOLERANCE = 0.15;
+
+/** True when the reason cites a figure the model was ACTUALLY GIVEN, names at
+ *  least one brief symbol, and makes no forward-looking claim.
+ *
+ *  The numeral check used to be `/\d/.test(reason)` — it asked whether a digit
+ *  was present, not whether it was true. A reason carrying the right ticker, a
+ *  confident invented number and calm phrasing passed, and passing means shown
+ *  verbatim to a holder whose money just moved. Grounding every numeral against
+ *  `figures` closes that: the model may still be wrong about what a number
+ *  MEANS, but it can no longer state one it was never shown.
+ *
+ *  Wording quality only — never gates the verdict itself. A failure is recorded
+ *  in the ledger and displayReason() substitutes a sentence that claims nothing. */
+export function lintVerdictReason(reason: string, briefSymbols: string[], figures: number[]): boolean {
+  const written = reason.match(/\d+(?:\.\d+)?/g);
+  if (!written) return false;
+  const grounded = written.every((tok) => {
+    const n = Number(tok);
+    return Number.isFinite(n) && figures.some((f) => Math.abs(f - n) <= FIGURE_TOLERANCE);
+  });
+  if (!grounded) return false;
   const named = briefSymbols.some((sym) => new RegExp(`\\b${escapeRegExp(sym)}\\b`, "i").test(reason));
   if (!named) return false;
   return !FORWARD_LOOKING.some((p) => p.test(reason));
+}
+
+/** A verdict WE wrote, not the model.
+ *
+ *  Hand-written sentences are safe verbatim and must never be judged by a lint
+ *  built for model prose — that lint requires a brief symbol, which our own
+ *  copy has no reason to contain. Getting this wrong is not hypothetical: the
+ *  defer-streak override's sentence carried lintOk:false, so both real trades of
+ *  the 2026-08-05 18:00 window showed holders a generic fallback instead of the
+ *  honest "waited 3 windows" explanation. Constructing our sentences through
+ *  here makes that impossible rather than merely fixed. */
+export function ourVerdict(action: RebalanceVerdict["action"], reason: string, source: RebalanceVerdict["source"] = "outage"): RebalanceVerdict {
+  return { action, reason, source, lintOk: true };
 }
 
 /** What a user sees. Lint-clean reasons pass through; a failing reason stays
@@ -163,6 +198,15 @@ function fmt(n: number | null | undefined, suffix = "%"): string {
 export async function judgeRebalance(brief: RebalanceBrief): Promise<RebalanceVerdict> {
   const symbols = brief.rows.map((r) => r.symbol);
   let prompt: string;
+  // Every number the model is SHOWN, collected as the prompt is built so the two
+  // cannot drift: the lint below only accepts numerals drawn from this set, so a
+  // figure added to the prompt without being added here would be flagged as
+  // invented, and one removed from the prompt stops being quotable. Rounded the
+  // same way it is rendered, because that is the form the model reads.
+  const figures: number[] = [];
+  const show = (n: number | null | undefined, dp: number): void => {
+    if (n != null && Number.isFinite(n)) figures.push(Number(Math.abs(n).toFixed(dp)));
+  };
   try {
     // The headline lookup is READ-ONLY over the KV cache the news sweep already
     // wrote: no outbound fetch, and a miss produces today's exact prompt.
@@ -176,6 +220,14 @@ export async function judgeRebalance(brief: RebalanceBrief): Promise<RebalanceVe
       const s = statBy.get(r.symbol);
       const d = (day as Record<string, { dayChangePct?: number }>)[r.symbol];
       const h = news.get(r.symbol);
+      show(r.currentWeightPct, 1);
+      show(r.targetWeightPct, 1);
+      show(r.deviationPct, 1);
+      show(d?.dayChangePct, 1);
+      show(s?.ret3mPct, 1);
+      show(s?.volPct, 1);
+      show(s?.maxDrawdownPct, 1);
+      show(h?.ageH, 0);
       return (
         `${r.symbol}: weight ${r.currentWeightPct.toFixed(1)}% vs target ${r.targetWeightPct.toFixed(1)}% ` +
         `(${r.deviationPct >= 0 ? "overweight, plan sells" : "underweight, plan buys"}) · ` +
@@ -183,6 +235,8 @@ export async function judgeRebalance(brief: RebalanceBrief): Promise<RebalanceVe
         (h ? ` · headline: "${h.title.slice(0, 110)}" (${h.ageH}h ago)` : "")
       );
     });
+    show(brief.turnoverUsd, 0);
+    show(brief.maxDeviationBps / 100, 1);
     prompt = [
       `Grove: ${brief.groveName}. Planned turnover ~$${brief.turnoverUsd.toFixed(0)}; worst weight deviation ${(brief.maxDeviationBps / 100).toFixed(1)} points.`,
       referenceSessionOpen()
@@ -195,8 +249,7 @@ export async function judgeRebalance(brief: RebalanceBrief): Promise<RebalanceVe
     ].join("\n");
   } catch (err) {
     console.error("[rebalance-judgment] brief build failed", err);
-    // Hand-written sentence, not model output — safe to show verbatim.
-    return { action: "defer", reason: "Market data was unavailable, so the rebalance waits for the next window.", source: "outage", lintOk: true };
+    return ourVerdict("defer", "Market data was unavailable, so the rebalance waits for the next window.");
   }
 
   // One short verdict is far quicker than the news batch (~14.5s for 24 items,
@@ -219,11 +272,11 @@ export async function judgeRebalance(brief: RebalanceBrief): Promise<RebalanceVe
         temperature: 0.2,
         abortSignal: AbortSignal.timeout(budget),
       });
-      return { ...object, source: "model", lintOk: lintVerdictReason(object.reason, symbols) };
+      return { ...object, source: "model", lintOk: lintVerdictReason(object.reason, symbols, figures) };
     } catch (err) {
       lastErr = err;
     }
   }
   console.error("[rebalance-judgment] all providers failed", lastErr);
-  return { action: "defer", reason: "Vera couldn't complete her market check, so the rebalance waits for the next window.", source: "outage", lintOk: true };
+  return ourVerdict("defer", "Vera couldn't complete her market check, so the rebalance waits for the next window.");
 }

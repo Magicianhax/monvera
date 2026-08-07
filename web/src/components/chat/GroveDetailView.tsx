@@ -670,7 +670,8 @@ export function GroveDetailView({
                 <div>
                   You do. The stocks sit in your own account{smartAccount ? <> (<AddrChip addr={smartAccount} />)</> : null}, not in a pool and not
                   behind a wrapper token. If management is on, the GroveManager contract holds one standing
-                  permission: it can sell and rebuy inside this basket to hold the published weights. Every
+                  permission: it can sell and rebuy <em>inside</em> this basket, to weights Vera sets within
+                  0.7–1.3× of the published composition. It can never add a name, drop one, or hold cash. Every
                   price it trades at is checked against Chainlink on-chain, every trade runs on a whitelisted
                   venue, and it cannot send anything anywhere but your own account. You can revoke that
                   permission instantly, even while the contract is paused, and only you can withdraw.

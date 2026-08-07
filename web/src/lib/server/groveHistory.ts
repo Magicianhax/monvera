@@ -27,7 +27,7 @@ import type { AbiEvent } from "viem";
 import { chain, EXPLORER_URL, PUBLIC_RPC_URL } from "@/lib/chain";
 import { kvCached } from "@/lib/server/kvCache";
 import { SERVER_RPC_URL } from "@/lib/server/rpc";
-import { GROVE_MANAGER } from "./groveQuote";
+import { GROVE_MANAGER, GROVE_MANAGER_DEPLOY_BLOCK } from "./groveQuote";
 
 const REBALANCED = parseAbiItem("event Rebalanced(address indexed user, uint256 indexed groveId)");
 const COMPOSITION_UPDATED = parseAbiItem(
@@ -43,7 +43,7 @@ const TOPIC_COMPOSITION = encodeEventTopics({ abi: [COMPOSITION_UPDATED] })[0];
 // MUST be re-pinned with every manager redeploy. Left at the previous
 // manager's block (21036427) this scans ~6.3M blocks in 10k chunks on the
 // fallback path, which is the shape of the RPC bill nobody wants.
-const DEPLOY_BLOCK = BigInt(process.env.GROVE_MANAGER_DEPLOY_BLOCK || "27289241");
+const DEPLOY_BLOCK = GROVE_MANAGER_DEPLOY_BLOCK;
 
 const CHUNK = BigInt(9_999);
 // Gentle on purpose: the public RPC 429s Cloudflare egress fast, and this path

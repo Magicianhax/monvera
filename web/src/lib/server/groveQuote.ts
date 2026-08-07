@@ -40,6 +40,23 @@ export const GROVE_MANAGER = (process.env.NEXT_PUBLIC_GROVE_MANAGER ||
   process.env.GROVE_MANAGER_ADDRESS ||
   "") as Address | "";
 
+/** The block GROVE_MANAGER was created at — the floor for every log scan that
+ *  falls back to the chain (auto-manage candidate discovery, grove history).
+ *
+ *  Deliberately adjacent to the address: the two are re-pinned by the SAME
+ *  event, a GroveManager redeploy, and keeping them apart is how one gets
+ *  updated without the other. It used to be a bare literal duplicated in
+ *  autoRebalance.ts and groveHistory.ts and set in no environment at all, so
+ *  production always ran the fallback and a redeploy touching one file would
+ *  have left the other pointing at a dead contract's history. The value now
+ *  lives in wrangler.jsonc vars beside SEASON_DEPLOY_BLOCK; this literal is the
+ *  last-resort default for local runs.
+ *
+ *  Wrong-and-too-late is the dangerous direction: an opt-in can be arbitrarily
+ *  old, so a floor past it makes the scan report "no candidates" with total
+ *  confidence and nobody gets managed. Too-early only costs RPC time. */
+export const GROVE_MANAGER_DEPLOY_BLOCK = BigInt(process.env.GROVE_MANAGER_DEPLOY_BLOCK || "27289241");
+
 /** Mirrors GroveManager.MIN_BUY_USDG — the contract reverts BuyLegTooSmall.
  *  A permissive DUST guard, not our economics: the sizing floor that decides
  *  which names a buy places is MIN_LEG_USD in lib/groves.ts, which sits well

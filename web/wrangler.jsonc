@@ -38,6 +38,15 @@
     // eth_getLogs at every span on this account but bills each refused try.
     "STAKING_LOGS_RPC_URL": "https://rpc.mainnet.chain.robinhood.com",
     "SEASON_DEPLOY_BLOCK": "17820981",
+    // GroveManager's creation block — the floor for the auto-manage candidate
+    // scan and the grove history fallback. Same reasoning as SEASON_DEPLOY_BLOCK
+    // above, and same failure if it is wrong: an opt-in can be arbitrarily old,
+    // so a floor set too late reports "no candidates" with total confidence and
+    // nobody gets managed. It was hardcoded as a literal fallback in TWO files
+    // and set nowhere, so production always ran the fallback and a redeploy that
+    // updated one file would have left the other silently stale. RE-PIN ON EVERY
+    // GroveManager REDEPLOY.
+    "GROVE_MANAGER_DEPLOY_BLOCK": "27289241",
     // Season 1 day-0, 2026-07-24T00:00:00Z. Public, not a secret.
     "SEASON_START": "1784851200",
     // Owner's user-directory id (user_directory.user_id): RED auto-manage

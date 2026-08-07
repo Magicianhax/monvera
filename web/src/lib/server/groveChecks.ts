@@ -29,12 +29,37 @@ function veraSentence(row: RebalanceOutcomeRow, fallback: string): string {
   return fallback;
 }
 
+/**
+ * What a rebalance moved the basket TOWARD, named honestly.
+ *
+ * Shared with the notification builder in autoRebalance.ts on purpose: both
+ * surfaces used to hardcode "its published weights" for every rebalance, which
+ * is false whenever Vera tilted — and she may scale any name 0.7-1.3x, so the
+ * basis can differ from the published composition by several points. The same
+ * class was already fixed once for the judge's own input rows after the
+ * 2026-08-05 incident where a recorded reason read "buying TSLA back to shape"
+ * on a run that SOLD TSLA down to Vera's lowered target; the fix never reached
+ * the copy. One function now, so a third surface cannot re-introduce it.
+ *
+ * `undefined` means the row predates tilt provenance. It must NOT collapse to
+ * "published" — an unknown basis gets wording that claims nothing specific.
+ */
+export function targetBasisName(tiltSource?: "model" | "base"): string {
+  if (tiltSource === "base") return "the basket's published weights";
+  if (tiltSource === "model") return "Vera's targets for this window";
+  return "the basket's target weights";
+}
+
 export function toCheckRow(row: RebalanceOutcomeRow): GroveCheckRow {
   // createdAt is when the window recorded this outcome (epoch ms).
   const base = { at: row.createdAt, outcome: row.outcome, txHash: row.txHash, turnoverUsd: row.turnoverUsd };
   switch (row.outcome) {
     case "rebalanced":
-      return { ...base, title: "Basket realigned", detail: veraSentence(row, "Weights were brought back to their published targets.") };
+      return {
+        ...base,
+        title: "Basket realigned",
+        detail: veraSentence(row, `Weights were brought back toward ${targetBasisName(row.tiltSource)}.`),
+      };
     case "no-drift":
       // The stored reason is an engineer's string ("no actionable plan (drift
       // under 500 bps…)"). It is accurate but it is not the sentence to show.

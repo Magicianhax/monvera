@@ -42,9 +42,12 @@ import type { AssetPrice } from "@/lib/prices";
 import { SERVER_RPC_URL } from "./rpc";
 import { priceAllWithFallback } from "./pricing";
 import { kyberQuote } from "./kyber";
-import { GROVE_MANAGER, GROVE_LEG_SLIPPAGE_BPS } from "./groveQuote";
+import { GROVE_MANAGER, GROVE_LEG_SLIPPAGE_BPS, GROVE_MANAGER_DEPLOY_BLOCK } from "./groveQuote";
 import { computeRebalancePlan, type PlanHolding, type PlanTarget } from "./rebalancePlan";
-import { judgeRebalance, displayReason, type JudgmentRow, type RebalanceVerdict } from "./rebalanceJudgment";
+import { judgeRebalance, displayReason, ourVerdict, type JudgmentRow, type RebalanceVerdict } from "./rebalanceJudgment";
+// Copy shared with the holder-facing panel, so a rebalance cannot be described
+// one way in a notification and another way in the app.
+import { targetBasisName } from "./groveChecks";
 import { veraTilt, TILT_TRIGGER_BPS, type TiltResult, type TiltRow } from "./veraTilt";
 import { universeStatsRows } from "./quant";
 import { getDaySummary } from "./marketData";
@@ -261,17 +264,37 @@ async function sendBudgetNotice(
   }
 }
 
-/** Every address that ever emitted AutoEnabled for this grove (v2, one page
- *  loop). Revokes and cap edits are re-checked on-chain afterwards, so stale
- *  entries here cost one autoConfigs read, never a wrong action. */
-/** Everyone who ever opted this grove in, from Blockscout's index. Throws on
- *  any HTTP failure — the caller decides whether that is fatal. */
-async function candidatesFromBlockscout(onChainId: number): Promise<Address[]> {
+/** Pages of the contract log the fast path will walk before giving up.
+ *
+ *  This endpoint returns the WHOLE contract log — every buy, exit and rebalance
+ *  — and AutoEnabled is picked out client-side below, so the budget is spent on
+ *  our own trading volume, not on holders. Worse, re-signing enableAuto emits a
+ *  FRESH AutoEnabled, so the events we care about are pushed back by renewals
+ *  too. The page count therefore cannot be argued safe from holder count alone,
+ *  which is why exhausting it is reported rather than assumed complete. */
+const BLOCKSCOUT_MAX_PAGES = 6;
+
+/** Everyone who ever opted this grove in, from Blockscout's index.
+ *
+ *  Throws on any HTTP failure — the caller decides whether that is fatal.
+ *
+ *  `complete` is the load-bearing part of the return. Walking off the end of
+ *  the page budget yields a PARTIAL holder set that is otherwise
+ *  indistinguishable from a complete one: no error, no empty page, just fewer
+ *  people. Returning the bare array let the caller cache a truncated scan as
+ *  gospel, and a genuinely opted-in holder would drop out of management with no
+ *  plan, no ledger row and no alert — the same shape as the 200k-block window
+ *  that searched a range the opt-ins could not be in and reported "none" with
+ *  total confidence. Revokes and cap edits are re-checked on-chain afterwards,
+ *  so a stale ENTRY costs one autoConfigs read; a stale OMISSION costs a holder
+ *  their management, which is why only omission is guarded here. */
+async function candidatesFromBlockscout(onChainId: number): Promise<{ users: Address[]; complete: boolean }> {
   const topic0 = encodeEventTopics({ abi: [AUTO_ENABLED] })[0];
   const groveTopic = toHex(BigInt(onChainId), { size: 32 }).toLowerCase();
   const users = new Set<Address>();
   let params = "";
-  for (let page = 0; page < 6; page++) {
+  let complete = false;
+  for (let page = 0; page < BLOCKSCOUT_MAX_PAGES; page++) {
     const res = await fetch(`${EXPLORER_URL}/api/v2/addresses/${GROVE_MANAGER}/logs${params}`, { headers: HEADERS });
     if (!res.ok) throw new Error(`blockscout v2 logs ${res.status}`);
     const json = (await res.json()) as {
@@ -285,10 +308,15 @@ async function candidatesFromBlockscout(onChainId: number): Promise<Address[]> {
       }
     }
     const next = json.next_page_params;
-    if (!next || Object.keys(next).length === 0) break;
+    // Reaching the end of the log is the ONLY way to be complete. Falling out
+    // of the loop instead means there was more we never read.
+    if (!next || Object.keys(next).length === 0) {
+      complete = true;
+      break;
+    }
     params = "?" + new URLSearchParams(Object.entries(next).map(([k, v]) => [k, String(v)])).toString();
   }
-  return [...users];
+  return { users: [...users], complete };
 }
 
 /** AutoEnabled logs straight from the chain, over a bounded recent window.
@@ -341,7 +369,7 @@ const CANDIDATES_KEY = (id: number) => `rebalance:candidates:${id}`;
  * candidates" with total confidence. An opt-in can be arbitrarily old, so the
  * only correct floor is the contract itself. Must be re-pinned on redeploy —
  * same rule as groveHistory's DEPLOY_BLOCK. */
-const MANAGER_DEPLOY_BLOCK = BigInt(process.env.GROVE_MANAGER_DEPLOY_BLOCK || "27289241");
+const MANAGER_DEPLOY_BLOCK = GROVE_MANAGER_DEPLOY_BLOCK;
 
 /**
  * Who to consider for this grove this window.
@@ -371,24 +399,51 @@ function dedupeAddresses(...lists: Address[][]): Address[] {
   return [...seen] as Address[];
 }
 
+/** The remembered floor. Unreadable cache is not fatal: the callers below all
+ *  have another source, and an empty floor only costs coverage, never safety. */
+async function cachedCandidates(store: ReturnType<typeof kv>, key: string): Promise<Address[]> {
+  try {
+    const raw = await store?.get(key);
+    return raw ? (JSON.parse(raw) as Address[]) : [];
+  } catch {
+    return [];
+  }
+}
+
 async function optedInCandidates(onChainId: number): Promise<Address[]> {
   const store = kv();
   const key = CANDIDATES_KEY(onChainId);
   try {
-    const users = dedupeAddresses(await candidatesFromBlockscout(onChainId));
-    // Remember the good scan. Opt-ins never disappear, so a cache that only
-    // grows is always a safe floor for the next fallback.
-    await store?.put(key, JSON.stringify(users)).catch(() => {});
-    return users;
+    const { users: scanned, complete } = await candidatesFromBlockscout(onChainId);
+    const cached = await cachedCandidates(store, key);
+
+    if (complete) {
+      // UNION, never replace. The old code overwrote the cache with whatever
+      // the scan returned, justified by "a cache that only grows is always a
+      // safe floor" — true of the cache, but the write made it not grow. The
+      // claim is now enforced instead of asserted: opt-ins never disappear, so
+      // dropping a remembered holder can only ever be a bug.
+      const all = dedupeAddresses(cached, scanned);
+      await store?.put(key, JSON.stringify(all)).catch(() => {});
+      return all;
+    }
+
+    // Truncated. The request SUCCEEDED, so nothing throws and the old code
+    // would have cached this partial set as the complete truth. Treat it as
+    // what it is — a partial answer — and go get the rest from the chain.
+    console.warn(`[auto-rebalance] blockscout truncated at ${BLOCKSCOUT_MAX_PAGES} pages for grove ${onChainId}`);
+    await alertOwner(
+      "candidate scan truncated",
+      `Grove ${onChainId}: Blockscout returned ${BLOCKSCOUT_MAX_PAGES} full pages without reaching the end of the log, so the fast path can no longer see every opt-in. Falling back to the chain scan this window. Raise BLOCKSCOUT_MAX_PAGES or filter the request by topic.`,
+    );
+    const head = await client.getBlockNumber();
+    const fresh = await candidatesFromRpc(onChainId, MANAGER_DEPLOY_BLOCK, head);
+    const all = dedupeAddresses(cached, scanned, fresh);
+    await store?.put(key, JSON.stringify(all)).catch(() => {});
+    return all;
   } catch (err) {
     console.error("[auto-rebalance] blockscout candidate scan failed, falling back", msg(err));
-    let cached: Address[] = [];
-    try {
-      const raw = await store?.get(key);
-      if (raw) cached = JSON.parse(raw) as Address[];
-    } catch {
-      /* cache unreadable: the RPC scan below is the only source left */
-    }
+    const cached = await cachedCandidates(store, key);
     const head = await client.getBlockNumber();
     const fresh = await candidatesFromRpc(onChainId, MANAGER_DEPLOY_BLOCK, head);
     const all = dedupeAddresses(cached, fresh);
@@ -815,7 +870,7 @@ async function repairUnconfirmed(bySmart: Map<string, string>): Promise<{ repair
           const delivered = await addNotification(userId, {
             kind: "system",
             title: `${name} rebalanced (confirmed late)`,
-            body: `Your ${name} rebalance took longer than usual to confirm — it has now landed. About $${(row.turnoverUsd ?? 0).toFixed(2)} realigned toward its published weights. Price-checked on-chain, as always.${read} The transaction is in the grove's Rebalances list.`,
+            body: `Your ${name} rebalance took longer than usual to confirm — it has now landed. About $${(row.turnoverUsd ?? 0).toFixed(2)} realigned toward ${targetBasisName(row.tiltSource)}. Price-checked on-chain, as always.${read} The transaction is in the grove's Rebalances list.`,
             txHash: row.txHash,
             at: Date.now(),
           });
@@ -923,19 +978,48 @@ export async function runAutoRebalance(): Promise<AutoRebalanceReport> {
   const outcomes: Outcome[] = [];
   const errors: string[] = [];
   const ledgerIds = new Map<Outcome, number>();
-  const toInput = (o: Outcome) => ({
-    runId,
-    groveId: o.grove,
-    user: o.user,
-    outcome: o.outcome,
-    reason: o.reason,
-    txHash: o.txHash,
-    turnoverUsd: o.turnoverUsd,
-    veraReason: o.veraReason,
-    lintOk: o.lintOk,
-    legs: o.legs,
-    at: Date.now(),
-  });
+
+  /** Record a run-level failure AND page the owner — one action, not two.
+   *
+   *  `errors` is only ever joined into the run row's text column, which no cron
+   *  reads back, so a bare errors.push() is invisible until someone hand-queries
+   *  D1. On 2026-08-07 the pricing sweep's catch was the only failure branch in
+   *  this function that pushed without alerting, and the consequence was the
+   *  broadest one available: a tier-1 pricing outage returns
+   *  "pricing-unavailable" for every user of every grove, for as long as it
+   *  lasts, with nobody told. Every other branch alerted; this one had simply
+   *  been forgotten. Coupling the two here means the next branch someone adds
+   *  cannot forget half of it. */
+  const fail = async (title: string, detail: string): Promise<void> => {
+    errors.push(`${title}: ${detail}`);
+    await alertOwner(title, detail);
+  };
+  // This window's tilt per grove. Hoisted above toInput (and handed to ctx
+  // below) so every ledger row can record WHICH target its plan traded toward.
+  // Without it the tilt — the decision that actually moves the goalposts — was
+  // computed, used, and thrown away, leaving "why is NVDA 2.3 points over its
+  // published weight?" unanswerable, and leaving user copy free to assert
+  // "realigned to published weights" on a run that did nothing of the kind.
+  const tiltByGrove = new Map<string, TiltResult>();
+  const toInput = (o: Outcome) => {
+    const tilt = tiltByGrove.get(o.grove);
+    return {
+      runId,
+      groveId: o.grove,
+      user: o.user,
+      outcome: o.outcome,
+      reason: o.reason,
+      txHash: o.txHash,
+      turnoverUsd: o.turnoverUsd,
+      veraReason: o.veraReason,
+      lintOk: o.lintOk,
+      tiltSource: tilt?.source,
+      tiltReason: tilt?.reason,
+      tiltLintOk: tilt?.lintOk,
+      legs: o.legs,
+      at: Date.now(),
+    };
+  };
   // "unconfirmed" rows are the ONLY pointer repair will ever have to a hash
   // whose fate is unknown — a lost write strands it forever. Retry, and when
   // the ledger truly won't take it, page the owner with the hash itself so a
@@ -1023,9 +1107,9 @@ export async function runAutoRebalance(): Promise<AutoRebalanceReport> {
   try {
     prices = await priceAllWithFallback(client, [...symbols.values()]);
   } catch (err) {
-    errors.push(`pricing sweep failed: ${msg(err)}`);
+    await fail("pricing sweep failed", `${msg(err)}. Every grove reports pricing-unavailable this window.`);
   }
-  const ctx: RunCtx = { prices, nowSeconds: Math.floor(Date.now() / 1000), bySmart, staleBlocked: 0, tilt: new Map() };
+  const ctx: RunCtx = { prices, nowSeconds: Math.floor(Date.now() / 1000), bySmart, staleBlocked: 0, tilt: tiltByGrove };
 
   let executed = 0;
   let plannedCount = 0;
@@ -1043,8 +1127,7 @@ export async function runAutoRebalance(): Promise<AutoRebalanceReport> {
     try {
       users = await optedInCandidates(def.onChainId!);
     } catch (err) {
-      errors.push(`candidate scan failed for ${def.id}: ${msg(err)}`);
-      await alertOwner("candidate scan failed", `${def.id}: ${msg(err)}`);
+      await fail("candidate scan failed", `${def.id}: ${msg(err)}`);
       continue;
     }
 
@@ -1076,6 +1159,11 @@ export async function runAutoRebalance(): Promise<AutoRebalanceReport> {
         console.error(`[auto-rebalance] plan failed ${def.id}/${user}`, err);
         await record({ grove: def.id, user, outcome: "failed", reason: msg(err) });
       }
+      // Planning is uncapped (only executions count against MAX_USERS_PER_RUN),
+      // so at scale this loop, not the execution loop, is the long one — and it
+      // was the only phase that never renewed, making the "renewed after every
+      // user so it cannot lapse mid-run" comment above literally untrue here.
+      await renewLock();
     }
     if (!planned.length) continue;
 
@@ -1135,20 +1223,18 @@ export async function runAutoRebalance(): Promise<AutoRebalanceReport> {
       const streak = await deferStreak(def.id).catch(() => 0);
       if (streak >= MAX_CONSECUTIVE_DEFERS) {
         console.warn(`[auto-rebalance] ${def.id}: ${streak} consecutive defers, acting on the drift`);
-        verdict = {
-          action: "proceed",
-          reason: `This basket has waited ${streak} windows for a calmer market, so it is being realigned now rather than drifting further.`,
-          source: "model",
-          // Hand-written, not model output — safe verbatim, exactly like the
-          // outage sentences, and true for the same reason. This carried false
-          // until 2026-08-06, which sent BOTH real trades of the 08-05 18:00
-          // window through displayReason()'s neutral fallback: users were shown
-          // "The market looked settled enough to realign" instead of the honest
-          // sentence explaining a three-window wait. The symbol-name rule inside
-          // lintVerdictReason exists to stop the MODEL being vague; it has no
-          // business judging a sentence we wrote ourselves.
-          lintOk: true,
-        };
+        // ourVerdict, not a literal: OUR sentences are safe verbatim and must
+        // never be judged by a lint built for model prose (it demands a brief
+        // symbol, which our copy has no reason to carry). Hand-setting lintOk
+        // here is exactly what went wrong before — it was false, so both real
+        // trades of the 08-05 18:00 window showed holders a generic fallback
+        // instead of this explanation. source stays "model" because the streak
+        // it overrides is a market judgment, not an outage.
+        verdict = ourVerdict(
+          "proceed",
+          `This basket has waited ${streak} windows for a calmer market, so it is being realigned now rather than drifting further.`,
+          "model",
+        );
       }
     }
 
@@ -1206,7 +1292,7 @@ export async function runAutoRebalance(): Promise<AutoRebalanceReport> {
       delivered = await addNotification(userId, {
         kind: "system",
         title: `${name} rebalanced`,
-        body: `Your ${name} basket: about $${(o.turnoverUsd ?? 0).toFixed(2)} realigned toward its published weights. Price-checked on-chain, as always.${read} The transaction is in the grove's Rebalances list.`,
+        body: `Your ${name} basket: about $${(o.turnoverUsd ?? 0).toFixed(2)} realigned toward ${targetBasisName(tiltByGrove.get(o.grove)?.source)}. Price-checked on-chain, as always.${read} The transaction is in the grove's Rebalances list.`,
         txHash: o.txHash,
         at: Date.now(),
       });
