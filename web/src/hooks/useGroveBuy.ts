@@ -13,6 +13,7 @@ import { createPublicClient, erc20Abi, http, type Address } from "viem";
 import { chain, RPC_URL } from "@/lib/chain";
 import { USDG } from "@/lib/tokens";
 import { authHeader } from "@/lib/authedFetch";
+import { notifyGrovesChanged } from "@/lib/grovesRefresh";
 import { explainError } from "@/lib/explainError";
 import { useActiveWallet } from "@/hooks/useActiveWallet";
 import { useRefreshBalances } from "@/hooks/useBalances";
@@ -269,6 +270,9 @@ export function useGroveBuy(): UseGroveBuy {
         setPhase("done");
         // The basket (and any spent grove cash) just moved — refetch now.
         refreshBalances();
+        // A new holder (or more capital from an existing one) changes the
+        // public investor count and total invested; drop the cached book.
+        void notifyGrovesChanged();
         return;
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);

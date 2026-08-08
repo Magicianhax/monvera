@@ -17,6 +17,7 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 import type { Address } from "viem";
 import { authHeader } from "@/lib/authedFetch";
+import { notifyGrovesChanged } from "@/lib/grovesRefresh";
 import { explainError } from "@/lib/explainError";
 import { useActiveWallet } from "@/hooks/useActiveWallet";
 import { useRefreshBalances } from "@/hooks/useBalances";
@@ -167,6 +168,9 @@ export function useGroveExit(): UseGroveExit {
         // Proceeds just landed at the smart account — the portfolio, the
         // grove-cash bar, and the activity feed must all say so NOW.
         refreshBalances();
+        // The position just changed on-chain; the public book still holds the
+        // pre-trade investor count and total invested until told otherwise.
+        void notifyGrovesChanged();
       } catch (err) {
         setError(explainError(err));
         setPhase("error");
@@ -204,6 +208,9 @@ export function useGroveExit(): UseGroveExit {
         });
         setPhase("done");
         refreshBalances();
+        // The position just changed on-chain; the public book still holds the
+        // pre-trade investor count and total invested until told otherwise.
+        void notifyGrovesChanged();
       } catch (err) {
         setError(explainError(err));
         setPhase("error");

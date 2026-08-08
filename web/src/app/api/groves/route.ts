@@ -1,5 +1,5 @@
 import type { NextRequest } from "next/server";
-import { getGroves, grovesDegraded } from "@/lib/server/groveService";
+import { getGroves, grovesDegraded, grovesEpoch, EPOCH_NOCACHE_MS } from "@/lib/server/groveService";
 import { rateLimit, clientIp } from "@/lib/server/rateLimit";
 import { tooManyRequests, serverError } from "@/lib/server/respond";
 
@@ -15,14 +15,23 @@ export async function GET(req: NextRequest) {
   if (!limit.ok) return tooManyRequests(limit.retryAfter);
   try {
     const payload = await getGroves();
-    // A degraded payload (a launched grove whose stats read failed) must not
-    // be pinned at the edge — SWR once kept "opens soon" on screen minutes
-    // after the origin recovered.
+    // Two reasons never to let the edge pin this response:
+    //
+    //  1. A degraded payload (a launched grove whose stats read failed) — SWR
+    //     once kept "opens soon" on screen minutes after the origin recovered.
+    //  2. A buy or exit landed in the last couple of minutes. The origin is
+    //     already correct by then, but stale-while-revalidate would keep
+    //     serving the pre-trade numbers to everyone else — which is exactly
+    //     what left "Investors 2" on screen after the second holder had
+    //     closed. Freshness beats cache hits for the short window where the
+    //     numbers visibly changed.
+    const recentlyMutated = Date.now() - grovesEpoch() < EPOCH_NOCACHE_MS;
     return Response.json(payload, {
       headers: {
-        "Cache-Control": grovesDegraded(payload.groves)
-          ? "no-store"
-          : "public, s-maxage=60, stale-while-revalidate=300",
+        "Cache-Control":
+          grovesDegraded(payload.groves) || recentlyMutated
+            ? "no-store"
+            : "public, s-maxage=60, stale-while-revalidate=300",
       },
     });
   } catch (err) {

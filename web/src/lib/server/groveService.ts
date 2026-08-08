@@ -16,6 +16,7 @@ import { chain, PUBLIC_RPC_URL } from "@/lib/chain";
 import { SERVER_RPC_URL } from "./rpc";
 import { priceAllWithFallback } from "./pricing";
 import { backtestBasket, type BacktestResult } from "./quant";
+import { getCloudflareContext } from "@opennextjs/cloudflare";
 
 // batch.multicall folds the per-component feed reads into one eth_call, same as
 // /api/prices — without it the RPC rate-limits the tail of a cold burst.
@@ -207,9 +208,74 @@ const NOTE =
 const PAYLOAD_TTL_MS = 60_000;
 let payloadCache: { at: number; value: Promise<GrovesPayload> } | null = null;
 
-/** All groves with live prices, stats, and backtests (cached ~60s). */
-export function getGroves(): Promise<GrovesPayload> {
-  if (payloadCache && Date.now() - payloadCache.at < PAYLOAD_TTL_MS) return payloadCache.value;
+// ── mutation epoch ─────────────────────────────────────────────────────────
+// Buys and exits settle CLIENT-SIDE, as sponsored UserOps. The server is never
+// in that path, so nothing here can know a position just closed — the numbers
+// simply aged out of a 60s memory cache behind a 60s/300s edge cache, and
+// "Investors 2 · Total invested $595" stayed on screen for minutes after a
+// holder had fully exited. Watching the chain harder would fix it by polling,
+// which is exactly the cost we do not want.
+//
+// Instead the client that just settled a transaction bumps this epoch
+// (POST /api/groves/refresh) and every reader notices on its next call. One KV
+// read per cache-hit, no chain traffic, and the edge is told to stop pinning
+// while the epoch is fresh.
+const EPOCH_KEY = "groves:epoch";
+/** How long after a mutation the route refuses to be edge-cached. Long enough
+ *  to cover an indexer catching up, short enough that one exit does not turn
+ *  caching off for everyone. */
+export const EPOCH_NOCACHE_MS = 120_000;
+
+let lastEpoch = 0;
+
+function kvStore(): { get(k: string): Promise<string | null>; put(k: string, v: string): Promise<void> } | null {
+  try {
+    const env = getCloudflareContext().env as unknown as {
+      KV?: { get(k: string): Promise<string | null>; put(k: string, v: string): Promise<void> };
+    };
+    return env.KV ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/** Record that a buy or exit just landed, so the next read rebuilds. */
+export async function markGrovesMutated(at = Date.now()): Promise<void> {
+  lastEpoch = at;
+  payloadCache = null;
+  await kvStore()?.put(EPOCH_KEY, String(at)).catch(() => {});
+}
+
+/** Epoch as last SEEN by this isolate. Cheap, no I/O — for cache headers. */
+export function grovesEpoch(): number {
+  return lastEpoch;
+}
+
+/** Has anyone mutated since this isolate's cached payload was built? KV is the
+ *  only cross-isolate channel; a failed read must never invalidate, or a KV
+ *  wobble would rebuild the payload on every request. */
+async function mutatedSince(builtAt: number): Promise<boolean> {
+  try {
+    const raw = await kvStore()?.get(EPOCH_KEY);
+    const epoch = raw ? Number(raw) : 0;
+    if (Number.isFinite(epoch) && epoch > lastEpoch) lastEpoch = epoch;
+    return Number.isFinite(epoch) && epoch > builtAt;
+  } catch {
+    return false;
+  }
+}
+
+/** All groves with live prices, stats, and backtests (cached ~60s, or until a
+ *  buy or exit says otherwise). */
+export async function getGroves(): Promise<GrovesPayload> {
+  if (payloadCache && Date.now() - payloadCache.at < PAYLOAD_TTL_MS) {
+    if (!(await mutatedSince(payloadCache.at))) return payloadCache.value;
+    payloadCache = null;
+  }
+  return buildGroves();
+}
+
+function buildGroves(): Promise<GrovesPayload> {
   const value = assemble(GROVES)
     // Launched groves lead the shelf everywhere (public page, /api, in-app):
     // Titan is live and buyable, the rest are previews. Stable sort, so the
@@ -239,9 +305,13 @@ export async function getGrove(id: string): Promise<GroveLive | null> {
   const def = groveById(id);
   if (!def) return null;
   // Serve from the shared list build when warm — the detail page and the list
-  // must never show different numbers for the same grove.
+  // must never show different numbers for the same grove. Goes through
+  // getGroves() rather than reading payloadCache directly so the mutation
+  // epoch is honoured here too: the detail page is where someone lands right
+  // after exiting, and it was the most likely place to still show their
+  // closed position.
   if (payloadCache && Date.now() - payloadCache.at < PAYLOAD_TTL_MS) {
-    const payload = await payloadCache.value.catch(() => null);
+    const payload = await getGroves().catch(() => null);
     const hit = payload?.groves.find((g) => g.id === id);
     if (hit) return hit;
   }
