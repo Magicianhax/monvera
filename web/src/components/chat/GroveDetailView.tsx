@@ -34,15 +34,24 @@ const EXPLORER = "https://robinhoodchain.blockscout.com";
 
 const GVD_CSS = `
 .gvd{container-type:inline-size}
-/* Five cells, ONE row, always. No wrapping — a stat strip that
-   re-stacks reads as a broken table. When the container is narrower than
-   five readable cells (~146px each), the strip scrolls sideways instead:
-   native swipe on phones, cells at full legibility, dividers always vertical.
-   This also deletes the whole breakpoint/divider cascade a wrap needs. */
+/* Wide: five cells, ONE row. Dividers vertical, no wrapping. */
 .gvd-stats{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(146px,1fr);overflow-x:auto;scrollbar-width:none}
 .gvd-stats::-webkit-scrollbar{display:none}
 .gvd-stats>div{padding:14px 16px;border-left:1px solid var(--line-2)}
 .gvd-stats>div:first-child{border-left:none}
+/* Narrow: all five AT ONCE, no swipe. The sideways scroller was chosen to
+   avoid a wrapped strip reading as a broken table, but the cost was worse
+   than the cure: on a phone only two cells fit, so investors, total invested
+   and the next window — the three facts that answer "is this real?" — sat
+   behind a gesture with no affordance. Nobody scrolls a thing they cannot
+   see. Two columns with the live countdown spanning the last row, and 1px
+   gaps over a line-coloured backdrop to draw dividers on BOTH axes, which a
+   border-left cascade cannot do once cells wrap. */
+@container (width < 620px){
+  .gvd-stats{grid-auto-flow:row;grid-template-columns:1fr 1fr;overflow-x:visible;gap:1px;background:var(--line-2)}
+  .gvd-stats>div{border-left:none;background:var(--panel);padding:12px 14px}
+  .gvd-stats>div:last-child{grid-column:1/-1}
+}
 .gvd-split{display:grid;gap:12px;grid-template-columns:minmax(0,1.45fr) minmax(0,1fr);align-items:start}
 /* The rail follows the reader once the ledger column grows past it — the
    action card stays reachable without ever leaving a void below the content.

@@ -366,6 +366,12 @@ export function ChatAppMobile() {
           inside a composition opens on top and closes back to the Grove */}
       {grovesView && (
         <div className={grovesClosing ? "sheet sheet-out aur" : "sheet aur"} style={{ position: "absolute", inset: 0, zIndex: 60, background: "var(--bg)", display: "flex", flexDirection: "column" }}>
+          {/* The app-level bar sits under this full-screen sheet, so on a phone
+              the Grove-account cash notice was only ever visible on Home — and
+              Groves is precisely where that cash gets spent (a buy draws on it
+              first). Repeated here rather than moved, because it is still an
+              app-level fact everywhere else. */}
+          <RecoverBanner />
           <GrovesPage mobile groveId={grovesView.id} autoManage={grovesView.auto} nav={nav} onOpen={(id) => setGrovesView({ id, auto: false })} onBack={() => (grovesView.id ? setGrovesView({ id: null, auto: false }) : closeGroves())} />
         </div>
       )}
