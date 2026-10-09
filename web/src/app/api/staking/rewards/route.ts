@@ -21,31 +21,65 @@ export const dynamic = "force-dynamic";
 interface EventSnapshot {
   events: StakeEvent[];
   headTs: bigint;
+  /** Last block the events are complete through. Absent on pre-cursor entries. */
+  toBlock?: bigint;
 }
 
-// One shared scan per 30s for the whole fleet. The staking chain is permissive
-// on log range, so scan wide (1M blocks/call); fetch.ts shrinks if an RPC balks.
-async function loadEvents(): Promise<EventSnapshot> {
+// The public 4663 RPC caps eth_getLogs at 10,000,000 blocks per call for the
+// address-only filter fetch.ts sends (its own error text, measured 2026-10-09;
+// an OR'd topic list drops that to 100k). fetch.ts halves if it ever tightens.
+const LOG_SPAN = BigInt(10_000_000);
+
+// RPC only, never the explorer: Blockscout now answers API clients with a
+// Cloudflare challenge, and its history-only degrade would advance the cursor
+// past events it never saw. Complete through `to`, or throw.
+const scan = (from: bigint, to: bigint) =>
+  from > to ? Promise.resolve([] as StakeEvent[]) : fetchStakeEvents(stakingLogsClient, STAKING, from, to, LOG_SPAN, { explorer: false });
+
+/** Σ replayed staked balance == the contract's totalStaked (stake credits the
+ *  measured delta it emits; requestUnstake/cancel move it 1:1). replayBalances
+ *  also throws on any per-wallet stakedAfter mismatch, i.e. a dropped event. */
+function reconciles(events: StakeEvent[], totalStaked: bigint): boolean {
+  try {
+    let sum = BigInt(0);
+    for (const tl of replayBalances(events).values()) sum += tl.length ? tl[tl.length - 1].bal : BigInt(0);
+    return sum === totalStaked;
+  } catch {
+    return false;
+  }
+}
+
+// One shared scan per 30s for the whole fleet. INCREMENTAL: the history is
+// ~66M blocks and grows ~1M/day, so rescanning it every refresh is what broke
+// this (a fixed call budget outgrown by chain age). The previous snapshot is
+// extended by just the blocks after its cursor; only a cold cache or a failed
+// reconciliation pays for the full scan.
+async function loadEvents(prev?: EventSnapshot): Promise<EventSnapshot> {
   const head = await stakingLogsClient.getBlockNumber();
   const headTs = (await stakingLogsClient.getBlock({ blockNumber: head })).timestamp;
-  const events = await fetchStakeEvents(stakingLogsClient, STAKING, DEPLOY_BLOCK, head, BigInt(1_000_000));
-
-  // Sanity gate, same discipline as the season builder: a transient empty
-  // getLogs is indistinguishable from "nobody staked", and caching it would
-  // serve every staker a confident, WRONG zero for 30s. Cross-check the scan
-  // against the chain's own totalStaked and refuse the snapshot if they
-  // disagree — the caller then reports unavailable and the UI shows "—",
-  // which is honest, instead of a zero that reads as "you earned nothing".
   const totalStaked = await stakingClient.readContract({
     address: STAKING,
     abi: stakingAbi,
     functionName: "totalStaked",
     blockNumber: head,
   });
-  if (totalStaked > BigInt(0) && events.length === 0) {
-    throw new Error(`reward scan empty while totalStaked=${totalStaked} — refusing snapshot`);
+
+  const base = prev?.toBlock !== undefined && prev.toBlock <= head ? prev : undefined;
+  let events = base ? [...base.events, ...(await scan(base.toBlock! + BigInt(1), head))] : await scan(DEPLOY_BLOCK, head);
+  if (base && !reconciles(events, totalStaked)) {
+    console.warn("[staking/rewards] incremental snapshot drifted from totalStaked — full rescan");
+    events = await scan(DEPLOY_BLOCK, head);
   }
-  return { events, headTs };
+
+  // Sanity gate, same discipline as the season builder: a transient empty or
+  // short getLogs is indistinguishable from "nobody staked", and caching it
+  // would serve every staker a confident, WRONG number for 30s. Refuse the
+  // snapshot instead — the caller reports unavailable and the UI shows "—",
+  // which is honest, instead of a zero that reads as "you earned nothing".
+  if (!reconciles(events, totalStaked)) {
+    throw new Error(`reward scan does not reconcile with totalStaked=${totalStaked} — refusing snapshot`);
+  }
+  return { events, headTs, toBlock: head };
 }
 
 // The ?all=1 table is identical for every caller of the same event snapshot,

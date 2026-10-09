@@ -113,6 +113,10 @@ export async function fetchStakeEvents(
    *  never grows, so pass a large value for a permissive RPC (fewer round-trips)
    *  and the default for an unknown one. */
   initialStep: bigint = BigInt(5_000),
+  /** explorer:false skips Blockscout. The result then covers [fromBlock,
+   *  toBlock] completely or the call throws — never the explorer-history-only
+   *  degrade below — which an incremental caller needs to advance a cursor. */
+  opts: { explorer?: boolean } = {},
 ): Promise<StakeEvent[]> {
   const raw: Raw[] = [];
 
@@ -120,7 +124,7 @@ export async function fetchStakeEvents(
   // blocks it has not indexed yet. `start` moves up so the RPC loop below
   // covers just the tail.
   let start = fromBlock;
-  const bs = await blockscoutLogs(address);
+  const bs = opts.explorer === false ? null : await blockscoutLogs(address);
   if (bs) {
     for (const r of bs.rows) {
       if (r.blockNumber >= fromBlock && r.blockNumber <= toBlock) raw.push(r);
@@ -138,28 +142,40 @@ export async function fetchStakeEvents(
   // this just avoids relying on it for the common case.)
   const SUSPECT_CAP = 9_000;
   // Never open with a window wider than the actual remaining range, and never
-  // spend more than a handful of getLogs per invocation. The halving loop was
-  // built for an endpoint that eventually accepts a span; against one that
-  // refuses EVERY span it degenerated into ~20 refused-but-billed calls per
-  // refresh (and tens of thousands when Blockscout had returned nothing).
-  const MAX_TAIL_CALLS = 8;
-  let tailCalls = 0;
+  // spend more getLogs than the range needs plus a few halvings. The halving
+  // loop was built for an endpoint that eventually accepts a span; against one
+  // that refuses EVERY span it degenerated into ~20 refused-but-billed calls
+  // per refresh (and tens of thousands when Blockscout had returned nothing).
+  // The budget scales with the span: a flat 8 was outgrown by chain age alone
+  // (66M blocks by 2026-10 at ~1M/day) and took staking down once Blockscout
+  // started challenging API clients.
   let step = initialStep;
   const remaining = toBlock - start + BigInt(1);
   if (step > remaining) step = remaining;
+  const MAX_TAIL_CALLS = (remaining > BigInt(0) ? Number((remaining + step - BigInt(1)) / step) : 0) + 8;
+  let tailCalls = 0;
   try {
     while (start <= toBlock) {
       if (++tailCalls > MAX_TAIL_CALLS) throw new Error(`tail scan budget exhausted (${MAX_TAIL_CALLS} getLogs)`);
       const end = start + step - BigInt(1) > toBlock ? toBlock : start + step - BigInt(1);
       try {
-        const logs = await client.getLogs({ address, events: EVENTS, fromBlock: start, toBlock: end });
+        // Address-only filter, decoded here. The 4663 RPC allows 10M blocks per
+        // call with one value per topic position but only 100k for an OR list
+        // ("send one value per position"), and `events: EVENTS` is a 4-way OR.
+        const logs = await client.getLogs({ address, fromBlock: start, toBlock: end });
         if (logs.length >= SUSPECT_CAP && step > BigInt(1)) { step = step / BigInt(2); continue; } // possible silent cap: shrink, don't advance.
         for (const l of logs) {
+          let dec;
+          try {
+            dec = decodeEventLog({ abi: EVENTS, topics: l.topics, data: l.data });
+          } catch {
+            continue; // not one of ours
+          }
           raw.push({
             blockNumber: l.blockNumber!,
             logIndex: l.logIndex!,
-            eventName: l.eventName as string,
-            args: l.args as { user?: `0x${string}`; amount?: bigint; stakedAfter?: bigint },
+            eventName: dec.eventName as string,
+            args: dec.args as Raw["args"],
           });
         }
         start = end + BigInt(1);
@@ -192,10 +208,14 @@ export async function fetchStakeEvents(
   // fast path this loop usually does nothing at all.
   const tsCache = new Map<bigint, bigint>();
   for (const r of raw) if (r.ts !== undefined) tsCache.set(r.blockNumber, r.ts);
+  // The RPC's own log.blockTimestamp is "0x0" on 4663, so it cannot stand in.
+  // Groups of 20 in flight: a batching transport folds each group into one
+  // HTTP request, and a plain one still never fans out unboundedly.
   const missing = [...new Set(raw.filter((r) => r.ts === undefined).map((r) => r.blockNumber))];
-  for (const bn of missing) {
-    const blk = await client.getBlock({ blockNumber: bn });
-    tsCache.set(bn, blk.timestamp);
+  for (let i = 0; i < missing.length; i += 20) {
+    const group = missing.slice(i, i + 20);
+    const blocks = await Promise.all(group.map((bn) => client.getBlock({ blockNumber: bn })));
+    group.forEach((bn, j) => tsCache.set(bn, blocks[j].timestamp));
   }
 
   return raw.map((r) => ({

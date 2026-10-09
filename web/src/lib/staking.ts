@@ -111,7 +111,9 @@ export const seasonDistributorAbi = parseAbi([
  *  endpoint that allows wide eth_getLogs ranges — see the note at the top. */
 export const stakingLogsClient = createPublicClient({
   chain: stakingChain,
-  transport: http(LOGS_RPC, { timeout: 20_000, retryCount: 2 }),
+  // batch: the scan's per-event getBlock lookups go out as one JSON-RPC batch
+  // (the public 4663 endpoint accepts them) instead of one subrequest each.
+  transport: http(LOGS_RPC, { timeout: 20_000, retryCount: 2, batch: true }),
 });
 
 /** Read client for the staking chain — separate from the app's 4663 client. */

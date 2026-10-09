@@ -86,7 +86,9 @@ function refreshInBackground(key: string, store: KvNamespace | null, load: () =>
   }
 }
 
-export async function kvCached<T>(key: string, ttlMs: number, load: () => Promise<T>): Promise<T> {
+/** `load` receives the stale value when one exists, so a loader can extend it
+ *  incrementally instead of rebuilding from scratch. Cold loads get undefined. */
+export async function kvCached<T>(key: string, ttlMs: number, load: (prev?: T) => Promise<T>): Promise<T> {
   const now = Date.now();
 
   const hot = memory.get(key);
@@ -115,9 +117,9 @@ export async function kvCached<T>(key: string, ttlMs: number, load: () => Promis
   const stale = hot && (!kvEntry || hot.at >= kvEntry.at) ? hot : kvEntry;
   if (stale) {
     memory.set(key, stale);
-    refreshInBackground(key, store, load);
+    refreshInBackground(key, store, () => load(stale.data as T));
     return stale.data as T;
   }
 
-  return refresh(key, store, load);
+  return refresh(key, store, () => load());
 }
