@@ -11,7 +11,7 @@ import "server-only";
 // TTL ever pays for it.
 import { isAddress } from "viem";
 import { kvCached } from "@/lib/server/kvCache";
-import { stakingAbi, stakingChain, stakingClient, stakingLogsClient } from "@/lib/staking";
+import { stakingAbi, stakingChain, stakingLogsClient } from "@/lib/staking";
 import { fetchStakeEvents } from "@/lib/season/fetch";
 import { previewFor, replayBalances, type StakeEvent } from "@/lib/season/compute";
 import { SEASON1, DEPLOY_BLOCK, STAKING } from "@/lib/season/config";
@@ -23,6 +23,9 @@ interface EventSnapshot {
   headTs: bigint;
   /** Last block the events are complete through. Absent on pre-cursor entries. */
   toBlock?: bigint;
+  /** Reached the head AND reconciled with totalStaked — the only state served.
+   *  A not-ready snapshot is cold-scan progress parked in KV for the next refresh. */
+  ready?: boolean;
 }
 
 // The public 4663 RPC caps eth_getLogs at 10,000,000 blocks per call for the
@@ -49,37 +52,61 @@ function reconciles(events: StakeEvent[], totalStaked: bigint): boolean {
   }
 }
 
-// One shared scan per 30s for the whole fleet. INCREMENTAL: the history is
-// ~66M blocks and grows ~1M/day, so rescanning it every refresh is what broke
-// this (a fixed call budget outgrown by chain age). The previous snapshot is
-// extended by just the blocks after its cursor; only a cold cache or a failed
-// reconciliation pays for the full scan.
+// One shared scan per 30s for the whole fleet, INCREMENTAL and RESUMABLE.
+//
+// The history is ~66M blocks and grows ~1M/day, and the only log source the
+// Worker can reach — the public RPC — answers Cloudflare's shared egress with
+// 429 "Too Many Requests" on a good share of calls (wrangler tail, 2026-10-09).
+// A cold scan is 7+ windows, so demanding all of them succeed in one request
+// meant it never finished. Instead each refresh advances a contiguous cursor as
+// far as it gets and parks that progress in KV (ready:false, never served); the
+// next refresh resumes. Once at the head and reconciled, refreshes only scan
+// the few hundred blocks since the last one.
 async function loadEvents(prev?: EventSnapshot): Promise<EventSnapshot> {
   const head = await stakingLogsClient.getBlockNumber();
   const headTs = (await stakingLogsClient.getBlock({ blockNumber: head })).timestamp;
-  const totalStaked = await stakingClient.readContract({
-    address: STAKING,
-    abi: stakingAbi,
-    functionName: "totalStaked",
-    blockNumber: head,
-  });
 
-  const base = prev?.toBlock !== undefined && prev.toBlock <= head ? prev : undefined;
-  let events = base ? [...base.events, ...(await scan(base.toBlock! + BigInt(1), head))] : await scan(DEPLOY_BLOCK, head);
-  if (base && !reconciles(events, totalStaked)) {
-    console.warn("[staking/rewards] incremental snapshot drifted from totalStaked — full rescan");
-    events = await scan(DEPLOY_BLOCK, head);
+  const resume = prev?.toBlock !== undefined && prev.toBlock <= head;
+  const events = resume ? [...prev!.events] : [];
+  let cursor = resume ? prev!.toBlock! : DEPLOY_BLOCK - BigInt(1);
+  while (cursor < head) {
+    const to = cursor + LOG_SPAN < head ? cursor + LOG_SPAN : head;
+    try {
+      events.push(...(await scan(cursor + BigInt(1), to)));
+      cursor = to;
+    } catch (err) {
+      console.warn(`[staking/rewards] scan stopped at ${cursor} of ${head}:`, err instanceof Error ? err.message.split("\n")[0] : err);
+      break;
+    }
   }
 
-  // Sanity gate, same discipline as the season builder: a transient empty or
-  // short getLogs is indistinguishable from "nobody staked", and caching it
-  // would serve every staker a confident, WRONG number for 30s. Refuse the
-  // snapshot instead — the caller reports unavailable and the UI shows "—",
-  // which is honest, instead of a zero that reads as "you earned nothing".
+  // A served snapshot stays served through a blip: throwing keeps kvCached on
+  // the stale ready value. Cold progress is returned (not ready) so it sticks.
+  const parked = (): EventSnapshot => ({ events, headTs, toBlock: cursor, ready: false });
+  if (cursor < head) {
+    if (prev?.ready) throw new Error(`incremental scan short of head (${cursor} < ${head})`);
+    return parked();
+  }
+
+  // Same endpoint as `head`, so the block is known to exist there (the keyed
+  // read endpoint can trail the public one at ~12 blocks/s).
+  let totalStaked: bigint;
+  try {
+    totalStaked = await stakingLogsClient.readContract({ address: STAKING, abi: stakingAbi, functionName: "totalStaked", blockNumber: head });
+  } catch (err) {
+    if (prev?.ready) throw err;
+    return parked();
+  }
+
+  // Sanity gate, same discipline as the season builder: a short getLogs is
+  // indistinguishable from "nobody staked", and caching it would serve every
+  // staker a confident, WRONG number. Refuse it and start over from the deploy
+  // block — the UI shows "—" until the rescan lands, which is honest.
   if (!reconciles(events, totalStaked)) {
-    throw new Error(`reward scan does not reconcile with totalStaked=${totalStaked} — refusing snapshot`);
+    console.warn(`[staking/rewards] scan does not reconcile with totalStaked=${totalStaked} — rescanning from deploy`);
+    return { events: [], headTs, toBlock: DEPLOY_BLOCK - BigInt(1), ready: false };
   }
-  return { events, headTs, toBlock: head };
+  return { events, headTs, toBlock: head, ready: true };
 }
 
 // The ?all=1 table is identical for every caller of the same event snapshot,
@@ -102,11 +129,14 @@ export async function GET(req: Request): Promise<Response> {
     return Response.json({ seasonStarted: false });
   }
   try {
-    const { events, headTs } = await kvCached<EventSnapshot>(
+    const { events, headTs, ready } = await kvCached<EventSnapshot>(
       `staking-rewards-events:${stakingChain.id}:${DEPLOY_BLOCK}`,
       30_000,
       loadEvents,
     );
+    // Cold scan still in progress (resumes on the next refresh): unavailable,
+    // uncached, same "—" the tiles show for any other gap.
+    if (!ready) return Response.json({ seasonStarted: false });
     const p = previewFor(events, SEASON1, headTs, address as `0x${string}`);
     // ?all=1 returns the whole leaderboard: every staker, their current staked
     // balance and their earned figure.

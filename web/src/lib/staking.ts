@@ -113,7 +113,9 @@ export const stakingLogsClient = createPublicClient({
   chain: stakingChain,
   // batch: the scan's per-event getBlock lookups go out as one JSON-RPC batch
   // (the public 4663 endpoint accepts them) instead of one subrequest each.
-  transport: http(LOGS_RPC, { timeout: 20_000, retryCount: 2, batch: true }),
+  // retries: that endpoint 429s Cloudflare's shared egress on a good share of
+  // calls, so back off 0.5s/1s/2s rather than viem's 150ms ladder.
+  transport: http(LOGS_RPC, { timeout: 20_000, retryCount: 3, retryDelay: 500, batch: true }),
 });
 
 /** Read client for the staking chain — separate from the app's 4663 client. */

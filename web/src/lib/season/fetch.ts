@@ -19,8 +19,13 @@
 // SLOW PATH: pure chunked eth_getLogs, kept intact as the fallback for when
 // Blockscout is unreachable. Correctness never depends on the explorer.
 import type { PublicClient } from "viem";
-import { decodeEventLog, parseAbiItem } from "viem";
+import { BaseError, HttpRequestError, TimeoutError, decodeEventLog, parseAbiItem } from "viem";
 import type { StakeEvent } from "./compute";
+
+/** The request never got a JSON-RPC answer (HTTP 429/5xx, network, timeout) —
+ *  as opposed to the node refusing the query itself. */
+const isTransportFailure = (err: unknown) =>
+  err instanceof BaseError && !!err.walk((e) => e instanceof HttpRequestError || e instanceof TimeoutError);
 
 /** Explorer base for the fast path. Empty disables it and forces the RPC scan. */
 const BLOCKSCOUT =
@@ -180,7 +185,10 @@ export async function fetchStakeEvents(
         }
         start = end + BigInt(1);
       } catch (err) {
-        if (step > BigInt(1)) { step = step / BigInt(2); continue; } // range too large: shrink and retry.
+        // Range too large: shrink and retry. But a transport failure (429, 5xx,
+        // timeout) says nothing about the range — halving on it turned a
+        // rate-limited window into a budget burn — so it surfaces as-is.
+        if (step > BigInt(1) && !isTransportFailure(err)) { step = step / BigInt(2); continue; }
         throw err;
       }
     }
