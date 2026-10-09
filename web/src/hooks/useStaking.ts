@@ -4,7 +4,7 @@
 // wallet adapter is passed in (Privy embedded in-app, injected on /stake).
 // Reads always go through the dedicated staking-chain client, so the page is
 // fully readable with no wallet connected at all.
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createWalletClient, custom, parseUnits } from "viem";
 import type { StakingWallet } from "@/hooks/useStakingWallet";
@@ -18,7 +18,10 @@ import {
   stakingTokenAbi,
 } from "@/lib/staking";
 import { loadClaimManifest } from "@/lib/season/claim";
-import { leafOf, verifyProof } from "@/lib/season/compute";
+import { leafOf, previewFor, verifyProof } from "@/lib/season/compute";
+import { buildBoard } from "@/lib/season/board";
+import { SEASON1 } from "@/lib/season/config";
+import { loadLiveEvents } from "@/lib/season/liveBoard";
 import { explainError } from "@/lib/explainError";
 
 const ZERO_ROOT = `0x${"0".repeat(64)}` as const;
@@ -32,10 +35,10 @@ export interface StakerRow {
   earned?: bigint;
 }
 
-/** Off-chain season reward figures, computed by the daily-bucket merkle pipeline
- *  and served from /api/staking/rewards. Undefined until that endpoint is live,
- *  in which case the reward tiles read "—" and the page still renders on-chain
- *  data. Amounts are raw 18dp wei. The model is pure proportional and uncapped:
+/** Off-chain season reward figures, computed in the browser by the same
+ *  daily-bucket model as the merkle payout (lib/season/liveBoard.ts). Undefined
+ *  while that scan loads or fails, in which case the reward tiles read "—" and
+ *  the page still renders on-chain data. Amounts are raw 18dp wei. The model is pure proportional and uncapped:
  *  each day's bucket is split by that day's stake-time, so bankedSoFar (the sum
  *  of finished days) is a monotone non-decreasing floor — a late staker never
  *  dilutes a day that already closed, and the more you stake the more you earn. */
@@ -54,8 +57,13 @@ export interface StakingSnapshot {
   totalStaked: bigint;
   cooldownSeconds: number;
   leaderboard: StakerRow[];
+  /** The leaderboard scan is its own query: "loading" until its first result,
+   *  "error" if it has none and its last attempt failed. */
+  leaderboardState: "loading" | "ready" | "error";
   rewards?: StakerRewards;
 }
+
+type ChainSnapshot = Omit<StakingSnapshot, "leaderboard" | "leaderboardState" | "rewards">;
 
 /** A season this wallet can (or already did) claim. Assembled from the published
  *  manifest + the on-chain distributor, with the proof verified against the
@@ -126,7 +134,7 @@ export function useSeasonClaims(user: `0x${string}` | null): ClaimableSeason[] {
   return query.data ?? [];
 }
 
-async function readSnapshot(user: `0x${string}` | null): Promise<StakingSnapshot> {
+async function readSnapshot(user: `0x${string}` | null): Promise<ChainSnapshot> {
   // Fire every read in the same tick: stakingClient batches multicall, but only
   // calls issued together fold into one eth_call — awaiting the totals before
   // the user reads was silently paying two round trips per poll.
@@ -153,54 +161,26 @@ async function readSnapshot(user: `0x${string}` | null): Promise<StakingSnapshot
     wallet = w; staked = s; pending = p[0]; unlockAt = Number(p[1]); weight = wt;
   }
 
-  // Leaderboard AND the reward preview both come from /api/staking/rewards.
-  //
-  // The browser deliberately does NOT scan for stakers itself. The public
-  // Robinhood RPC caps eth_getLogs at ~2000 blocks and the contract sits ~900k
-  // blocks back, so a client-side scan cannot succeed. It used to run here as
-  // getLogs(0 -> latest), it failed on every load, and because it sat unguarded
-  // in this function it rejected the WHOLE snapshot: balances went null, so the
-  // panel showed "—" everywhere and the stake guard read the wallet as 0 and
-  // refused every stake. A cosmetic table was blocking the primary action.
-  //
-  // Now the server does the scan once (chunked, cached in KV, shared) and this
-  // is a single guarded fetch. If it fails, the leaderboard and reward tiles
-  // degrade to "—" and everything that gates staking keeps working.
-  let rows: StakerRow[] = [];
-  let rewards: StakerRewards | undefined;
-  if (user) {
-    try {
-      const res = await fetch(`/api/staking/rewards?address=${user}&all=1`, { cache: "no-store" });
-      if (res.ok) {
-        const j = (await res.json()) as {
-          seasonStarted?: boolean;
-          bankedSoFar?: string;
-          todayAccruing?: string;
-          stakers?: { address: string; staked: string; earned: string }[];
-        };
-        if (j.seasonStarted && j.bankedSoFar !== undefined) {
-          rewards = { bankedSoFar: BigInt(j.bankedSoFar), todayAccruing: BigInt(j.todayAccruing ?? "0") };
-        }
-        if (j.stakers) {
-          rows = j.stakers.map((r) => ({
-            address: r.address as `0x${string}`,
-            staked: BigInt(r.staked),
-            weight: BigInt(0),
-            earned: BigInt(r.earned),
-          }));
-        }
-      }
-    } catch {
-      /* leaderboard stays empty, balances above are unaffected */
-    }
-  }
-
   return {
     wallet, staked, pending, unlockAt, weight, totalWeight, totalStaked,
     cooldownSeconds: Number(cooldown),
-    leaderboard: rows,
-    rewards,
   };
+}
+
+/** Leaderboard + this wallet's reward preview, from the browser-side event scan
+ *  (lib/season/liveBoard.ts — the Worker cannot reach the history). Kept OUT of
+ *  readSnapshot on purpose: a slow or failing scan must never hold up the
+ *  balances that gate staking, which is exactly what the old in-snapshot
+ *  /api/staking/rewards fetch did for ~9.5s on every poll. */
+async function readBoard(user: `0x${string}` | null): Promise<{ rows: StakerRow[]; rewards?: StakerRewards }> {
+  const { events, headTs } = await loadLiveEvents();
+  const rows = buildBoard(events, SEASON1, headTs).map((r) => ({ ...r, weight: BigInt(0) }));
+  let rewards: StakerRewards | undefined;
+  if (user && SEASON1.seasonStart !== BigInt(0)) {
+    const p = previewFor(events, SEASON1, headTs, user);
+    rewards = { bankedSoFar: p.bankedSoFar, todayAccruing: p.todayAccruing };
+  }
+  return { rows, rewards };
 }
 
 export type StakingAction = "stake" | "unstake" | "cancel" | "withdraw" | "mint" | "claim";
@@ -222,6 +202,26 @@ export function useStaking(w: StakingWallet) {
     refetchInterval: 20_000,
     staleTime: 10_000,
   });
+
+  // Under the "staking" prefix so a stake/claim invalidation rescans it too
+  // (incrementally — usually one getLogs).
+  const boardQuery = useQuery({
+    queryKey: ["staking", "board", user],
+    queryFn: () => readBoard(user),
+    refetchInterval: 30_000,
+    staleTime: 15_000,
+  });
+
+  const snapshot = useMemo<StakingSnapshot | null>(() => {
+    if (!query.data) return null;
+    const board = boardQuery.data;
+    return {
+      ...query.data,
+      leaderboard: board?.rows ?? [],
+      leaderboardState: board ? "ready" : boardQuery.isError ? "error" : "loading",
+      rewards: board?.rewards,
+    };
+  }, [query.data, boardQuery.data, boardQuery.isError]);
 
   // Separate query (keyed under the same "staking" prefix so a stake/claim
   // invalidation refreshes it too): a manifest fetch failure must not blank the
@@ -325,7 +325,7 @@ export function useStaking(w: StakingWallet) {
 
   return {
     address: user,
-    snapshot: query.data ?? null,
+    snapshot,
     claims: claimsQuery.data ?? [],
     loading: query.isLoading,
     busy,

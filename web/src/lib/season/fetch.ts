@@ -22,10 +22,13 @@ import type { PublicClient } from "viem";
 import { BaseError, HttpRequestError, TimeoutError, decodeEventLog, parseAbiItem } from "viem";
 import type { StakeEvent } from "./compute";
 
-/** The request never got a JSON-RPC answer (HTTP 429/5xx, network, timeout) —
- *  as opposed to the node refusing the query itself. */
+/** The request was throttled or never answered (HTTP 429/5xx, network,
+ *  timeout) — as opposed to the node refusing the query itself. viem surfaces
+ *  an HTTP 429 that carries a JSON-RPC body as an RPC error with code 429, not
+ *  as an HttpRequestError, hence the explicit code check. */
 const isTransportFailure = (err: unknown) =>
-  err instanceof BaseError && !!err.walk((e) => e instanceof HttpRequestError || e instanceof TimeoutError);
+  err instanceof BaseError &&
+  !!err.walk((e) => e instanceof HttpRequestError || e instanceof TimeoutError || (e as { code?: unknown }).code === 429);
 
 /** Explorer base for the fast path. Empty disables it and forces the RPC scan. */
 const BLOCKSCOUT =

@@ -4,13 +4,14 @@
 // the two values that must be pinned before a real season is computed; both are
 // env-overridable so the same code serves testnet rehearsal and mainnet.
 import type { SeasonParams } from "./compute";
-import { STAKING_ADDRESSES } from "@/lib/staking";
+import { STAKING_ADDRESSES, STAKING_DEPLOY_BLOCK } from "@/lib/staking";
 
 const E = (typeof process !== "undefined" ? process.env : {}) as Record<string, string | undefined>;
 
-/** Block MonveraStaking was deployed at (records the log-scan floor). On the
- *  tiny testnet, scanning from 0 is fine; on mainnet set SEASON_DEPLOY_BLOCK. */
-export const DEPLOY_BLOCK = BigInt(E.SEASON_DEPLOY_BLOCK ?? "0");
+/** Block MonveraStaking was deployed at (the log-scan floor). Defaults to the
+ *  constant beside the address so the browser scan has it too; the server-only
+ *  SEASON_DEPLOY_BLOCK overrides it (e.g. for a testnet rehearsal). */
+export const DEPLOY_BLOCK = E.SEASON_DEPLOY_BLOCK ? BigInt(E.SEASON_DEPLOY_BLOCK) : STAKING_DEPLOY_BLOCK;
 
 /** UTC unix seconds of Season 1 day-0 00:00. Owner-set; no safe default, so a
  *  rehearsal must pass it explicitly. Falls back to NEXT_PUBLIC_SEASON_START so a

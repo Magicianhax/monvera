@@ -3,6 +3,13 @@ import "server-only";
 // GET /api/staking/rewards?address=0x… — live season reward preview for one
 // wallet: { seasonStarted, bankedSoFar, todayAccruing } (raw 18dp wei strings).
 //
+// ⚠️ The staking page no longer calls this (2026-10-09): from Cloudflare's
+// egress the public RPC 429s every getLogs/eth_call and Blockscout challenges,
+// so the scan cannot complete here. The page scans in the browser instead
+// (lib/season/liveBoard.ts, same model via lib/season/board.ts). This route
+// works again only once STAKING_LOGS_RPC_URL points at an endpoint that serves
+// eth_getLogs to Workers.
+//
 // Runs the SAME off-chain model as the final merkle payout (compute.ts) over the
 // staking event stream up to the chain head, so the "Earned so far" / "This
 // epoch, accruing" tiles show a number that grows from epoch 1 and, at close,
@@ -13,7 +20,8 @@ import { isAddress } from "viem";
 import { kvCached } from "@/lib/server/kvCache";
 import { stakingAbi, stakingChain, stakingLogsClient } from "@/lib/staking";
 import { fetchStakeEvents } from "@/lib/season/fetch";
-import { previewFor, replayBalances, type StakeEvent } from "@/lib/season/compute";
+import { previewFor, type StakeEvent } from "@/lib/season/compute";
+import { buildBoard, reconciles } from "@/lib/season/board";
 import { SEASON1, DEPLOY_BLOCK, STAKING } from "@/lib/season/config";
 
 export const dynamic = "force-dynamic";
@@ -38,19 +46,6 @@ const LOG_SPAN = BigInt(10_000_000);
 // past events it never saw. Complete through `to`, or throw.
 const scan = (from: bigint, to: bigint) =>
   from > to ? Promise.resolve([] as StakeEvent[]) : fetchStakeEvents(stakingLogsClient, STAKING, from, to, LOG_SPAN, { explorer: false });
-
-/** Σ replayed staked balance == the contract's totalStaked (stake credits the
- *  measured delta it emits; requestUnstake/cancel move it 1:1). replayBalances
- *  also throws on any per-wallet stakedAfter mismatch, i.e. a dropped event. */
-function reconciles(events: StakeEvent[], totalStaked: bigint): boolean {
-  try {
-    let sum = BigInt(0);
-    for (const tl of replayBalances(events).values()) sum += tl.length ? tl[tl.length - 1].bal : BigInt(0);
-    return sum === totalStaked;
-  } catch {
-    return false;
-  }
-}
 
 // One shared scan per 30s for the whole fleet, INCREMENTAL and RESUMABLE.
 //
@@ -154,15 +149,11 @@ export async function GET(req: Request): Promise<Response> {
       if (stakersMemo?.key === memoKey) {
         stakers = stakersMemo.stakers;
       } else {
-        const timelines = replayBalances(events);
-        stakers = [...timelines.entries()]
-          .map(([addr, tl]) => ({
-            address: addr,
-            staked: (tl.length ? tl[tl.length - 1].bal : BigInt(0)).toString(),
-            earned: previewFor(events, SEASON1, headTs, addr as `0x${string}`).bankedSoFar.toString(),
-          }))
-          .filter((r) => r.staked !== "0" || r.earned !== "0")
-          .sort((a, b) => (BigInt(b.staked) > BigInt(a.staked) ? 1 : BigInt(b.staked) < BigInt(a.staked) ? -1 : 0));
+        stakers = buildBoard(events, SEASON1, headTs).map((r) => ({
+          address: r.address,
+          staked: r.staked.toString(),
+          earned: (r.earned ?? BigInt(0)).toString(),
+        }));
         stakersMemo = { key: memoKey, stakers };
       }
     }

@@ -54,6 +54,13 @@ export const STAKING_ADDRESSES = {
   seasonDistributor: "0xe51658ee2fed7ae09b81a91e2e0ffc6698648163" as `0x${string}`,
 } as const;
 
+/** Block MonveraStaking was deployed at — the floor for every staking log scan.
+ *  A constant beside the address because the browser scans too and cannot see
+ *  wrangler vars (SEASON_DEPLOY_BLOCK still overrides it server-side). A wrong
+ *  floor cannot pass silently: a missed Staked event fails the totalStaked
+ *  reconciliation every scan runs. */
+export const STAKING_DEPLOY_BLOCK = BigInt(17_820_981);
+
 /** Season 1 pool: 2,000,000 $MONVERA (0.20% of supply), paid as flat daily buckets. */
 export const SEASON_POOL = 2_000_000;
 export const SEASON_DAYS = 90;
@@ -107,8 +114,12 @@ export const seasonDistributorAbi = parseAbi([
   "function claim(uint256 seasonId, address account, uint256 amount, bytes32[] proof)",
 ]);
 
-/** Log-scan client. Server-side only (the browser never scans logs). Kept on an
- *  endpoint that allows wide eth_getLogs ranges — see the note at the top. */
+/** Log-scan client, kept on an endpoint that allows wide eth_getLogs ranges —
+ *  see the note at the top. The staking page's leaderboard scan runs it in the
+ *  BROWSER (lib/season/liveBoard.ts): the public RPC 429s every getLogs/eth_call
+ *  from Cloudflare's egress (measured from the edge, 2026-10-09) but serves
+ *  visitors' own IPs, with CORS open. In the browser STAKING_LOGS_RPC_URL is not
+ *  inlined, so this is always the literal public URL there. */
 export const stakingLogsClient = createPublicClient({
   chain: stakingChain,
   // batch: the scan's per-event getBlock lookups go out as one JSON-RPC batch

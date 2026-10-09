@@ -792,7 +792,7 @@ export function StakingPanel({
       <style dangerouslySetInnerHTML={{ __html: STAKING_CSS }} />
 
       {/* ── season strip (both surfaces): live headline numbers + progress ring ── */}
-      <SeasonStrip totalStaked={snap ? snap.totalStaked : null} stakers={snap ? snap.leaderboard.length : null} />
+      <SeasonStrip totalStaked={snap ? snap.totalStaked : null} stakers={snap?.leaderboardState === "ready" ? snap.leaderboard.length : null} />
 
       {/* ── claimable rewards: shown to any connected wallet — lists claimable
            seasons once one closes, otherwise a locked "opens after season" row ── */}
@@ -972,7 +972,11 @@ export function StakingPanel({
           title="Leaderboard"
           right={
             <span style={meta}>
-              {snap ? `${snap.leaderboard.length} staker${snap.leaderboard.length === 1 ? "" : "s"} · live from chain` : "loading…"}
+              {snap?.leaderboardState === "ready"
+                ? `${snap.leaderboard.length} staker${snap.leaderboard.length === 1 ? "" : "s"} · live from chain`
+                : snap?.leaderboardState === "error"
+                  ? "unavailable, retrying"
+                  : "loading…"}
             </span>
           }
         />
